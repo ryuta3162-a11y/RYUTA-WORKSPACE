@@ -4,7 +4,7 @@ const workspaceUrl =
   '';
 
 /**
- * GAS_WEB_APP_URL 設定時は next.config.ts の redirects で GAS へ転送。
+ * GAS_WEB_APP_URL 設定時は next.config.mjs の redirects で GAS へ転送。
  * 未設定時のみこのページが表示される。
  */
 export default function HomePage() {
