@@ -1,0 +1,82 @@
+# RYUTA Workspace — GAS × Vercel × GitHub
+
+業務日報を **AI で自動生成**し、**Gmail 下書き**（経堂数値つき）まで届ける構成です。
+
+## 構成
+
+```
+┌─────────────────┐     dayContext / createDailyDraft      ┌──────────────────┐
+│  Vercel (web/)  │ ────────────────────────────────────► │  Google Apps     │
+│  日報スタジオ UI │ ◄──────────────────────────────────── │  Script (gas/)   │
+│  Gemini で文章化 │                                       │  スプシ・Gmail    │
+└─────────────────┘                                       └──────────────────┘
+         ▲
+         │ git push
+   ┌─────┴─────┐
+   │  GitHub   │
+   └───────────┘
+```
+
+| 役割 | 場所 | 担当 |
+|------|------|------|
+| 4分割 Workspace（従来 UI） | `gas/index.html` | 手動入力・ショートカット |
+| 日報の「頭脳」 | `web/` (Vercel) | カレンダー＋タスク → Gemini |
+| 経堂数値・Gmail 下書き | `gas/Code.gs` | スプシ `日報` シート、GmailApp |
+
+## セットアップ
+
+### 1. Google Apps Script
+
+1. [script.google.com](https://script.google.com) でプロジェクトを開く（または新規）
+2. `gas/Code.gs` を **コード** に、`gas/index.html` を **index**（HTML）にコピー
+3. **プロジェクトの設定 → スクリプト プロパティ** に追加:
+   - `WS_API_TOKEN` … ランダムな長い文字列（Vercel と共有）
+   - `GEMINI_API_KEY` … （任意）GAS 上の所感校閲用。Vercel 側にも同じキーを設定
+4. **デプロイ → ウェブアプリ** → `/exec` URL を控える
+5. 初回: カレンダー・Gmail・スプレッドシートの権限を許可
+
+### 2. Vercel
+
+```bash
+cd web
+npm install
+cp .env.example .env.local
+# .env.local を編集
+npm run dev
+```
+
+環境変数（Vercel ダッシュボードでも可）:
+
+| 変数 | 内容 |
+|------|------|
+| `GAS_WEB_APP_URL` | GAS の `/exec` URL |
+| `GAS_API_TOKEN` | `WS_API_TOKEN` と同じ |
+| `GEMINI_API_KEY` | Google AI Studio |
+
+GitHub リポジトリを Vercel に接続 → Root Directory を **`web`** に指定。
+
+### 3. 動作確認
+
+1. `https://あなたの-vercel.app/` を開く
+2. **AI で業務・所感を生成** → カレンダー・Workspace をもとに文章化
+3. 編集 → **Gmail に下書き作成** → GAS が経堂数値表を付けて下書き
+
+API 単体テスト:
+
+- `GET {GAS_URL}?api=dayContext&token=...`
+- `GET {GAS_URL}?api=status`
+
+## リポジトリ内のファイル
+
+| パス | 説明 |
+|------|------|
+| `gas/Code.gs` | GAS 本番用（`dayContext` API 含む） |
+| `gas/index.html` | 従来 Workspace UI |
+| `web/` | Next.js 日報スタジオ |
+| `Code.gs` / `index.html`（ルート） | 開発用コピー（`gas/` と同期推奨） |
+
+## 今後の拡張
+
+- Vercel 上で Gmail API まで持つ（GAS はスプシ専用にさらに薄くする）
+- Chat / Gmail 件名の取り込み
+- プロンプトを `web/prompts/` で版管理
