@@ -10,18 +10,17 @@ type DayContext = {
 
 export default function NippoStudioPage() {
   const [ctx, setCtx] = useState<DayContext | null>(null);
-  const [notes, setNotes] = useState('');
   const [gyomuText, setGyomuText] = useState('');
   const [kansou, setKansou] = useState('');
   const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(false);
 
   const loadContext = useCallback(async () => {
-    setStatus('データ取得中…');
+    setStatus('GAS からデータ取得中…');
     const res = await fetch('/api/context');
     const data = await res.json();
     if (!data.ok) {
-      setStatus(data.message ?? 'コンテキスト取得に失敗');
+      setStatus(data.message ?? '取得に失敗。GAS_WEB_APP_URL と GAS_API_TOKEN を確認してください。');
       return;
     }
     setCtx({
@@ -39,25 +38,17 @@ export default function NippoStudioPage() {
     loadContext();
   }, [loadContext]);
 
-  async function handleGenerate() {
-    setLoading(true);
-    setStatus('AI が業務・所感を生成中…');
-    try {
-      const res = await fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notes }),
-      });
-      const data = await res.json();
-      if (!data.ok) throw new Error(data.message ?? '生成に失敗');
-      setGyomuText((data.generated.gyomu as string[]).join('\n'));
-      setKansou(data.generated.kansou as string);
-      setStatus('生成しました。内容を確認してから下書き作成へ。');
-    } catch (e) {
-      setStatus(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
+  function fillGyomuFromCalendar() {
+    if (!ctx?.calendarEvents.length) {
+      setStatus('今日のカレンダー予定がありません');
+      return;
     }
+    const lines = ctx.calendarEvents.map((ev) => {
+      const time = ev.start && ev.end ? `${ev.start}–${ev.end} ` : '';
+      return `${time}${ev.title}`.trim();
+    });
+    setGyomuText(lines.join('\n'));
+    setStatus('カレンダー予定を業務欄に反映しました（編集してください）');
   }
 
   async function handleDraft() {
@@ -81,7 +72,7 @@ export default function NippoStudioPage() {
       });
       const data = await res.json();
       if (!data.ok) throw new Error(data.message ?? '下書き作成に失敗');
-      setStatus(`下書きを作成しました: ${data.subject ?? ''}`);
+      setStatus(`下書きを作成しました。\n件名: ${data.subject ?? ''}`);
     } catch (e) {
       setStatus(e instanceof Error ? e.message : String(e));
     } finally {
@@ -89,15 +80,50 @@ export default function NippoStudioPage() {
     }
   }
 
+  const workspaceUrl = process.env.NEXT_PUBLIC_GAS_WEB_APP_URL ?? '';
+
   return (
     <main style={{ maxWidth: 720, margin: '0 auto', padding: '2rem 1.25rem' }}>
+      <div
+        style={{
+          marginBottom: 20,
+          padding: '12px 14px',
+          borderRadius: 12,
+          border: '1px solid rgba(147, 197, 253, 0.35)',
+          background: 'rgba(59, 130, 246, 0.12)',
+          fontSize: 13,
+          lineHeight: 1.55,
+          color: '#e4e4e7',
+        }}
+      >
+        <strong>いつもの 4 分割画面はこちらです。</strong>
+        <br />
+        Vercel のトップ（このページ）は日報専用のシンプル版です。
+        <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {workspaceUrl ? (
+            <a href="/workspace" style={{ ...btnPrimary, textDecoration: 'none', display: 'inline-block' }}>
+              Workspace を開く（4分割）
+            </a>
+          ) : null}
+          {workspaceUrl ? (
+            <a
+              href={workspaceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ ...btnGhost, textDecoration: 'none', display: 'inline-block' }}
+            >
+              GAS URL を直接開く
+            </a>
+          ) : null}
+        </div>
+      </div>
+
       <p style={{ fontSize: 12, letterSpacing: '0.12em', color: '#71717a', margin: 0 }}>
-        GAS × VERCEL × GITHUB
+        GAS × VERCEL（AI なし）
       </p>
       <h1 style={{ fontSize: 28, fontWeight: 700, margin: '0.25rem 0 0.5rem' }}>日報スタジオ</h1>
       <p style={{ color: '#a1a1aa', fontSize: 14, lineHeight: 1.6 }}>
-        カレンダーと Workspace を GAS が集約 → Vercel で Gemini が業務・所感を生成 → GAS が経堂数値付き Gmail
-        下書きを作成します。
+        業務・所感を入力（またはカレンダーから下書き）→ GAS が経堂数値付き Gmail 下書きを作成します。
       </p>
 
       {ctx && (
@@ -127,23 +153,12 @@ export default function NippoStudioPage() {
         </section>
       )}
 
-      <label style={{ display: 'block', marginTop: 20, fontSize: 12, color: '#a1a1aa' }}>
-        追記メモ（AI 用・任意）
-        <textarea
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          rows={2}
-          style={fieldStyle}
-          placeholder="例: 本日は棚卸し対応が中心"
-        />
-      </label>
-
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
-        <button type="button" onClick={handleGenerate} disabled={loading} style={btnPrimary}>
-          AI で業務・所感を生成
-        </button>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 16 }}>
         <button type="button" onClick={loadContext} disabled={loading} style={btnGhost}>
           データ再取得
+        </button>
+        <button type="button" onClick={fillGyomuFromCalendar} disabled={loading} style={btnGhost}>
+          カレンダー → 業務欄
         </button>
       </div>
 

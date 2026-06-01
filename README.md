@@ -50,8 +50,9 @@ npm run dev
 | 変数 | 内容 |
 |------|------|
 | `GAS_WEB_APP_URL` | GAS の `/exec` URL |
+| `NEXT_PUBLIC_GAS_WEB_APP_URL` | 上と同じ（`/workspace` で 4 分割 UI を表示） |
 | `GAS_API_TOKEN` | `WS_API_TOKEN` と同じ |
-| `GEMINI_API_KEY` | Google AI Studio |
+| `GEMINI_API_KEY` | （任意）使わないなら不要 |
 
 GitHub リポジトリを Vercel に接続 → Root Directory を **`web`** に指定。
 
