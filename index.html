@@ -1,0 +1,1816 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RYUTA Workspace</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"DM Sans"', 'Inter', 'system-ui', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
+          },
+          colors: {
+            void: '#030308',
+            panel: 'rgba(10, 12, 20, 0.72)',
+            line: 'rgba(255, 255, 255, 0.06)',
+            accent: '#22d3ee',
+            accent2: '#a78bfa',
+          },
+          boxShadow: {
+            panel: '0 0 0 1px rgba(255,255,255,0.06), 0 24px 80px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.04)',
+            panelHover: '0 0 0 1px rgba(34, 211, 238, 0.22), 0 28px 90px rgba(0,0,0,0.65), inset 0 1px 0 rgba(255,255,255,0.06)',
+          },
+        },
+      },
+    };
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg0: #020208;
+      --bg1: #070a12;
+      --glow: rgba(200, 200, 200, 0.22);
+      --grid: rgba(255, 255, 255, 0.035);
+    }
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: var(--bg0);
+      color: #e8e8ec;
+      font-family: 'DM Sans', Inter, system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      overflow: hidden;
+    }
+    .font-mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+
+    /* 背景: ノイズ + グリッド（モノトーン） */
+    .app-bg {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(1200px 600px at 15% -10%, rgba(255, 255, 255, 0.08), transparent 55%),
+        radial-gradient(900px 500px at 95% 10%, rgba(150, 150, 150, 0.08), transparent 50%),
+        radial-gradient(700px 400px at 50% 100%, rgba(230, 230, 230, 0.05), transparent 45%),
+        linear-gradient(180deg, var(--bg0) 0%, var(--bg1) 45%, #03040a 100%);
+    }
+    .app-bg::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      opacity: 0.35;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+      mix-blend-mode: overlay;
+    }
+    .app-bg::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(var(--grid) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+      background-size: 48px 48px;
+      mask-image: radial-gradient(ellipse at 50% 30%, black 0%, transparent 72%);
+      opacity: 0.55;
+    }
+
+    .pro-panel {
+      position: relative;
+      z-index: 1;
+      background: rgba(10, 12, 20, 0.55);
+      backdrop-filter: blur(18px) saturate(140%);
+      -webkit-backdrop-filter: blur(18px) saturate(140%);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 18px;
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.03), 0 24px 80px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.04);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      transition: border-color 0.35s ease, box-shadow 0.35s ease, transform 0.35s ease;
+      min-width: 0;
+      min-height: 0;
+    }
+    .pro-panel::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      padding: 1px;
+      background: linear-gradient(135deg, rgba(255,255,255,0.18), transparent 40%, rgba(160,160,160,0.18));
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+      opacity: 0.45;
+    }
+    .pro-panel:hover {
+      border-color: rgba(255, 255, 255, 0.18);
+      box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.10), 0 32px 100px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06);
+    }
+
+    .pro-panel.focused-panel {
+      position: fixed;
+      inset: 1rem;
+      z-index: 50;
+      height: calc(100vh - 2rem);
+      background: rgba(6, 8, 14, 0.92);
+    }
+
+    .focus-btn {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: #e8e8ec;
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.2s, background 0.2s, border-color 0.2s;
+      z-index: 20;
+    }
+    .pro-panel:hover .focus-btn { opacity: 1; }
+    .focus-btn:hover { background: rgba(255, 255, 255, 0.12); border-color: rgba(255, 255, 255, 0.28); }
+
+    .task-card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-left: 2px solid rgba(220, 220, 220, 0.35);
+      border-radius: 12px;
+      padding: 11px 14px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 8px;
+      transition: background 0.2s, border-color 0.2s, transform 0.2s;
+      position: relative;
+      z-index: 10;
+    }
+    .task-card:hover {
+      background: rgba(255,255,255,0.05);
+      border-color: rgba(255,255,255,0.1);
+      transform: translateX(2px);
+    }
+    .task-checkbox {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 1.5px solid rgba(255,255,255,0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+      margin-top: 2px;
+      transition: all 0.2s;
+    }
+    .task-checkbox:hover { border-color: #fff; background: rgba(255,255,255,0.08); }
+    .task-checkbox::after { content: '✓'; font-size: 9px; color: #020208; opacity: 0; transition: opacity 0.2s; font-weight: 700; }
+    .task-checkbox.done { background: linear-gradient(135deg, #f5f5f5, #9ca3af); border-color: transparent; }
+    .task-checkbox.done::after { opacity: 1; }
+    .task-card.done-card { border-left-color: transparent; opacity: 0.45; }
+    .task-card.done-card:hover { opacity: 0.85; }
+
+    .pro-input {
+      width: 100%;
+      background: rgba(0,0,0,0.45);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #f4f4f5;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 12px;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      box-shadow: inset 0 2px 8px rgba(0,0,0,0.35);
+    }
+    .pro-input:focus {
+      border-color: rgba(255, 255, 255, 0.40);
+      box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.10), inset 0 2px 8px rgba(0,0,0,0.35);
+    }
+    .pro-input.ai-loading {
+      border-color: rgba(255, 255, 255, 0.35);
+      color: #e5e7eb;
+    }
+
+    .tab-btn {
+      font-size: 11px;
+      font-weight: 600;
+      color: #71717a;
+      padding: 6px 14px;
+      border-radius: 8px;
+      transition: all 0.25s ease;
+      cursor: pointer;
+    }
+    .tab-btn.active {
+      color: #fafafa;
+      background: rgba(255,255,255,0.08);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+    }
+    .tab-btn:hover:not(.active) { color: #a1a1aa; }
+
+    .iframe-wrapper {
+      width: 100%;
+      height: 100%;
+      border-radius: inherit;
+      overflow: hidden;
+      filter: contrast(0.98) saturate(1.05);
+      transition: filter 0.35s ease;
+    }
+    .iframe-wrapper:hover { filter: contrast(1) saturate(1.08); }
+
+    #cmd-palette-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(2, 4, 12, 0.72);
+      backdrop-filter: blur(10px);
+      z-index: 100;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding-top: 15vh;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+    }
+    #cmd-palette-overlay.active { opacity: 1; pointer-events: auto; }
+    #cmd-palette {
+      width: 100%;
+      max-width: 520px;
+      background: rgba(14, 16, 24, 0.92);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 14px;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.65), 0 0 0 1px rgba(34,211,238,0.08);
+      overflow: hidden;
+      transform: scale(0.96) translateY(-8px);
+      transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    #cmd-palette-overlay.active #cmd-palette { transform: scale(1) translateY(0); }
+    .cmd-item {
+      padding: 12px 16px;
+      color: #a1a1aa;
+      font-size: 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .cmd-item.selected, .cmd-item:hover {
+      background: rgba(34, 211, 238, 0.08);
+      color: #fafafa;
+    }
+
+    /* Apps リンク一覧（右上）：4分割グリッド内で高さ制限＋この中だけスクロール */
+    #panel-apps .app-panel-bg {
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: radial-gradient(ellipse at center, rgba(55, 55, 55, 0.32) 0%, #05060f 50%, #020208 100%);
+      pointer-events: none;
+      z-index: 0;
+    }
+    #panel-apps .app-panel-body {
+      position: relative;
+      z-index: 10;
+      flex: 1 1 0;
+      min-height: 0;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      padding: 10px 8px 10px 10px;
+    }
+    #app-list.app-link-grid {
+      flex: 1 1 0;
+      min-height: 0;
+      min-width: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+      touch-action: pan-y;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 8px;
+      align-content: start;
+      padding-right: 4px;
+      scrollbar-width: auto;
+      scrollbar-color: rgba(34, 211, 238, 0.55) rgba(255, 255, 255, 0.08);
+    }
+    #app-list.app-link-grid::-webkit-scrollbar {
+      width: 12px;
+    }
+    #app-list.app-link-grid::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.07);
+      border-radius: 999px;
+      margin: 6px 2px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    #app-list.app-link-grid::-webkit-scrollbar-thumb {
+      background: linear-gradient(180deg, rgba(235, 235, 235, 0.55), rgba(145, 145, 145, 0.5));
+      border-radius: 999px;
+      border: 3px solid rgba(8, 10, 18, 0.95);
+      min-height: 40px;
+    }
+    #app-list.app-link-grid::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(180deg, rgba(245, 245, 245, 0.85), rgba(180, 180, 180, 0.75));
+    }
+    #app-list.app-link-grid::-webkit-scrollbar-thumb:active {
+      background: linear-gradient(180deg, rgba(255, 255, 255, 1), rgba(190, 190, 190, 0.9));
+    }
+    .app-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      min-width: 0;
+      background: linear-gradient(90deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px;
+      padding: 8px 8px;
+      transition: border-color 0.2s, transform 0.2s, background 0.2s;
+      animation: app-row-appear 0.35s ease both;
+    }
+    .app-row:hover {
+      border-color: rgba(255,255,255,0.24);
+      background: linear-gradient(90deg, rgba(240,240,240,0.10), rgba(130,130,130,0.08));
+      transform: translateX(1px);
+    }
+    .app-link {
+      color: #e5e7eb;
+      text-decoration: none;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      flex: 1;
+      position: relative;
+      z-index: 1;
+    }
+    .app-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      flex-shrink: 0;
+      box-shadow: 0 0 12px currentColor;
+      opacity: 0.95;
+    }
+    .app-name {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .app-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .app-mini-btn {
+      font-size: 10px;
+      font-weight: 700;
+      color: #e5e7eb;
+      background: rgba(255,255,255,0.10);
+      border: 1px solid rgba(255,255,255,0.26);
+      border-radius: 999px;
+      padding: 2px 8px;
+      text-decoration: none;
+    }
+    .app-keycap {
+      font-size: 10px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      color: #7dd3fc;
+      background: rgba(0,0,0,0.45);
+      border: 1px solid rgba(125,211,252,0.25);
+      border-radius: 6px;
+      padding: 1px 6px;
+    }
+    @keyframes app-row-appear {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .mascot-wrapper {
+      width: 68px;
+      height: 68px;
+      transform-origin: bottom center;
+      filter: drop-shadow(0 12px 16px rgba(0,0,0,0.65));
+    }
+    @keyframes mascot-squish {
+      0%, 100% { transform: scale(1, 1); }
+      50% { transform: scale(1.04, 0.96); }
+    }
+    @keyframes mascot-jump {
+      0%, 100% { transform: translateY(0) scale(1, 1); }
+      30% { transform: translateY(-56px) scale(0.92, 1.08); }
+      50% { transform: translateY(-64px) scale(0.96, 1.04); }
+      70% { transform: translateY(-56px) scale(1, 1); }
+      85% { transform: translateY(0) scale(1.12, 0.88); }
+      95% { transform: translateY(0) scale(0.96, 1.04); }
+    }
+    @keyframes mascot-roll {
+      0%, 100% { transform: translateX(0) rotate(0deg); }
+      25% { transform: translateX(80px) rotate(360deg); }
+      50% { transform: translateX(80px) rotate(360deg) scale(1.08, 0.92); }
+      75% { transform: translateX(0) rotate(0deg); }
+    }
+    @keyframes mascot-dash {
+      0%, 100% { transform: translateX(0) skewX(0); }
+      15% { transform: translateX(-12px) skewX(12deg); }
+      40% { transform: translateX(96px) skewX(-16deg); }
+      60% { transform: translateX(96px) skewX(0); }
+      85% { transform: translateX(0) skewX(12deg); }
+    }
+    .mascot-thinking #mascotBody { fill: url(#mascotGradThink) !important; }
+    .mascot-thinking { animation: mascot-squish 0.3s ease-in-out infinite !important; }
+    .mascot-fast { animation: mascot-squish 0.5s infinite ease-in-out !important; }
+    .mascot-sleeping #mascotFace { opacity: 0; }
+    .mascot-sleeping #mascotSleepFace { opacity: 1; }
+
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 10px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(34, 211, 238, 0.35); }
+
+    .sync-pill {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #52525b;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(0,0,0,0.25);
+    }
+    .sync-pill.ok { color: #5eead4; border-color: rgba(94, 234, 212, 0.35); }
+    .sync-pill.err { color: #fda4af; border-color: rgba(253, 164, 175, 0.4); }
+    .sync-pill.ok { color: #e5e7eb; border-color: rgba(255, 255, 255, 0.35); }
+    .sync-pill.err { color: #d4d4d8; border-color: rgba(212, 212, 216, 0.35); }
+
+    /* モノトーンUI強制（インラインTailwind色指定の上書き） */
+    #panel-tasks button,
+    #kansou-modal button,
+    #tax-bubble button {
+      color: #e5e7eb !important;
+      background: rgba(255, 255, 255, 0.08) !important;
+      border-color: rgba(255, 255, 255, 0.18) !important;
+    }
+    #report-preview-modal-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 210;
+      background: rgba(2, 4, 12, 0.78);
+      backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+    }
+    #report-preview-modal-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    #report-preview-modal {
+      width: 100%;
+      max-width: 720px;
+      max-height: min(92vh, 820px);
+      background: rgba(12, 14, 22, 0.97);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 16px;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.65);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    #report-preview-subject {
+      font-size: 12px;
+      font-weight: 600;
+      color: #e4e4e7;
+      line-height: 1.5;
+      word-break: break-word;
+    }
+    #report-preview-body {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      background: #f8fafc;
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 11px;
+    }
+    #report-preview-plain {
+      font-size: 11px;
+      color: #a1a1aa;
+      white-space: pre-wrap;
+      line-height: 1.55;
+      max-height: 120px;
+      overflow-y: auto;
+      padding: 8px 10px;
+      background: rgba(0,0,0,0.35);
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    #kansou-modal textarea:focus,
+    #kansou-modal input:focus,
+    #tax-bubble input:focus {
+      border-color: rgba(255, 255, 255, 0.42) !important;
+      box-shadow: 0 0 0 2px rgba(255,255,255,0.10) !important;
+    }
+    #kansou-modal .kansou-field-label,
+    #tax-bubble .text-cyan-200,
+    #tax-bubble .text-violet-200,
+    #tax-bubble .text-emerald-200 {
+      color: #d4d4d8 !important;
+    }
+
+    #kansou-modal-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 200;
+      background: rgba(2, 4, 12, 0.75);
+      backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+    }
+    #kansou-modal-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    #kansou-modal {
+      width: 100%;
+      max-width: 440px;
+      max-height: min(90vh, 640px);
+      background: rgba(12, 14, 22, 0.95);
+      border: 1px solid rgba(34, 211, 238, 0.2);
+      border-radius: 16px;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.05);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .kansou-field-label {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #71717a;
+      margin-bottom: 6px;
+    }
+
+    /* キャラ表示は隠し、反応ボタンのみ表示 */
+    #ai-mascot-container {
+      display: none;
+    }
+    #tax-mascot-container {
+      position: absolute;
+      right: 16px;
+      bottom: 62px;
+      z-index: 24;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      user-select: none;
+    }
+    #ai-mascot,
+    #mascot-bubble,
+    #tax-mascot,
+    #tax-bubble {
+      pointer-events: auto;
+    }
+    #daily-react-btn {
+      position: absolute;
+      right: 92px;
+      bottom: 16px;
+      z-index: 35;
+      border: 1px solid rgba(255,255,255,0.30);
+      background: #ffffff;
+      color: #111827;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      padding: 6px 10px;
+      line-height: 1;
+      cursor: pointer;
+    }
+    #tax-open-btn {
+      position: absolute;
+      right: 16px;
+      bottom: 16px;
+      z-index: 35;
+      border: 1px solid rgba(255,255,255,0.30);
+      background: #111111;
+      color: #f5f5f5;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      padding: 6px 10px;
+      line-height: 1;
+      cursor: pointer;
+    }
+    .ruled-lines {
+      line-height: 1.7;
+      padding-top: 0.65em;
+      background-size: 100% 1.7em;
+      background-position: 0 0.65em;
+      background-image: repeating-linear-gradient(
+        to bottom,
+        rgba(255,255,255,0.00) 0,
+        rgba(255,255,255,0.00) calc(1.7em - 1px),
+        rgba(255,255,255,0.10) calc(1.7em - 1px),
+        rgba(255,255,255,0.10) 1.7em
+      );
+      background-clip: content-box;
+    }
+    #tax-bubble {
+      width: min(520px, calc(100vw - 40px));
+      max-height: min(80vh, 640px);
+      overflow-y: auto;
+      background: #0a0a0a;
+      border: 1px solid rgba(255,255,255,0.20);
+      border-radius: 14px;
+      padding: 14px;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.70), 0 0 0 1px rgba(255,255,255,0.06);
+      backdrop-filter: blur(8px);
+      color: #f5f5f5;
+    }
+    #tax-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 120;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(0, 0, 0, 0.82);
+      backdrop-filter: blur(4px);
+    }
+    #tax-overlay.active {
+      display: flex;
+    }
+    #tax-close {
+      position: absolute;
+      top: 8px;
+      right: 10px;
+      border: 1px solid rgba(255,255,255,0.25);
+      background: rgba(255,255,255,0.08);
+      color: #e5e7eb;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1;
+      padding: 7px 9px;
+      cursor: pointer;
+    }
+    .tax-mascot {
+      width: 62px;
+      height: 62px;
+      filter: drop-shadow(0 10px 12px rgba(0,0,0,0.6));
+      transition: transform 0.2s;
+      display: none;
+    }
+    .tax-mascot:hover {
+      transform: scale(1.06);
+    }
+  </style>
+</head>
+<body class="h-screen w-screen relative">
+  <div class="app-bg" aria-hidden="true"></div>
+
+  <div class="relative z-10 h-full w-full grid grid-cols-2 grid-rows-2 gap-3 sm:gap-4 p-3 sm:p-4">
+
+    <div class="pro-panel" id="panel-sheet">
+      <button type="button" class="focus-btn" onclick="toggleFocus('panel-sheet')" title="Fullscreen">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
+      </button>
+      <div class="iframe-wrapper">
+        <!-- 差し替え: あなたのメインシート URL -->
+        <iframe title="Sheet" src="https://docs.google.com/spreadsheets/d/1deuG2zYdIMegMnCCT7lVl4AD7J75K8KisEsH2NVH10Q/edit?rm=minimal" class="w-full h-full border-0"></iframe>
+      </div>
+    </div>
+
+    <div class="pro-panel" id="panel-apps">
+      <button type="button" class="focus-btn" onclick="toggleFocus('panel-apps')" title="Fullscreen">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
+      </button>
+      <div class="app-panel-bg" aria-hidden="true"></div>
+      <div class="app-panel-body">
+        <div id="app-list" class="app-link-grid" role="list" aria-label="ショートカットリンク"></div>
+      </div>
+    </div>
+
+    <div class="pro-panel" id="panel-cal">
+      <button type="button" class="focus-btn" onclick="toggleFocus('panel-cal')" title="Fullscreen">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
+      </button>
+      <div class="iframe-wrapper">
+        <!-- 差し替え: 埋め込みカレンダー URL -->
+        <iframe title="Calendar" src="https://calendar.google.com/calendar/embed?src=r-kusaka%40okamoto-group.co.jp&mode=AGENDA&color=%23333333&showTitle=0&showNav=1&showDate=1&showPrint=0&showTabs=0&showCalendars=0&showTz=0&bgcolor=%23101010" class="w-full h-full border-0" scrolling="no"></iframe>
+      </div>
+    </div>
+
+    <div class="pro-panel" id="panel-tasks">
+      <button type="button" class="focus-btn" onclick="toggleFocus('panel-tasks')" title="Fullscreen">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
+      </button>
+      <div class="px-4 py-3 flex justify-between items-center flex-none border-b border-white/[0.06] relative z-30 gap-2">
+        <div class="text-[11px] tracking-[0.08em] text-zinc-400 font-semibold">DAILY WORKSPACE</div>
+        <div class="flex items-center gap-2 flex-wrap justify-end">
+          <button type="button" onclick="clearDailyInputs()" class="text-[10px] font-semibold tracking-wide text-zinc-300 bg-white/[0.08] hover:bg-white/[0.14] px-3 py-1.5 rounded-lg border border-white/[0.16]">クリア</button>
+          <button type="button" id="btn-daily-report" onclick="createDailyReport()" class="text-[10px] font-semibold tracking-wide text-zinc-100 bg-white/[0.14] hover:bg-white/[0.20] px-3 py-1.5 rounded-lg border border-white/[0.24]">日報プレビュー</button>
+        </div>
+      </div>
+
+      <div class="flex-1 overflow-y-auto px-4 py-3 relative z-10">
+        <div class="grid grid-cols-2 gap-3 h-full min-h-[220px]">
+          <div class="flex flex-col min-h-0">
+            <div class="text-[10px] text-zinc-400 tracking-[0.08em] mb-2">業務内容</div>
+            <textarea id="gyomu-main-input" class="ruled-lines w-full flex-1 min-h-0 bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-zinc-100 placeholder:text-zinc-500 outline-none resize-none" placeholder=""></textarea>
+          </div>
+          <div class="flex flex-col min-h-0">
+            <div class="text-[10px] text-zinc-400 tracking-[0.08em] mb-2">所感</div>
+            <textarea id="kansou-main-input" class="ruled-lines w-full flex-1 min-h-0 bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-zinc-100 placeholder:text-zinc-500 outline-none resize-none" placeholder="今日の所感を入力"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <div id="ai-mascot-container" class="group">
+        <div id="mascot-bubble" class="hidden mb-2 bg-[#0a0f18]/90 backdrop-blur-md border border-violet-400/25 rounded-xl p-2 shadow-[0_0_24px_rgba(167,139,250,0.15)] flex items-center justify-center min-w-[68px] transition-all duration-200 transform origin-bottom scale-95 opacity-0"></div>
+        <div id="ai-mascot" class="mascot-wrapper group-hover:scale-105 transition-transform" style="animation: mascot-squish 2.5s infinite ease-in-out;" ondblclick="event.stopPropagation(); openKansouModal();" title="ダブルクリックで所感を入力">
+          <svg viewBox="0 0 100 100" class="w-full h-full">
+            <defs>
+              <radialGradient id="mascotGrad" cx="30%" cy="30%" r="70%">
+                <stop offset="0%" stop-color="#ffffff" />
+                <stop offset="100%" stop-color="#a5f3fc" />
+              </radialGradient>
+              <radialGradient id="mascotGradThink" cx="30%" cy="30%" r="70%">
+                <stop offset="0%" stop-color="#ffffff" />
+                <stop offset="100%" stop-color="#c4b5fd" />
+              </radialGradient>
+            </defs>
+            <ellipse cx="50" cy="92" rx="22" ry="5" fill="rgba(0,0,0,0.32)" />
+            <g id="mascotBodyGroup">
+              <circle id="mascotBody" cx="50" cy="54" r="28" fill="url(#mascotGrad)" />
+              <g id="mascotFace" class="transition-opacity duration-200">
+                <circle cx="40" cy="51" r="5.2" fill="#0b1120" />
+                <circle cx="60" cy="51" r="5.2" fill="#0b1120" />
+                <circle cx="41.5" cy="49.4" r="1.8" fill="#ecfeff" />
+                <circle cx="61.5" cy="49.4" r="1.8" fill="#ecfeff" />
+                <path d="M44 64 Q50 69 56 64" fill="none" stroke="#0b1120" stroke-width="2.2" stroke-linecap="round" />
+              </g>
+              <g id="mascotSleepFace" class="opacity-0 transition-opacity duration-300">
+                <path d="M 33 52 Q 40 56 47 52" fill="none" stroke="#0b1120" stroke-width="2.5" stroke-linecap="round" />
+                <path d="M 53 52 Q 60 56 67 52" fill="none" stroke="#0b1120" stroke-width="2.5" stroke-linecap="round" />
+                <circle cx="50" cy="63" r="2.2" fill="#0b1120" />
+                <text x="78" y="25" font-family="Arial" font-size="20" fill="#fff" font-weight="bold" opacity="0.85">Z</text>
+                <text x="92" y="10" font-family="Arial" font-size="12" fill="#fff" font-weight="bold" opacity="0.65">z</text>
+              </g>
+            </g>
+          </svg>
+        </div>
+      </div>
+
+      <div id="tax-mascot-container">
+        <div id="tax-overlay">
+          <div id="tax-bubble">
+          <button type="button" id="tax-close" aria-label="閉じる">×</button>
+          <div class="text-[10px] text-cyan-200 font-bold tracking-wide mb-2">軽減税率カリキュレーター</div>
+          <div class="flex gap-2 mb-2">
+            <button type="button" id="tax-mode-gross" class="text-[10px] px-2 py-1 rounded border border-white/15 bg-white/5 text-zinc-200">税込入力</button>
+            <button type="button" id="tax-mode-net" class="text-[10px] px-2 py-1 rounded border border-white/15 bg-white/5 text-zinc-200">税抜入力</button>
+          </div>
+          <div class="flex gap-2 mb-2">
+            <button type="button" id="tax-rate-8" class="text-[10px] px-2 py-1 rounded border border-cyan-400/35 bg-cyan-500/15 text-cyan-100">8%</button>
+            <button type="button" id="tax-rate-10" class="text-[10px] px-2 py-1 rounded border border-cyan-400/35 bg-cyan-500/15 text-cyan-100">10%</button>
+          </div>
+          <input id="tax-input" type="number" class="w-full bg-black/45 border border-white/15 rounded px-2 py-1.5 text-xs text-white mb-2" placeholder="金額を入力" />
+          <div class="text-[11px] text-zinc-300 leading-relaxed">
+            <div>税抜: <span id="tax-net" class="text-cyan-200 font-mono">0</span></div>
+            <div>消費税: <span id="tax-tax" class="text-violet-200 font-mono">0</span></div>
+            <div>税込: <span id="tax-gross" class="text-emerald-200 font-mono">0</span></div>
+          </div>
+          </div>
+        </div>
+        <svg id="tax-mascot" class="tax-mascot" viewBox="0 0 100 100">
+          <ellipse cx="50" cy="92" rx="22" ry="5" fill="rgba(0,0,0,0.32)" />
+          <circle cx="50" cy="54" r="28" fill="url(#taxGrad)" />
+          <circle cx="40" cy="51" r="5.2" fill="#0b1120" />
+          <circle cx="60" cy="51" r="5.2" fill="#0b1120" />
+          <circle cx="41.5" cy="49.4" r="1.8" fill="#ecfeff" />
+          <circle cx="61.5" cy="49.4" r="1.8" fill="#ecfeff" />
+          <path d="M44 64 Q50 69 56 64" fill="none" stroke="#0b1120" stroke-width="2.2" stroke-linecap="round" />
+          <defs>
+            <radialGradient id="taxGrad" cx="28%" cy="30%" r="72%">
+              <stop offset="0%" stop-color="#ffffff"/>
+              <stop offset="100%" stop-color="#86efac"/>
+            </radialGradient>
+          </defs>
+        </svg>
+      </div>
+
+      <div class="p-2 bg-[#05060f]/60 backdrop-blur-md flex-none border-t border-white/[0.06] relative z-30"></div>
+      <button type="button" id="daily-react-btn" onclick="handleMascotClick()" title="リアクション">●</button>
+      <button type="button" id="tax-open-btn" title="軽減税率">計算</button>
+    </div>
+  </div>
+
+  <div id="cmd-palette-overlay">
+    <div id="cmd-palette">
+      <div class="p-3 border-b border-white/[0.08] flex items-center gap-3">
+        <span class="text-zinc-500 opacity-80" aria-hidden="true">⌘</span>
+        <input type="text" id="cmd-input" class="w-full bg-transparent border-none text-zinc-100 outline-none text-sm placeholder:text-zinc-600" placeholder="Filter…">
+        <span class="text-[10px] text-zinc-600 border border-white/[0.08] px-1.5 rounded-md">ESC</span>
+      </div>
+      <div id="cmd-list" class="max-h-[300px] overflow-y-auto py-2"></div>
+    </div>
+  </div>
+
+  <div id="report-preview-modal-overlay" onclick="if (event.target === this) closeReportPreviewModal();">
+    <div id="report-preview-modal" onclick="event.stopPropagation();">
+      <div class="px-4 py-3 border-b border-white/[0.08] flex items-start justify-between gap-3">
+        <div class="min-w-0 flex-1">
+          <div class="text-sm font-semibold text-zinc-100 mb-1">日報プレビュー</div>
+          <div id="report-preview-subject"></div>
+        </div>
+        <button type="button" onclick="closeReportPreviewModal()" class="text-[10px] font-semibold text-zinc-500 hover:text-zinc-300 px-2 py-1 rounded-lg border border-white/10 flex-shrink-0">閉じる</button>
+      </div>
+      <div class="p-4 flex-1 overflow-y-auto min-h-0 space-y-3 flex flex-col">
+        <div id="report-preview-plain" class="flex-none"></div>
+        <div id="report-preview-body" class="flex-1 min-h-[200px]"></div>
+      </div>
+      <div class="px-4 pb-4 flex flex-wrap gap-2 justify-end border-t border-white/[0.06] pt-3">
+        <button type="button" onclick="closeReportPreviewModal()" class="text-[10px] font-semibold text-zinc-500 hover:text-zinc-300 px-3 py-2 rounded-lg border border-white/10">戻る</button>
+        <button type="button" id="btn-confirm-daily-report" onclick="confirmDailyReportDraft()" class="text-[10px] font-semibold text-zinc-100 bg-white/[0.18] hover:bg-white/[0.26] px-4 py-2 rounded-lg border border-white/30">Gmail に下書き作成</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="kansou-modal-overlay" onclick="if (event.target === this) closeKansouModal();">
+    <div id="kansou-modal" onclick="event.stopPropagation();">
+      <div class="px-4 py-3 border-b border-white/[0.08] flex items-start gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-400/30 to-violet-500/30 border border-white/10 flex-shrink-0 flex items-center justify-center text-lg" aria-hidden="true">◇</div>
+      <div>
+        <div class="text-sm font-semibold text-zinc-100">所感</div>
+      </div>
+      </div>
+      <div class="p-4 flex-1 overflow-y-auto min-h-0 space-y-4">
+        <div>
+          <div class="kansou-field-label">業務</div>
+          <textarea id="kansou-gyomu-input" rows="4" class="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-cyan-500/40 resize-y min-h-[88px]" placeholder="（箇条書き可）"></textarea>
+        </div>
+        <div>
+          <div class="kansou-field-label">感想</div>
+          <textarea id="kansou-hannou-input" rows="3" class="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-violet-500/35 resize-y min-h-[72px]" placeholder=""></textarea>
+        </div>
+        <div class="flex justify-end">
+          <button type="button" onclick="mergePlainKansou()" class="text-[10px] font-semibold text-emerald-200/95 bg-emerald-500/15 hover:bg-emerald-500/25 px-3 py-2 rounded-lg border border-emerald-500/35">結合して所感欄へ</button>
+        </div>
+        <div>
+          <div class="kansou-field-label text-cyan-400/80">所感</div>
+          <textarea id="kansou-input" rows="5" class="w-full bg-black/40 border border-cyan-500/20 rounded-xl px-3 py-2.5 text-xs text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-cyan-500/45 resize-y min-h-[100px]" placeholder=""></textarea>
+        </div>
+      </div>
+      <div class="px-4 pb-4 flex flex-wrap gap-2 justify-end border-t border-white/[0.06] pt-3">
+        <button type="button" onclick="closeKansouModal()" class="text-[10px] font-semibold text-zinc-500 hover:text-zinc-300 px-3 py-2 rounded-lg border border-white/10">閉じる</button>
+        <button type="button" onclick="saveKansouAndClose()" class="text-[10px] font-semibold text-cyan-200 bg-cyan-500/20 hover:bg-cyan-500/30 px-3 py-2 rounded-lg border border-cyan-500/35">保存して閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SCHEDULE_URL = 'https://calendar.app.google/egS9bVik7BJTZ8Jb9';
+
+    const apps = [
+      { category: 'core', key: '1', name: 'MAIL', url: 'https://mail.google.com/mail/u/0/#inbox', color: 0xff3366 },
+      { category: 'core', key: '2', name: 'CHAT', url: 'https://mail.google.com/mail/u/0/#chat/home', color: 0x33ccff },
+      { category: 'core', key: 'o', name: 'TOP', url: 'https://sites.google.com/okamoto-group.co.jp/top2020/top%E3%83%9A%E3%83%BC%E3%82%B8', color: 0xffaa00 },
+      { category: 'core', key: 'w', name: 'WORK LIST', url: 'https://docs.google.com/spreadsheets/d/1mC-euXll9WW0O6rtHmrZbvapjft2rSSw9detZBKunas/edit?gid=0#gid=0', color: 0xaa00ff },
+      { category: 'core', key: 't', name: 'ToDo List', url: 'https://script.google.com/a/macros/okamoto-group.co.jp/s/AKfycbzBSSatEsGqHwNcy9aZHgNa0VclMortsZMZlFp279aL3SPsScSbv3ticlL34BPAWQcl9g/exec', color: 0x33ff66 },
+      { category: 'ops', key: 'h', name: 'HomePage', url: 'https://joyfit.jp/kyodo/wp-login.php', color: 0xff5555 },
+      { category: 'ops', key: 'a', name: 'App管理', url: 'https://entry.joyfit-service.jp/admin/001304/', color: 0xaaaaaa },
+      { category: 'ops', key: 'r', name: '稟議申請', url: 'https://www.appsheet.com/start/091d2146-ac0b-4c3a-9962-84e071dc23e1', color: 0xffdd00 },
+      { category: 'tools', key: 'g', name: 'GEMINI', url: 'https://gemini.google.com/app?hl=ja', color: 0xffffff },
+      { category: 'tools', key: 'v', name: 'Vercel', url: 'https://vercel.com/new', color: 0xeeeeee },
+      { category: 'tools', key: 'c', name: 'Canva', url: 'https://www.canva.com/', color: 0x00dfff },
+      { category: 'tools', key: 'p', name: 'PT', url: 'https://reserve.joyfit.jp/', color: 0xff6600 },
+      { category: 'tools', key: 'q', name: 'Querier', url: 'https://app.querier.io/', color: 0x8888ff }
+    ];
+
+    function renderAppLinks() {
+      const list = document.getElementById('app-list');
+      if (!list) return;
+      list.innerHTML = '';
+
+      apps.forEach(function (app, idx) {
+        const row = document.createElement('div');
+        row.className = 'app-row';
+        row.setAttribute('role', 'listitem');
+        row.style.animationDelay = (idx * 0.02) + 's';
+
+        const colorHex = '#d4d4d8';
+        const link = document.createElement('a');
+        link.className = 'app-link';
+        link.href = app.url;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.innerHTML =
+          '<span class="app-dot" style="color:' + colorHex + '; background:' + colorHex + ';"></span>' +
+          '<span class="app-name">' + app.name + '</span>';
+
+        const actions = document.createElement('div');
+        actions.className = 'app-actions';
+        if (app.name === 'MAIL') {
+          actions.innerHTML += '<span id="mail-badge" class="app-keycap" style="display:none;">0</span>';
+        }
+        if (app.name === 'Vercel' || app.name === 'PT') {
+          actions.innerHTML += '<a class="app-mini-btn" href="' + SCHEDULE_URL + '" target="_blank" rel="noopener noreferrer">空き</a>';
+        }
+        if (app.key) {
+          actions.innerHTML += '<span class="app-keycap">' + app.key.toUpperCase() + '</span>';
+        }
+
+        row.appendChild(link);
+        row.appendChild(actions);
+        list.appendChild(row);
+      });
+    }
+
+    let mascotTimerId = null;
+    let mascotStartTime = 0;
+    let mascotElapsedTime = 0;
+    let mascotState = 'idle';
+    let taxMode = 'gross'; // gross | net
+    let taxRate = 8;
+    const DEFAULT_GYOMU_LINES = ['清掃業務', 'お客様対応', '事務作業'];
+
+    function formatMascotTime(ms) {
+      const totalSeconds = Math.floor(ms / 1000);
+      const minutes = Math.floor(totalSeconds / 60);
+      const seconds = totalSeconds % 60;
+      return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    }
+
+    function updateMascotBubble() {
+      const bubble = document.getElementById('mascot-bubble');
+      if (mascotState === 'idle') {
+        bubble.classList.remove('scale-100', 'opacity-100');
+        bubble.classList.add('scale-95', 'opacity-0');
+        setTimeout(function () { if (mascotState === 'idle') bubble.classList.add('hidden'); }, 200);
+      } else if (mascotState === 'running') {
+        bubble.classList.remove('hidden');
+        setTimeout(function () {
+          bubble.classList.remove('scale-95', 'opacity-0');
+          bubble.classList.add('scale-100', 'opacity-100');
+        }, 10);
+        const currentElapsed = Date.now() - mascotStartTime;
+        bubble.innerHTML = '<span class="font-mono text-[14px] font-semibold text-zinc-200">' + formatMascotTime(currentElapsed) + '</span>';
+      } else if (mascotState === 'stopped') {
+        bubble.classList.remove('hidden', 'scale-95', 'opacity-0');
+        bubble.classList.add('scale-100', 'opacity-100');
+        const timeStr = formatMascotTime(mascotElapsedTime);
+        bubble.innerHTML =
+          '<div class="flex flex-col items-center gap-1">' +
+          '<span class="text-[9px] text-zinc-300 font-bold tracking-wider uppercase">Measured</span>' +
+          '<span class="font-mono text-[14px] font-semibold text-zinc-100 leading-none mb-1">' + timeStr + '</span>' +
+          '<button type="button" onclick="resetMascotTimer(event)" class="text-[10px] font-bold bg-white/10 text-zinc-200 px-3 py-1 rounded-lg border border-white/25 hover:bg-white/20 transition-colors">RESET</button>' +
+          '</div>';
+      }
+    }
+
+    function handleMascotClick() {
+      const mascot = document.getElementById('ai-mascot');
+      if (!mascot) return;
+      if (mascotState === 'idle') {
+        mascotStartTime = Date.now();
+        mascotState = 'running';
+        mascotTimerId = setInterval(updateMascotBubble, 1000);
+        updateMascotBubble();
+        mascot.classList.add('mascot-fast');
+        mascot.classList.remove('mascot-sleeping');
+        mascot.style.animation = '';
+      } else if (mascotState === 'running') {
+        clearInterval(mascotTimerId);
+        mascotElapsedTime = Date.now() - mascotStartTime;
+        mascotState = 'stopped';
+        updateMascotBubble();
+        mascot.classList.remove('mascot-fast');
+      }
+    }
+
+    function resetMascotTimer(e) {
+      e.stopPropagation();
+      mascotState = 'idle';
+      mascotElapsedTime = 0;
+      updateMascotBubble();
+    }
+
+    function formatYen(value) {
+      return Number(value || 0).toLocaleString('ja-JP');
+    }
+
+    function calcTaxView() {
+      var input = document.getElementById('tax-input');
+      var netEl = document.getElementById('tax-net');
+      var taxEl = document.getElementById('tax-tax');
+      var grossEl = document.getElementById('tax-gross');
+      if (!input || !netEl || !taxEl || !grossEl) return;
+      var v = Number(input.value || 0);
+      if (!Number.isFinite(v) || v < 0) v = 0;
+
+      var net = 0;
+      var gross = 0;
+      var tax = 0;
+      if (taxMode === 'gross') {
+        gross = v;
+        net = Math.floor(gross / (1 + taxRate / 100));
+        tax = gross - net;
+      } else {
+        net = v;
+        tax = Math.floor(net * taxRate / 100);
+        gross = net + tax;
+      }
+      netEl.textContent = formatYen(net);
+      taxEl.textContent = formatYen(tax);
+      grossEl.textContent = formatYen(gross);
+    }
+
+    function setTaxMode(nextMode) {
+      taxMode = nextMode;
+      var b1 = document.getElementById('tax-mode-gross');
+      var b2 = document.getElementById('tax-mode-net');
+      if (b1 && b2) {
+        b1.style.borderColor = nextMode === 'gross' ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.15)';
+        b1.style.background = nextMode === 'gross' ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.05)';
+        b2.style.borderColor = nextMode === 'net' ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.15)';
+        b2.style.background = nextMode === 'net' ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.05)';
+      }
+      calcTaxView();
+    }
+
+    function setTaxRate(nextRate) {
+      taxRate = nextRate;
+      var r8 = document.getElementById('tax-rate-8');
+      var r10 = document.getElementById('tax-rate-10');
+      if (r8 && r10) {
+        r8.style.opacity = nextRate === 8 ? '1' : '0.6';
+        r10.style.opacity = nextRate === 10 ? '1' : '0.6';
+      }
+      calcTaxView();
+    }
+
+    function setupTaxMascot() {
+      var mascot = document.getElementById('tax-mascot');
+      var openBtn = document.getElementById('tax-open-btn');
+      var overlay = document.getElementById('tax-overlay');
+      var bubble = document.getElementById('tax-bubble');
+      var closeBtn = document.getElementById('tax-close');
+      var input = document.getElementById('tax-input');
+      var modeGross = document.getElementById('tax-mode-gross');
+      var modeNet = document.getElementById('tax-mode-net');
+      var rate8 = document.getElementById('tax-rate-8');
+      var rate10 = document.getElementById('tax-rate-10');
+      if (!overlay || !bubble || !input) return;
+
+      var openOverlay = function (e) {
+        if (e) e.stopPropagation();
+        overlay.classList.add('active');
+        setTimeout(function () { input.focus(); }, 40);
+      };
+
+      if (mascot) mascot.addEventListener('click', openOverlay);
+      if (openBtn) openBtn.addEventListener('click', openOverlay);
+      if (openBtn) openBtn.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          openOverlay(e);
+        }
+      });
+      bubble.addEventListener('click', function (e) { e.stopPropagation(); });
+      overlay.addEventListener('click', function (e) {
+        if (e.target === overlay) overlay.classList.remove('active');
+      });
+      if (closeBtn) {
+        closeBtn.addEventListener('click', function () {
+          overlay.classList.remove('active');
+        });
+      }
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && overlay.classList.contains('active')) {
+          overlay.classList.remove('active');
+        }
+      });
+      input.addEventListener('input', calcTaxView);
+      modeGross.addEventListener('click', function () { setTaxMode('gross'); });
+      modeNet.addEventListener('click', function () { setTaxMode('net'); });
+      rate8.addEventListener('click', function () { setTaxRate(8); });
+      rate10.addEventListener('click', function () { setTaxRate(10); });
+      setTaxMode('gross');
+      setTaxRate(8);
+      calcTaxView();
+    }
+
+    function setupAiMascotClick() {
+      var mascot = document.getElementById('ai-mascot');
+      if (!mascot) return;
+      mascot.addEventListener('click', function (e) {
+        e.stopPropagation();
+        handleMascotClick();
+      });
+    }
+
+    function randomMascotAction() {
+      const mascot = document.getElementById('ai-mascot');
+      if (!mascot || mascot.classList.contains('mascot-thinking') || mascotState === 'running') {
+        setTimeout(randomMascotAction, 2000);
+        return;
+      }
+      const actions = ['sleep', 'squish', 'squish', 'squish'];
+      const action = actions[Math.floor(Math.random() * actions.length)];
+      mascot.classList.remove('mascot-sleeping');
+      void mascot.offsetWidth;
+      if (action === 'sleep') {
+        mascot.classList.add('mascot-sleeping');
+        mascot.style.animation = 'mascot-squish 4s infinite ease-in-out';
+      } else mascot.style.animation = 'mascot-squish 2.5s infinite ease-in-out';
+      const nextDelay = action === 'sleep' ? 6000 : (Math.random() * 3000 + 2000);
+      setTimeout(randomMascotAction, nextDelay);
+    }
+
+    let activeTasks = JSON.parse(localStorage.getItem('ryuta_pro_active') || '[]');
+    let finishedTasks = JSON.parse(localStorage.getItem('ryuta_pro_done') || '[]');
+    let kansouText = localStorage.getItem('ryuta_pro_kansou') || '';
+
+    /** 業務欄は下書きがあればそれを優先。なければ Done から箇条書き。感想は前回入力を復元 */
+    function openKansouModal() {
+      var gy = document.getElementById('kansou-gyomu-input');
+      var hn = document.getElementById('kansou-hannou-input');
+      var ta = document.getElementById('kansou-input');
+      var draftG = '';
+      try {
+        draftG = localStorage.getItem('ryuta_pro_kansou_gyomu_draft') || '';
+      } catch (e) {}
+      if (gy) {
+        if (draftG.trim()) {
+          gy.value = draftG;
+        } else if (finishedTasks.length) {
+          gy.value = finishedTasks.map(function (t) { return '・' + t; }).join('\n');
+        } else {
+          gy.value = '';
+        }
+      }
+      if (hn) {
+        hn.value = localStorage.getItem('ryuta_pro_kansou_hannou') || '';
+      }
+      if (ta) ta.value = kansouText;
+      var ov = document.getElementById('kansou-modal-overlay');
+      if (ov) {
+        ov.classList.add('active');
+        setTimeout(function () { if (hn) hn.focus(); }, 100);
+      }
+    }
+
+    /** API なし：業務メモと感想を見出し付きでつなぐだけ */
+    function mergePlainKansou() {
+      var g = document.getElementById('kansou-gyomu-input');
+      var h = document.getElementById('kansou-hannou-input');
+      var out = document.getElementById('kansou-input');
+      if (!g || !h || !out) return;
+      var gy = g.value.trim();
+      var hn = h.value.trim();
+      if (!hn) {
+        window.alert('所感を入力してください。');
+        return;
+      }
+      // 所感欄には「所感」のみを入れる（業務内容は重複させない）
+      out.value = hn;
+      try {
+        localStorage.setItem('ryuta_pro_kansou_hannou', hn);
+        localStorage.setItem('ryuta_pro_kansou_gyomu_draft', gy);
+      } catch (e) {}
+    }
+
+    function closeKansouModal() {
+      var ov = document.getElementById('kansou-modal-overlay');
+      if (ov) ov.classList.remove('active');
+    }
+
+    function saveKansouAndClose() {
+      var ta = document.getElementById('kansou-input');
+      var hn = document.getElementById('kansou-hannou-input');
+      var gy = document.getElementById('kansou-gyomu-input');
+      kansouText = ta ? ta.value.trim() : '';
+      localStorage.setItem('ryuta_pro_kansou', kansouText);
+      try {
+        if (hn) localStorage.setItem('ryuta_pro_kansou_hannou', hn.value.trim());
+        if (gy) localStorage.setItem('ryuta_pro_kansou_gyomu_draft', gy.value.trim());
+      } catch (e) {}
+      closeKansouModal();
+    }
+
+    function polishKansouAI() {
+      var ta = document.getElementById('kansou-input');
+      if (!ta || !ta.value.trim()) {
+        window.alert('先に所感を入力してください。');
+        return;
+      }
+      if (typeof google === 'undefined' || !google.script || !google.script.run) {
+        window.alert('Web アプリで開いたときだけ使えます。');
+        return;
+      }
+      var btn = document.getElementById('btn-polish-kansou');
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = '…';
+      }
+      google.script.run
+        .withSuccessHandler(function (r) {
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'AIで整える';
+          }
+          if (r && r.ok) ta.value = r.text;
+          else window.alert((r && r.message) || '校閲に失敗しました。');
+        })
+        .withFailureHandler(function (err) {
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'AIで整える';
+          }
+          window.alert('エラー: ' + (err && err.message ? err.message : String(err)));
+        })
+        .polishKansouWithGemini(ta.value);
+    }
+
+    function setSyncStatus(text, kind) {
+      const el = document.getElementById('sync-status');
+      if (!el) return;
+      el.textContent = text;
+      el.className = 'sync-pill' + (kind === 'ok' ? ' ok' : kind === 'err' ? ' err' : '');
+    }
+
+    function processInputWithoutAI(text) {
+      if (!text || !text.trim()) return;
+      const input = document.getElementById('task-input');
+      const mascot = document.getElementById('ai-mascot');
+      if (!input) return;
+      input.disabled = true;
+      input.value = '…';
+      input.classList.add('ai-loading');
+      if (mascot) {
+        mascot.classList.remove('mascot-sleeping');
+        mascot.classList.add('mascot-thinking');
+      }
+      setTimeout(function () {
+        activeTasks.push(text.trim());
+        saveTasks();
+        renderTasks();
+        const container = document.getElementById('task-container-inbox');
+        if (container) {
+          setTimeout(function () { container.scrollTop = container.scrollHeight; }, 50);
+        }
+        input.disabled = false;
+        input.value = '';
+        input.classList.remove('ai-loading');
+        if (mascot) mascot.classList.remove('mascot-thinking');
+        setTimeout(function () { input.focus(); }, 50);
+      }, 600);
+    }
+
+    var taskInputEl = document.getElementById('task-input');
+    if (taskInputEl) {
+      taskInputEl.addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') processInputWithoutAI(this.value);
+      });
+    }
+
+    function renderTasks() {
+      const inboxContainer = document.getElementById('task-container-inbox');
+      const doneContainer = document.getElementById('task-container-done');
+      if (!inboxContainer || !doneContainer) return;
+      inboxContainer.innerHTML = '';
+      activeTasks.forEach(function (task, index) {
+        const div = document.createElement('div');
+        div.className = 'task-card';
+        div.innerHTML =
+          '<div class="task-checkbox" onclick="completeTask(' + index + ')"></div>' +
+          '<div class="flex-1 text-xs text-zinc-300 outline-none leading-relaxed" contenteditable="true" onblur="editTask(event, \'active\', ' + index + ')" onkeydown="handleTaskEditKey(event)">' +
+          escapeHtml(task) + '</div>';
+        inboxContainer.appendChild(div);
+      });
+      doneContainer.innerHTML = '';
+      finishedTasks.forEach(function (task, index) {
+        const div = document.createElement('div');
+        div.className = 'task-card done-card';
+        div.innerHTML =
+          '<div class="task-checkbox done" onclick="undoTask(' + index + ')"></div>' +
+          '<div class="flex-1 text-xs text-zinc-500 line-through outline-none leading-relaxed" contenteditable="true" onblur="editTask(event, \'done\', ' + index + ')" onkeydown="handleTaskEditKey(event)">' +
+          escapeHtml(task) + '</div>';
+        doneContainer.appendChild(div);
+      });
+    }
+
+    function escapeHtml(s) {
+      const d = document.createElement('div');
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    function editTask(event, type, index) {
+      const newText = event.target.textContent.trim();
+      if (newText === '') {
+        if (type === 'active') activeTasks.splice(index, 1);
+        else finishedTasks.splice(index, 1);
+      } else {
+        if (type === 'active') activeTasks[index] = newText;
+        else finishedTasks[index] = newText;
+      }
+      saveTasks();
+      renderTasks();
+    }
+
+    function handleTaskEditKey(event) {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        event.target.blur();
+      }
+    }
+
+    function completeTask(index) {
+      finishedTasks.push(activeTasks.splice(index, 1)[0]);
+      saveTasks();
+      renderTasks();
+    }
+
+    function undoTask(index) {
+      activeTasks.push(finishedTasks.splice(index, 1)[0]);
+      saveTasks();
+      renderTasks();
+    }
+
+    function saveTasks() {
+      localStorage.setItem('ryuta_pro_active', JSON.stringify(activeTasks));
+      localStorage.setItem('ryuta_pro_done', JSON.stringify(finishedTasks));
+    }
+
+    function normalizeGyomuLine_(line) {
+      return String(line || '')
+        .replace(/^[・\-•\s]+/, '')
+        .trim();
+    }
+
+    function parseGyomuLines_(raw) {
+      if (!raw) return [];
+      return String(raw)
+        .replace(/\r\n/g, '\n')
+        .split('\n')
+        .map(normalizeGyomuLine_)
+        .filter(function (v) { return !!v; });
+    }
+
+    function fillMainEditorsFromState_() {
+      var gy = document.getElementById('gyomu-main-input');
+      var ks = document.getElementById('kansou-main-input');
+      if (gy) {
+        var baseLines = finishedTasks && finishedTasks.length ? finishedTasks : DEFAULT_GYOMU_LINES;
+        gy.value = baseLines.join('\n');
+      }
+      if (ks) ks.value = kansouText || '';
+    }
+
+    function syncStateFromMainEditors_() {
+      var gy = document.getElementById('gyomu-main-input');
+      var ks = document.getElementById('kansou-main-input');
+      var gyLines = parseGyomuLines_(gy ? gy.value : '');
+      finishedTasks = gyLines;
+      activeTasks = [];
+      kansouText = ks ? String(ks.value || '').trim() : '';
+      try {
+        localStorage.setItem('ryuta_pro_kansou', kansouText);
+      } catch (e) {}
+      saveTasks();
+    }
+
+    function clearDailyInputs() {
+      var gy = document.getElementById('gyomu-main-input');
+      var ks = document.getElementById('kansou-main-input');
+      if (gy) gy.value = DEFAULT_GYOMU_LINES.join('\n');
+      if (ks) ks.value = '';
+      activeTasks = [];
+      finishedTasks = DEFAULT_GYOMU_LINES.slice();
+      kansouText = '';
+      try {
+        localStorage.setItem('ryuta_pro_kansou', '');
+      } catch (e) {}
+      saveTasks();
+      setSyncStatus('CLR', 'ok');
+    }
+
+    function switchTaskTab(tab) {
+      const inbox = document.getElementById('task-container-inbox');
+      const done = document.getElementById('task-container-done');
+      const btnInbox = document.getElementById('tab-inbox');
+      const btnDone = document.getElementById('tab-done');
+      if (!inbox || !done || !btnInbox || !btnDone) return;
+      if (tab === 'inbox') {
+        inbox.classList.remove('hidden');
+        done.classList.add('hidden');
+        btnInbox.classList.add('active');
+        btnDone.classList.remove('active');
+      } else {
+        inbox.classList.add('hidden');
+        done.classList.remove('hidden');
+        btnDone.classList.add('active');
+        btnInbox.classList.remove('active');
+      }
+    }
+
+    function copyTasks() {
+      if (finishedTasks.length === 0) return;
+      const textToCopy = '【完了したタスク】\n' + finishedTasks.map(function (t) { return '・' + t; }).join('\n');
+      navigator.clipboard.writeText(textToCopy).then(function () {
+        const btn = document.querySelector('button[onclick="copyTasks()"]');
+        if (!btn) return;
+        const orig = btn.textContent;
+        btn.textContent = 'COPIED';
+        btn.classList.add('text-cyan-300');
+        setTimeout(function () {
+          btn.textContent = orig;
+          btn.classList.remove('text-cyan-300');
+        }, 2000);
+      }).catch(function () {
+        const ta = document.createElement('textarea');
+        ta.value = textToCopy;
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); } catch (e) {}
+        document.body.removeChild(ta);
+      });
+    }
+
+    function syncTasksToSheet(showToast) {
+      if (typeof google === 'undefined' || !google.script || !google.script.run) {
+        setSyncStatus('LOCAL', '');
+        return;
+      }
+      setSyncStatus('…', '');
+      google.script.run
+        .withSuccessHandler(function (res) {
+          if (res && res.ok) setSyncStatus('SYNC', 'ok');
+          else setSyncStatus('ERR', 'err');
+        })
+        .withFailureHandler(function () {
+          setSyncStatus('ERR', 'err');
+        })
+        .saveWorkspaceTasksToSheet(JSON.stringify(activeTasks), JSON.stringify(finishedTasks), kansouText);
+    }
+
+    var pendingReportPayload = null;
+
+    function setDailyReportBtnLoading(loading) {
+      var btn = document.getElementById('btn-daily-report');
+      if (!btn) return;
+      btn.disabled = !!loading;
+      btn.textContent = loading ? '…' : '日報プレビュー';
+    }
+
+    function setConfirmReportBtnLoading(loading) {
+      var btn = document.getElementById('btn-confirm-daily-report');
+      if (!btn) return;
+      btn.disabled = !!loading;
+      btn.textContent = loading ? '作成中…' : 'Gmail に下書き作成';
+    }
+
+    function openReportPreviewModal(res) {
+      var subjectEl = document.getElementById('report-preview-subject');
+      var bodyEl = document.getElementById('report-preview-body');
+      var plainEl = document.getElementById('report-preview-plain');
+      var ov = document.getElementById('report-preview-modal-overlay');
+      if (subjectEl) subjectEl.textContent = res.subject || '';
+      if (bodyEl) bodyEl.innerHTML = res.htmlBody || '';
+      if (plainEl) plainEl.textContent = res.previewText || '';
+      if (ov) ov.classList.add('active');
+    }
+
+    function closeReportPreviewModal() {
+      var ov = document.getElementById('report-preview-modal-overlay');
+      if (ov) ov.classList.remove('active');
+      pendingReportPayload = null;
+    }
+
+    /** プレビュー → 確認後に下書き（サーバー呼び出しは各 1 回） */
+    function createDailyReport() {
+      if (typeof google === 'undefined' || !google.script || !google.script.run) {
+        window.alert('日報は Google の Web アプリ（デプロイした URL）で開いたときだけ使えます。');
+        return;
+      }
+      syncStateFromMainEditors_();
+      if (!finishedTasks.length) {
+        window.alert('業務内容を 1 行以上入力してください。');
+        return;
+      }
+
+      setDailyReportBtnLoading(true);
+      google.script.run
+        .withSuccessHandler(function (res) {
+          setDailyReportBtnLoading(false);
+          if (!res || !res.ok) {
+            setSyncStatus('ERR', 'err');
+            window.alert((res && res.message) || 'プレビューの作成に失敗しました。');
+            return;
+          }
+          pendingReportPayload = {
+            active: JSON.stringify(activeTasks),
+            done: JSON.stringify(finishedTasks),
+            kansou: kansouText,
+          };
+          openReportPreviewModal(res);
+        })
+        .withFailureHandler(function (err) {
+          setDailyReportBtnLoading(false);
+          setSyncStatus('ERR', 'err');
+          window.alert('エラー: ' + (err && err.message ? err.message : String(err)));
+        })
+        .previewDailyReport(
+          JSON.stringify(activeTasks),
+          JSON.stringify(finishedTasks),
+          kansouText
+        );
+    }
+
+    function confirmDailyReportDraft() {
+      if (!pendingReportPayload) return;
+      if (typeof google === 'undefined' || !google.script || !google.script.run) return;
+
+      setConfirmReportBtnLoading(true);
+      google.script.run
+        .withSuccessHandler(function (res) {
+          setConfirmReportBtnLoading(false);
+          if (res && res.ok) {
+            setSyncStatus('DRAFT', 'ok');
+            closeReportPreviewModal();
+            window.alert('Gmail に下書きを作成しました。\n件名: ' + (res.subject || ''));
+          } else {
+            setSyncStatus('ERR', 'err');
+            window.alert((res && res.message) || '日報下書きの作成に失敗しました。');
+          }
+        })
+        .withFailureHandler(function (err) {
+          setConfirmReportBtnLoading(false);
+          setSyncStatus('ERR', 'err');
+          window.alert('エラー: ' + (err && err.message ? err.message : String(err)));
+        })
+        .createDailyReportFromWorkspace(
+          pendingReportPayload.active,
+          pendingReportPayload.done,
+          pendingReportPayload.kansou
+        );
+    }
+
+    /** シート結果をローカルへ反映。force=true なら当日行がなくても空で上書き（更新ボタン用） */
+    function applySheetTasksToLocal_(res, force) {
+      if (!res || !res.ok) return false;
+      var useServer = force === true || res.hasTodayRow === true;
+      if (!useServer) return false;
+      activeTasks = Array.isArray(res.active) ? res.active : [];
+      finishedTasks = Array.isArray(res.done) ? res.done : [];
+      if (typeof res.kansou === 'string') {
+        kansouText = res.kansou;
+        try {
+          localStorage.setItem('ryuta_pro_kansou', kansouText);
+        } catch (e) {}
+      }
+      fillMainEditorsFromState_();
+      saveTasks();
+      renderTasks();
+      return true;
+    }
+
+    function loadFromSheet() {
+      if (typeof google === 'undefined' || !google.script || !google.script.run) return;
+      google.script.run
+        .withSuccessHandler(function (res) {
+          if (!res || !res.ok) return;
+          applySheetTasksToLocal_(res, false);
+          setSyncStatus('LOAD', 'ok');
+        })
+        .loadWorkspaceTasksFromSheet();
+    }
+
+    function refreshTasksFromSheet() {
+      if (typeof google === 'undefined' || !google.script || !google.script.run) {
+        window.alert('シートからの更新は、デプロイした Web アプリで開いたときだけ使えます。');
+        return;
+      }
+      setSyncStatus('…', '');
+      google.script.run
+        .withSuccessHandler(function (res) {
+          if (!res || !res.ok) {
+            setSyncStatus('ERR', 'err');
+            window.alert((res && res.message) || 'シートの読み込みに失敗しました。');
+            return;
+          }
+          applySheetTasksToLocal_(res, true);
+          setSyncStatus('UPD', 'ok');
+        })
+        .withFailureHandler(function (err) {
+          setSyncStatus('ERR', 'err');
+          window.alert('エラー: ' + (err && err.message ? err.message : String(err)));
+        })
+        .loadWorkspaceTasksFromSheet();
+    }
+
+    let currentFocused = null;
+    function toggleFocus(panelId) {
+      const panel = document.getElementById(panelId);
+      if (currentFocused === panel) {
+        panel.classList.remove('focused-panel');
+        currentFocused = null;
+      } else {
+        if (currentFocused) currentFocused.classList.remove('focused-panel');
+        panel.classList.add('focused-panel');
+        currentFocused = panel;
+      }
+      setTimeout(function () { window.dispatchEvent(new Event('resize')); }, 350);
+    }
+
+    const cmdOverlay = document.getElementById('cmd-palette-overlay');
+    const cmdInput = document.getElementById('cmd-input');
+    const cmdList = document.getElementById('cmd-list');
+    let filteredApps = apps.slice();
+    let selectedIndex = 0;
+
+    function openCmdPalette() {
+      cmdOverlay.classList.add('active');
+      cmdInput.value = '';
+      renderCmdList('');
+      cmdInput.focus();
+    }
+    function closeCmdPalette() {
+      cmdOverlay.classList.remove('active');
+    }
+
+    function renderCmdList(query) {
+      const q = (query || '').toLowerCase();
+      filteredApps = apps.filter(function (app) { return app.name.toLowerCase().includes(q); });
+      cmdList.innerHTML = '';
+      selectedIndex = 0;
+      if (filteredApps.length === 0) {
+        cmdList.innerHTML = '<div class="px-4 py-3 text-xs text-zinc-600">No results — Enter adds task</div>';
+        return;
+      }
+      filteredApps.forEach(function (app, index) {
+        const div = document.createElement('div');
+        div.className = 'cmd-item' + (index === 0 ? ' selected' : '');
+        div.innerHTML = '<span>' + escapeHtml(app.name) + '</span><span class="text-[10px] text-zinc-600 font-mono">Open</span>';
+        div.onmouseover = function () {
+          document.querySelectorAll('.cmd-item').forEach(function (el) { el.classList.remove('selected'); });
+          div.classList.add('selected');
+          selectedIndex = index;
+        };
+        div.onclick = function () { executeCmd(); };
+        cmdList.appendChild(div);
+      });
+    }
+
+    function executeCmd() {
+      if (filteredApps.length > 0) {
+        const a = document.createElement('a');
+        a.href = filteredApps[selectedIndex].url;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      } else if (cmdInput.value.trim() !== '') {
+        processInputWithoutAI(cmdInput.value);
+      }
+      closeCmdPalette();
+    }
+
+    cmdInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') closeCmdPalette();
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        selectedIndex = (selectedIndex + 1) % Math.max(filteredApps.length, 1);
+        updateCmdSelection();
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        selectedIndex = (selectedIndex - 1 + Math.max(filteredApps.length, 1)) % Math.max(filteredApps.length, 1);
+        updateCmdSelection();
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        executeCmd();
+      }
+    });
+    cmdInput.addEventListener('input', function (e) {
+      renderCmdList(e.target.value);
+    });
+
+    function updateCmdSelection() {
+      const items = document.querySelectorAll('.cmd-item');
+      items.forEach(function (item, index) {
+        if (index === selectedIndex) {
+          item.classList.add('selected');
+          item.scrollIntoView({ block: 'nearest' });
+        } else item.classList.remove('selected');
+      });
+    }
+
+    document.addEventListener('keydown', function (e) {
+      var reportOv = document.getElementById('report-preview-modal-overlay');
+      if (reportOv && reportOv.classList.contains('active') && e.key === 'Escape') {
+        closeReportPreviewModal();
+        return;
+      }
+      var kansouOv = document.getElementById('kansou-modal-overlay');
+      if (kansouOv && kansouOv.classList.contains('active') && e.key === 'Escape') {
+        closeKansouModal();
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        openCmdPalette();
+        return;
+      }
+      if (cmdOverlay.classList.contains('active')) return;
+      if (e.key === 'Escape' && currentFocused) {
+        toggleFocus(currentFocused.id);
+        return;
+      }
+      const tag = document.activeElement.tagName.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || document.activeElement.isContentEditable) return;
+      const openTab = function (url) {
+        const a = document.createElement('a');
+        a.href = url;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      };
+      const k = e.key.toLowerCase();
+      const target = apps.find(function (app) { return app.key === k; });
+      if (target && target.url) openTab(target.url);
+    });
+
+    function loadDataFromGAS() {
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(function (unreadCount) {
+            const badge = document.getElementById('mail-badge');
+            if (badge && unreadCount > 0) {
+              badge.textContent = unreadCount;
+              badge.classList.remove('hidden');
+            }
+          })
+          .getUnreadEmailCount();
+      }
+    }
+
+    cmdOverlay.addEventListener('click', function (e) {
+      if (e.target === cmdOverlay) closeCmdPalette();
+    });
+
+    window.onload = function () {
+      renderAppLinks();
+      loadDataFromGAS();
+      loadFromSheet();
+      renderTasks();
+      fillMainEditorsFromState_();
+      setupAiMascotClick();
+      setupTaxMascot();
+      setSyncStatus(typeof google !== 'undefined' && google.script ? '…' : 'LOCAL', '');
+      setTimeout(randomMascotAction, 2200);
+      var mainKansou = document.getElementById('kansou-main-input');
+      if (mainKansou) mainKansou.focus();
+    };
+  </script>
+</body>
+</html>
