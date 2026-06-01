@@ -2,14 +2,14 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'RYUTA 日報スタジオ',
-  description: 'GAS × Vercel — 業務日報の自動生成と Gmail 下書き',
+  title: 'RYUTA Workspace',
+  description: 'GAS × Vercel — 4分割 Workspace',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ja">
-      <body>{children}</body>
+      <body style={{ margin: 0 }}>{children}</body>
     </html>
   );
 }

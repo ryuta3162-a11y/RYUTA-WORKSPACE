@@ -5,23 +5,27 @@
 ## 構成
 
 ```
-┌─────────────────┐     dayContext / createDailyDraft      ┌──────────────────┐
-│  Vercel (web/)  │ ────────────────────────────────────► │  Google Apps     │
-│  日報スタジオ UI │ ◄──────────────────────────────────── │  Script (gas/)   │
-│  Gemini で文章化 │                                       │  スプシ・Gmail    │
-└─────────────────┘                                       └──────────────────┘
-         ▲
-         │ git push
-   ┌─────┴─────┐
-   │  GitHub   │
-   └───────────┘
+  GitHub ──push──► Vercel (web/)
+                      │
+                      │ トップ / = iframe で GAS Workspace 表示
+                      ▼
+                 GAS Web App (gas/index.html + Code.gs)
+                      │
+                      ├── 4分割 UI・日報ボタン（いつもの画面）
+                      └── API（/nippo 用・dayContext など）
 ```
 
-| 役割 | 場所 | 担当 |
-|------|------|------|
-| 4分割 Workspace（従来 UI） | `gas/index.html` | 手動入力・ショートカット |
-| 日報の「頭脳」 | `web/` (Vercel) | カレンダー＋タスク → Gemini |
-| 経堂数値・Gmail 下書き | `gas/Code.gs` | スプシ `日報` シート、GmailApp |
+| URL | 画面 |
+|-----|------|
+| `vercel.app/` | **4分割 Workspace**（GAS と同じ） |
+| `vercel.app/nippo` | 日報だけ作る簡易版（補助） |
+| GAS `/exec` 直リンク | 上と同じ Workspace |
+
+| 役割 | 場所 |
+|------|------|
+| メイン UI | `gas/index.html`（Vercel から iframe 表示） |
+| 日報・スプシ・Gmail | `gas/Code.gs` |
+| Vercel | ドメイン・`/nippo`・API プロキシ |
 
 ## セットアップ
 
