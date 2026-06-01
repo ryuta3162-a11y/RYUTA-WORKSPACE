@@ -17,7 +17,7 @@
 
 | URL | 画面 |
 |-----|------|
-| `vercel.app/` | **4分割 Workspace**（GAS と同じ） |
+| `vercel.app/` | **GAS Workspace へリダイレクト**（4分割・iframe 不可のため） |
 | `vercel.app/nippo` | 日報だけ作る簡易版（補助） |
 | GAS `/exec` 直リンク | 上と同じ Workspace |
 
