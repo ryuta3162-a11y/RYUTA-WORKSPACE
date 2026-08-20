@@ -4,7 +4,7 @@
  */
 var WS_CONFIG = {
   /** タスク同期を書き込むスプレッドシートID（URLの /d/ と /edit/ の間） */
-  SPREADSHEET_ID: '14hxiLBzvGTuIpfZcoVjiHpz8b419OzUrtQAr5788h3w',
+  SPREADSHEET_ID: '1deuG2zYdIMegMnCCT7lVl4AD7J75K8KisEsH2NVH10Q',
   /** 同期用シート名（なければ自動作成） */
   SYNC_SHEET_NAME: 'WorkspaceSync',
   /** 日付列・JSON列・所感（1行目）。既存4列シートは初回保存時に E 列が追記されます */
@@ -44,6 +44,13 @@ function jsonOutput_(obj) {
 /** Vercel 連携用。スクリプトプロパティ WS_API_TOKEN を設定すると必須 */
 function getApiToken_() {
   return PropertiesService.getScriptProperties().getProperty('WS_API_TOKEN') || '';
+}
+
+function applyWsApiToken(token) {
+  var value = String(token || '').trim();
+  if (!value) return { ok: false, message: 'empty' };
+  PropertiesService.getScriptProperties().setProperty('WS_API_TOKEN', value);
+  return { ok: true };
 }
 
 function isApiAuthorized_(e, body) {
@@ -107,6 +114,32 @@ function handleApiGet_(e) {
       if (!isApiAuthorized_(e, null)) return unauthorized_();
       return jsonOutput_(getDayContextForApi_());
     }
+    if (api === 'partnerMails') {
+      if (!isApiAuthorized_(e, null)) return unauthorized_();
+      var emails = String((e.parameter && e.parameter.emails) || '');
+      var label = String((e.parameter && e.parameter.label) || '');
+      return jsonOutput_(searchPartnerMailsForApi_(emails, label));
+    }
+    if (api === 'vendorMail') {
+      return jsonOutput_(syncOneVendorFromGmail_(
+        String((e.parameter && e.parameter.company) || ''),
+        String((e.parameter && e.parameter.email) || '')
+      ));
+    }
+    if (api === 'vendorDiscover') {
+      return jsonOutput_(discoverVendorEmails_(String((e.parameter && e.parameter.company) || '')));
+    }
+    if (api === 'keidoPreview') {
+      var packed = buildKeidoTableHtmlSafe_();
+      return jsonOutput_({
+        ok: !!(packed && packed.html),
+        length: packed && packed.html ? packed.html.length : 0,
+        sample: packed && packed.html ? String(packed.html).slice(0, 400) : '',
+        err: packed && packed.err ? packed.err : '',
+        sheet: packed && packed.sheet ? packed.sheet : '',
+        id: packed && packed.id ? packed.id : '',
+      });
+    }
     if (api === 'dashboard') {
       var tasks = loadWorkspaceTasksFromSheet();
       var unread = getUnreadEmailCount();
@@ -133,7 +166,8 @@ function handleApiPost_(e) {
       api === 'saveTasks' ||
       api === 'createDailyDraft' ||
       api === 'previewDailyReport' ||
-      api === 'polishKansou';
+      api === 'polishKansou' ||
+      api === 'vendorSync';
     if (needsAuth && !isApiAuthorized_(e, body)) return unauthorized_();
 
     if (api === 'saveTasks') {
@@ -166,6 +200,9 @@ function handleApiPost_(e) {
     if (api === 'polishKansou') {
       return jsonOutput_(polishKansouWithGemini(String(body.text || '')));
     }
+    if (api === 'vendorSync') {
+      return jsonOutput_(syncVendorCasesFromGmail_());
+    }
     return jsonOutput_({ ok: false, message: 'Unknown POST api: ' + api });
   } catch (e3) {
     return jsonOutput_({ ok: false, message: String(e3.message || e3) });
@@ -181,6 +218,585 @@ function getUnreadEmailCount() {
   } catch (err) {
     console.error('Gmail取得エラー:', err);
     return 0;
+  }
+}
+
+function quoteGmailTerm_(value) {
+  var s = String(value || '').trim();
+  if (!s) return '';
+  if (/[\s\/:]/.test(s)) return '"' + s.replace(/"/g, '') + '"';
+  return s;
+}
+
+/**
+ * 取引先メール／Gmailラベルからスレッドを取得
+ */
+function searchPartnerMailsForApi_(emailsCsv, label) {
+  try {
+    var parts = [];
+    var labelQ = quoteGmailTerm_(label);
+    if (labelQ) parts.push('label:' + labelQ);
+    var emailParts = [];
+    String(emailsCsv || '')
+      .split(/[,\n;]+/)
+      .forEach(function (raw) {
+        var email = String(raw || '').trim();
+        if (!email) return;
+        emailParts.push('from:' + email);
+        emailParts.push('to:' + email);
+      });
+    if (emailParts.length) parts.push('(' + emailParts.join(' OR ') + ')');
+    if (!parts.length) {
+      return { ok: false, message: 'メールアドレスか Gmail ラベルを入れてください' };
+    }
+    var query = parts.join(' ') + ' newer_than:365d';
+    var threads = GmailApp.search(query, 0, 12);
+    var items = [];
+    for (var i = 0; i < threads.length; i++) {
+      var thread = threads[i];
+      var msg = thread.getMessages()[thread.getMessageCount() - 1];
+      items.push({
+        id: String(thread.getId()),
+        subject: msg ? String(msg.getSubject() || '') : '',
+        from: msg ? String(msg.getFrom() || '') : '',
+        date: msg
+          ? Utilities.formatDate(msg.getDate(), Session.getScriptTimeZone(), 'yyyy/MM/dd')
+          : '',
+        url: thread.getPermalink(),
+        snippet: msg ? String(msg.getPlainBody() || '').replace(/\s+/g, ' ').slice(0, 80) : '',
+      });
+    }
+    return { ok: true, query: query, items: items };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
+var VENDOR_COMPANIES_ = [
+  { name: 'SEKAI', keys: ['SEKAI', 'セカイ'], domains: ['sekai.co.jp'], contacts: [
+    { name: '志賀', email: 'a-shiga@sekai.co.jp' },
+    { name: 'SEKAI team', email: 'team@sekai.co.jp' },
+  ] },
+  { name: 'Lifefitness', keys: ['Lifefitness', 'Life Fitness', 'ライフフィットネス'], domains: ['lifefitness.com'], contacts: [
+    { name: 'Life Fitness CS', email: 'customerservice.jp@lifefitness.com' },
+  ] },
+  { name: 'LIXIL', keys: ['LIXIL', 'リクシル'], domains: ['lixil.com'], contacts: [
+    { name: 'LIXILお問い合わせ', email: 'lxlcc-answer105@lixil.com' },
+  ] },
+  { name: 'BICS', keys: ['BICS', 'ビックス'] },
+  { name: '鳳商事', keys: ['鳳商事'], domains: ['ohtori-s.co.jp'], contacts: [
+    { name: '齋藤 翔', email: 'm-saito@ohtori-s.co.jp' },
+    { name: '首都圏支店', email: 'shutoken@ohtori-s.co.jp' },
+  ] },
+  { name: 'アイリスオーヤマ', keys: ['アイリスオーヤマ', 'IRIS'], domains: ['irisohyama.co.jp'] },
+  { name: 'KH', keys: ['KH', 'gracene'], domains: ['gracene.com'], contacts: [
+    { name: '劉震宇', email: 'info@gracene.com' },
+  ] },
+  { name: '藤ビル', keys: ['藤ビル'], domains: ['fujibuil.co.jp'], contacts: [
+    { name: '小笹', email: 't-ozasa@fujibuil.co.jp' },
+  ] },
+  { name: 'メトス', keys: ['メトス', 'METOS'], domains: ['metos.co.jp'], contacts: [
+    { name: '菅原 睦', email: 's.sugawara@metos.co.jp' },
+    { name: '三原 宏次', email: 'k.mihara@metos.co.jp' },
+  ] },
+  { name: 'プロアバンセ', keys: ['プロアバンセ', 'proavance', '小森'], domains: ['proavance.co.jp'], contacts: [
+    { name: '小森', email: 'maintenance@proavance.co.jp' },
+    { name: '角田', email: 's.tsunoda@proavance.co.jp' },
+  ] },
+  { name: 'technogym', keys: ['technogym', 'TechnoGym', 'テクノジム'], domains: ['technogym.com'] },
+];
+
+function vendorContactEmails_(vendor) {
+  var list = (vendor && vendor.contacts) || [];
+  var emails = [];
+  for (var i = 0; i < list.length; i++) {
+    var em = sanitizeEmail_(list[i].email);
+    if (em && emails.indexOf(em) === -1) emails.push(em);
+  }
+  return emails;
+}
+
+function getOrCreateVendorSpreadsheet_() {
+  return openWorkspaceSpreadsheet_();
+}
+
+function getOrCreateVendorSheet_(ss, name, headers) {
+  var sh = ss.getSheetByName(name);
+  if (!sh) sh = ss.insertSheet(name);
+  var first = sh.getRange(1, 1, 1, headers.length).getValues()[0];
+  if (String(first[0] || '') !== headers[0]) {
+    sh.getRange(1, 1, 1, headers.length).setValues([headers]);
+  }
+  return sh;
+}
+
+function extractEmailAddresses_(text) {
+  var out = [];
+  var re = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+  var m;
+  var seen = {};
+  while ((m = re.exec(String(text || '')))) {
+    var email = m[0].toLowerCase();
+    if (seen[email]) continue;
+    seen[email] = true;
+    out.push(email);
+  }
+  return out;
+}
+
+function isOwnEmail_(email, myEmail) {
+  email = String(email || '').toLowerCase();
+  myEmail = String(myEmail || '').toLowerCase();
+  if (!email) return false;
+  if (myEmail && email === myEmail) return true;
+  return /okamoto-group\.co\.jp$/.test(email);
+}
+
+function matchVendorName_(text) {
+  var hay = String(text || '');
+  for (var i = 0; i < VENDOR_COMPANIES_.length; i++) {
+    var keys = VENDOR_COMPANIES_[i].keys;
+    for (var k = 0; k < keys.length; k++) {
+      if (hay.indexOf(keys[k]) !== -1) return VENDOR_COMPANIES_[i].name;
+    }
+  }
+  return '';
+}
+
+function vendorQuery_(keys, domains) {
+  var parts = [];
+  for (var i = 0; i < keys.length; i++) {
+    var key = keys[i];
+    parts.push(key.indexOf(' ') !== -1 ? '"' + key + '"' : key);
+  }
+  var q = '(' + parts.join(' OR ') + ')';
+  if (domains && domains.length) {
+    for (var d = 0; d < domains.length; d++) {
+      q += ' OR from:@' + domains[d] + ' OR to:@' + domains[d];
+    }
+  }
+  return q + ' newer_than:5m';
+}
+
+function sanitizeEmail_(email) {
+  email = String(email || '').toLowerCase().trim();
+  if (!/^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(email)) return '';
+  return email;
+}
+
+function isNippoSubject_(subject) {
+  return /日報/.test(String(subject || ''));
+}
+
+function threadExternalEmails_(thread, myEmail) {
+  var messages = thread.getMessages();
+  var out = [];
+  var seen = {};
+  for (var i = 0; i < messages.length; i++) {
+    var text = String(messages[i].getFrom() || '') + ' ' + String(messages[i].getTo() || '') + ' ' + String(messages[i].getCc() || '');
+    extractEmailAddresses_(text).forEach(function (email) {
+      if (isOwnEmail_(email, myEmail) || seen[email]) return;
+      seen[email] = true;
+      out.push(email);
+    });
+  }
+  return out;
+}
+
+function loadVendorEmailsFromSheet_(company) {
+  try {
+    var ss = openWorkspaceSpreadsheet_();
+    var sh = ss.getSheetByName('業者アドレス');
+    if (!sh || sh.getLastRow() < 2) return [];
+    var values = sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues();
+    var emails = [];
+    for (var i = 0; i < values.length; i++) {
+      if (String(values[i][0] || '') !== company) continue;
+      var em = sanitizeEmail_(values[i][1]);
+      if (em && emails.indexOf(em) === -1) emails.push(em);
+    }
+    return emails;
+  } catch (err) {
+    return [];
+  }
+}
+
+function vendorEmailsQuery_(emails, myEmail) {
+  var parts = [];
+  var n = Math.min(emails.length, 8);
+  for (var i = 0; i < n; i++) {
+    var email = emails[i];
+    if (myEmail) {
+      parts.push('(from:' + email + ' to:' + myEmail + ')');
+      parts.push('(from:' + myEmail + ' to:' + email + ')');
+    } else {
+      parts.push('from:' + email);
+      parts.push('to:' + email);
+    }
+  }
+  return '(' + parts.join(' OR ') + ') newer_than:5m';
+}
+
+function packVendorItem_(row, vendor, query, mode, externals) {
+  return {
+    company: vendor.name,
+    emails: (externals && externals.length ? externals : (row.emails ? row.emails.split(/,\s*/) : [])).join(', '),
+    lastDate: row.date || '',
+    direction: row.direction || '',
+    subject: row.subject || '',
+    snippet: row.snippet || '',
+    from: row.from || '',
+    to: row.to || '',
+    permalink: row.permalink || '',
+    threadId: row.threadId || '',
+    messages: row.messages || [],
+    messageCount: row.messageCount || 0,
+    contacts: vendor.contacts || [],
+    query: query,
+    mode: mode,
+  };
+}
+
+function vendorPinnedQuery_(email, myEmail) {
+  email = sanitizeEmail_(email);
+  myEmail = sanitizeEmail_(myEmail);
+  if (!email) return '';
+  if (myEmail) {
+    return '(from:' + email + ' to:' + myEmail + ') OR (from:' + myEmail + ' to:' + email + ') newer_than:5m';
+  }
+  return '(from:' + email + ' OR to:' + email + ') newer_than:5m';
+}
+
+function gmailOpenUrl_(thread, company) {
+  var id = '';
+  try {
+    id = String(thread.getId() || '');
+  } catch (ignored) {}
+  var permalink = '';
+  try {
+    permalink = String(thread.getPermalink() || '');
+  } catch (ignored2) {}
+  var uiId = id;
+  var matched = permalink.match(/#(?:inbox|all|sent|search\/[^/]+)\/([A-Za-z0-9:_-]+)/);
+  if (matched && matched[1]) uiId = matched[1];
+  if (company && uiId) {
+    return 'https://mail.google.com/mail/u/0/#search/' + encodeURIComponent(company) + '/' + uiId;
+  }
+  if (uiId) {
+    return 'https://mail.google.com/mail/u/0/#all/' + uiId;
+  }
+  if (id) {
+    return 'https://mail.google.com/mail/u/0/?fs=1&tf=cv&search=all&th=' + encodeURIComponent(id);
+  }
+  return permalink;
+}
+
+function cleanMailBody_(raw) {
+  var text = String(raw || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  text = text.replace(/[\u200B-\u200D\uFE0E\uFE0F]/g, '');
+  text = text.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '');
+  text = text.replace(/[●○■□▪▫◆◇★☆☑☐☒⬛⬜⬤◉◎▢]/g, '');
+  text = text.replace(/[ \t]+/g, ' ');
+  text = text.replace(/[・]/g, '\n');
+  var lines = text.split('\n');
+  var out = [];
+  for (var i = 0; i < lines.length; i++) {
+    var t = lines[i].trim();
+    if (/^--\s*$/.test(t) || /^_{4,}/.test(t) || /^-{4,}/.test(t) || /^[━─=]{3,}/.test(t)) break;
+    if (i > 4 && /^(株式会社|TEL[:：]|Tel[:：]|〒|FAX[:：]|This e-?mail is confidential)/i.test(t)) break;
+    if (i > 4 && /(配信停止|このメールに心当たり|Copyright)/.test(t)) break;
+    out.push(lines[i]);
+  }
+  return out.join('\n').trim().slice(0, 2500);
+}
+
+function summarizeMessage_(msg, myEmail) {
+  var from = String(msg.getFrom() || '');
+  var to = String(msg.getTo() || '');
+  var cc = String(msg.getCc() || '');
+  var subject = String(msg.getSubject() || '');
+  var body = cleanMailBody_(msg.getPlainBody());
+  var date = msg.getDate() || new Date();
+  var fromEmails = extractEmailAddresses_(from);
+  var toEmails = extractEmailAddresses_(to + ' ' + cc);
+  var counterpart = [];
+  fromEmails.concat(toEmails).forEach(function (email) {
+    if (!isOwnEmail_(email, myEmail) && counterpart.indexOf(email) === -1) counterpart.push(email);
+  });
+  var sent = fromEmails.some(function (email) { return isOwnEmail_(email, myEmail); });
+  return {
+    date: Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm'),
+    dateObj: date,
+    direction: sent ? '送信' : '受信',
+    from: from,
+    to: to,
+    subject: subject,
+    snippet: body,
+    emails: counterpart.join(', '),
+  };
+}
+
+function summarizeThread_(thread, myEmail, company) {
+  var messages = thread.getMessages();
+  var last = messages[messages.length - 1];
+  var row = last ? summarizeMessage_(last, myEmail) : {
+    date: '',
+    dateObj: new Date(0),
+    direction: '',
+    from: '',
+    to: '',
+    subject: '',
+    snippet: '',
+    emails: '',
+  };
+  var history = [];
+  var start = Math.max(0, messages.length - 4);
+  for (var i = start; i < messages.length; i++) {
+    history.push(summarizeMessage_(messages[i], myEmail));
+  }
+  row.messages = history;
+  row.messageCount = messages.length;
+  row.threadId = String(thread.getId() || '');
+  row.permalink = gmailOpenUrl_(thread, company);
+  return row;
+}
+
+function syncOneVendorFromGmail_(name, pinnedEmail) {
+  try {
+    var vendor = null;
+    for (var i = 0; i < VENDOR_COMPANIES_.length; i++) {
+      if (VENDOR_COMPANIES_[i].name === name) {
+        vendor = VENDOR_COMPANIES_[i];
+        break;
+      }
+    }
+    if (!vendor) return { ok: false, message: '不明な会社です: ' + name };
+
+    var myEmail = '';
+    try {
+      myEmail = String(Session.getActiveUser().getEmail() || '').toLowerCase();
+    } catch (ignored) {}
+
+    pinnedEmail = sanitizeEmail_(pinnedEmail);
+    var contactEmails = vendorContactEmails_(vendor);
+    var sheetEmails = pinnedEmail ? [] : loadVendorEmailsFromSheet_(vendor.name);
+    var mode = 'keyword';
+    var query = vendorQuery_(vendor.keys, vendor.domains);
+    if (pinnedEmail) {
+      mode = 'pin';
+      query = vendorPinnedQuery_(pinnedEmail, myEmail);
+    } else if (contactEmails.length) {
+      mode = 'contact';
+      query = vendorEmailsQuery_(contactEmails, myEmail);
+    } else if (sheetEmails.length) {
+      mode = 'address';
+      query = vendorEmailsQuery_(sheetEmails, myEmail);
+    }
+    var threads = GmailApp.search(query, 0, 8);
+    var items = [];
+    for (var t = 0; t < threads.length; t++) {
+      var thread = threads[t];
+      var subject0 = '';
+      try { subject0 = String(thread.getFirstMessageSubject() || ''); } catch (ignoredSub) {}
+      if (isNippoSubject_(subject0)) continue;
+      var externals = threadExternalEmails_(thread, myEmail);
+      if (!externals.length) continue;
+      var row = summarizeThread_(thread, myEmail, vendor.name);
+      if (isNippoSubject_(row.subject)) continue;
+      items.push(packVendorItem_(row, vendor, query, mode, externals));
+    }
+    items.sort(function (a, b) { return String(b.lastDate).localeCompare(String(a.lastDate)); });
+    return {
+      ok: true,
+      items: items,
+      item: items[0] || null,
+      mode: mode,
+      contacts: vendor.contacts || [],
+    };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
+function discoverVendorEmails_(name) {
+  try {
+    var vendor = null;
+    for (var i = 0; i < VENDOR_COMPANIES_.length; i++) {
+      if (VENDOR_COMPANIES_[i].name === name) {
+        vendor = VENDOR_COMPANIES_[i];
+        break;
+      }
+    }
+    if (!vendor) return { ok: false, message: '不明な会社です: ' + name };
+
+    var myEmail = '';
+    try {
+      myEmail = String(Session.getActiveUser().getEmail() || '').toLowerCase();
+    } catch (ignored) {}
+
+    var threads = GmailApp.search(vendorQuery_(vendor.keys, vendor.domains), 0, 15);
+    var counts = {};
+    var samples = {};
+    for (var t = 0; t < threads.length; t++) {
+      var subject0 = '';
+      try { subject0 = String(threads[t].getFirstMessageSubject() || ''); } catch (ignored2) {}
+      if (isNippoSubject_(subject0)) continue;
+      var externals = threadExternalEmails_(threads[t], myEmail);
+      for (var e = 0; e < externals.length; e++) {
+        var email = externals[e];
+        counts[email] = (counts[email] || 0) + 1;
+        if (!samples[email]) samples[email] = subject0;
+      }
+    }
+
+    var found = [];
+    Object.keys(counts).forEach(function (email) {
+      found.push({ email: email, count: counts[email], sample: samples[email] || '' });
+    });
+    found.sort(function (a, b) { return b.count - a.count; });
+
+    var spreadsheetUrl = '';
+    try {
+      var ss = openWorkspaceSpreadsheet_();
+      var headers = ['company', 'email', 'count', 'sampleSubject', 'updatedAt'];
+      var sh = getOrCreateVendorSheet_(ss, '業者アドレス', headers);
+      var last = sh.getLastRow();
+      if (last > 1) {
+        var existing = sh.getRange(2, 1, last - 1, 1).getValues();
+        for (var r = existing.length - 1; r >= 0; r--) {
+          if (String(existing[r][0] || '') === vendor.name) sh.deleteRow(r + 2);
+        }
+      }
+      var now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm');
+      if (found.length) {
+        var values = found.map(function (row) {
+          return [vendor.name, row.email, row.count, row.sample, now];
+        });
+        sh.getRange(sh.getLastRow() + 1, 1, values.length, headers.length).setValues(values);
+      }
+      spreadsheetUrl = ss.getUrl();
+    } catch (sheetErr) {
+      spreadsheetUrl = '';
+    }
+
+    return {
+      ok: true,
+      company: vendor.name,
+      emails: found,
+      spreadsheetUrl: spreadsheetUrl,
+    };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
+function syncVendorCasesFromGmail_() {
+  try {
+    var myEmail = '';
+    try {
+      myEmail = String(Session.getActiveUser().getEmail() || '').toLowerCase();
+    } catch (ignored) {}
+    var latest = {};
+    var logs = [];
+
+    for (var i = 0; i < VENDOR_COMPANIES_.length; i++) {
+      var vendor = VENDOR_COMPANIES_[i];
+      var threads = GmailApp.search(vendorQuery_(vendor.keys, vendor.domains), 0, 10);
+      for (var t = 0; t < threads.length; t++) {
+        var row = summarizeThread_(threads[t], myEmail, vendor.name);
+        row.company = vendor.name;
+        logs.push(row);
+        if (!latest[vendor.name] || row.dateObj > latest[vendor.name].dateObj) {
+          latest[vendor.name] = row;
+        }
+      }
+    }
+
+    var sentThreads = GmailApp.search('in:sent newer_than:365d', 0, 40);
+    for (var s = 0; s < sentThreads.length; s++) {
+      var sentRow = summarizeThread_(sentThreads[s], myEmail);
+      var company = matchVendorName_(
+        sentRow.subject + ' ' + sentRow.to + ' ' + sentRow.from + ' ' + sentRow.snippet
+      );
+      if (!company) continue;
+      sentRow.company = company;
+      logs.push(sentRow);
+      if (!latest[company] || sentRow.dateObj > latest[company].dateObj) {
+        latest[company] = sentRow;
+      }
+    }
+
+    var cases = VENDOR_COMPANIES_.map(function (vendor) {
+      var hit = latest[vendor.name];
+      return {
+        company: vendor.name,
+        emails: hit ? hit.emails : '',
+        lastDate: hit ? hit.date : '',
+        direction: hit ? hit.direction : '',
+        subject: hit ? hit.subject : '',
+        snippet: hit ? hit.snippet : '',
+        from: hit ? hit.from : '',
+        permalink: hit ? hit.permalink : '',
+      };
+    });
+
+    var spreadsheetUrl = '';
+    try {
+      var ss = getOrCreateVendorSpreadsheet_();
+      var caseHeaders = ['company', 'emails', 'lastDate', 'direction', 'subject', 'snippet', 'from', 'permalink', 'updatedAt'];
+      var logHeaders = ['date', 'company', 'direction', 'from', 'to', 'subject', 'snippet', 'permalink'];
+      var caseSheet = getOrCreateVendorSheet_(ss, 'CASE-LOG', caseHeaders);
+      var logSheet = getOrCreateVendorSheet_(ss, 'CASE-LOG Mail', logHeaders);
+      var now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm');
+      var caseRows = cases.map(function (item) {
+        return [item.company, item.emails, item.lastDate, item.direction, item.subject, item.snippet, item.from, item.permalink, now];
+      });
+      if (caseSheet.getLastRow() > 1) {
+        caseSheet.getRange(2, 1, caseSheet.getLastRow() - 1, caseHeaders.length).clearContent();
+      }
+      if (caseRows.length) caseSheet.getRange(2, 1, caseRows.length, caseHeaders.length).setValues(caseRows);
+      logs.sort(function (a, b) { return b.dateObj - a.dateObj; });
+      var logRows = logs.slice(0, 200).map(function (row) {
+        return [row.date, row.company, row.direction, row.from, row.to, row.subject, row.snippet, row.permalink];
+      });
+      if (logSheet.getLastRow() > 1) {
+        logSheet.getRange(2, 1, logSheet.getLastRow() - 1, logHeaders.length).clearContent();
+      }
+      if (logRows.length) logSheet.getRange(2, 1, logRows.length, logHeaders.length).setValues(logRows);
+      spreadsheetUrl = ss.getUrl();
+    } catch (sheetErr) {
+      spreadsheetUrl = '';
+    }
+
+    return { ok: true, spreadsheetUrl: spreadsheetUrl, cases: cases };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
+function loadVendorCasesForApi_() {
+  try {
+    var ss = getOrCreateVendorSpreadsheet_();
+    var sh = ss.getSheetByName('CASE-LOG');
+    if (!sh || sh.getLastRow() < 2) {
+      return { ok: true, spreadsheetId: ss.getId(), spreadsheetUrl: ss.getUrl(), cases: [] };
+    }
+    var values = sh.getRange(2, 1, sh.getLastRow() - 1, 8).getValues();
+    var cases = values.map(function (r) {
+      return {
+        company: String(r[0] || ''),
+        emails: String(r[1] || ''),
+        lastDate: String(r[2] || ''),
+        direction: String(r[3] || ''),
+        subject: String(r[4] || ''),
+        snippet: String(r[5] || ''),
+        from: String(r[6] || ''),
+        permalink: String(r[7] || ''),
+      };
+    });
+    return { ok: true, spreadsheetUrl: ss.getUrl(), cases: cases };
+  } catch (err) {
+    return { ok: true, cases: [], message: String(err && err.message ? err.message : err) };
   }
 }
 
@@ -321,9 +937,9 @@ var REPORT_CONFIG = {
   RECIPIENT:
     'y_east_staff@okamoto-group.co.jp, yamauchieastnippou_transfer@okamoto-group.co.jp, jf-kyoudou@okamoto-group.co.jp',
   CC: 'k-takakuwa@okamoto-group.co.jp, m-akiyama@okamoto-group.co.jp, t-doi@okamoto-group.co.jp',
-  // 26年度運用: テリトリー呼称は「エリア-番号」表記（例: 7-2）
   MY_TEAM: '7-2',
   MY_NAME: '日下竜太',
+  SPREADSHEET_ID: '14hxiLBzvGTuIpfZcoVjiHpz8b419OzUrtQAr5788h3w',
   REPORT_SHEET_NAME: '日報',
   START_ROW: 8,
   START_COL: 2,
@@ -364,12 +980,13 @@ function createDailyReportFromWorkspace(activeJson, doneJson, kansouText) {
     var active = parseJsonSafe_(activeJson);
     var doneTasks = parseDoneTasksInput_(doneJson);
     var kansou = String(kansouText || '');
-    var saveResult = saveWorkspaceTasksToSheet(
-      JSON.stringify(active),
-      JSON.stringify(doneTasks),
-      kansou
-    );
-    if (!saveResult.ok) return saveResult;
+    try {
+      saveWorkspaceTasksToSheet(
+        JSON.stringify(active),
+        JSON.stringify(doneTasks),
+        kansou
+      );
+    } catch (ignoredSave) {}
     return createDailyReportDraftWithData_(doneTasks, kansou);
   } catch (e) {
     console.error(e);
@@ -409,16 +1026,186 @@ function parseDoneTasksInput_(input) {
   return parseJsonSafe_(input);
 }
 
-function buildDailyReportPackage_(doneTasks, kansouRaw) {
-  if (WS_CONFIG.SPREADSHEET_ID === 'YOUR_SPREADSHEET_ID_HERE') {
-    return { ok: false, message: 'SPREADSHEET_ID を設定してください。' };
+function colToA1_(n) {
+  var s = '';
+  var num = Number(n);
+  while (num > 0) {
+    var m = (num - 1) % 26;
+    s = String.fromCharCode(65 + m) + s;
+    num = Math.floor((num - 1) / 26);
   }
-  var ss = openWorkspaceSpreadsheet_();
-  var reportSheet = ss.getSheetByName(REPORT_CONFIG.REPORT_SHEET_NAME);
-  if (!reportSheet) {
-    return { ok: false, message: '「' + REPORT_CONFIG.REPORT_SHEET_NAME + '」シートが見つかりません。' };
-  }
+  return s;
+}
 
+function reportRangeA1_() {
+  var r1 = REPORT_CONFIG.START_ROW;
+  var c1 = REPORT_CONFIG.START_COL;
+  var r2 = r1 + REPORT_CONFIG.NUM_ROWS - 1;
+  var c2 = c1 + REPORT_CONFIG.NUM_COLS - 1;
+  return REPORT_CONFIG.REPORT_SHEET_NAME + '!' + colToA1_(c1) + r1 + ':' + colToA1_(c2) + r2;
+}
+
+/** SpreadsheetApp.openById が匿名Webアプリで拒否される場合の代替 */
+function sheetsApiGetJson_(url) {
+  var token = ScriptApp.getOAuthToken();
+  var res = UrlFetchApp.fetch(url, {
+    method: 'get',
+    muteHttpExceptions: true,
+    headers: { Authorization: 'Bearer ' + token },
+  });
+  var code = res.getResponseCode();
+  var text = res.getContentText() || '';
+  if (code < 200 || code >= 300) {
+    throw new Error('Sheets API ' + code + ' ' + String(text).slice(0, 180));
+  }
+  return JSON.parse(text);
+}
+
+function parseSimpleCsv_(text) {
+  var lines = String(text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+  var rows = [];
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i];
+    if (!line) continue;
+    var cells = [];
+    var cur = '';
+    var inQ = false;
+    for (var k = 0; k < line.length; k++) {
+      var ch = line.charAt(k);
+      if (inQ) {
+        if (ch === '"') {
+          if (line.charAt(k + 1) === '"') {
+            cur += '"';
+            k++;
+          } else inQ = false;
+        } else cur += ch;
+      } else if (ch === '"') inQ = true;
+      else if (ch === ',') {
+        cells.push(cur);
+        cur = '';
+      } else cur += ch;
+    }
+    cells.push(cur);
+    rows.push(cells);
+  }
+  return rows;
+}
+
+function rowsToKeidoTableHtml_(rows) {
+  if (!rows || !rows.length) return '';
+  var html = '';
+  for (var i = 0; i < rows.length; i++) {
+    var row = rows[i] || [];
+    var joined = row.join('').trim();
+    if (!joined && i > 15) continue;
+    html += '<tr>';
+    var cols = Math.max(REPORT_CONFIG.NUM_COLS, row.length);
+    for (var j = 0; j < cols; j++) {
+      var val = j < row.length ? row[j] : '';
+      var displayVal = val === '' || val == null ? '&nbsp;' : escapeHtml_(val).replace(/\n/g, '<br>');
+      html +=
+        '<td style="border: none; padding: 3px 12px 3px 0; background-color: transparent; color: #1f2937; text-align: left; vertical-align: middle; font-size: 10pt; white-space: nowrap;">' +
+        displayVal +
+        '</td>';
+    }
+    html += '</tr>';
+  }
+  return html;
+}
+
+function buildKeidoTableHtmlViaGviz_() {
+  var a1 =
+    colToA1_(REPORT_CONFIG.START_COL) +
+    REPORT_CONFIG.START_ROW +
+    ':' +
+    colToA1_(REPORT_CONFIG.START_COL + REPORT_CONFIG.NUM_COLS - 1) +
+    (REPORT_CONFIG.START_ROW + REPORT_CONFIG.NUM_ROWS - 1);
+  var url =
+    'https://docs.google.com/spreadsheets/d/' +
+    WS_CONFIG.SPREADSHEET_ID +
+    '/gviz/tq?tqx=out:csv&sheet=' +
+    encodeURIComponent(REPORT_CONFIG.REPORT_SHEET_NAME) +
+    '&range=' +
+    encodeURIComponent(a1);
+  var res = UrlFetchApp.fetch(url, {
+    muteHttpExceptions: true,
+    followRedirects: true,
+    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
+  });
+  if (res.getResponseCode() !== 200) throw new Error('gviz ' + res.getResponseCode());
+  var text = res.getContentText() || '';
+  if (/<!DOCTYPE html>|<html/i.test(text)) throw new Error('gviz html');
+  return rowsToKeidoTableHtml_(parseSimpleCsv_(text));
+}
+
+function buildKeidoTableHtmlViaApi_() {
+  var range = reportRangeA1_();
+  var url =
+    'https://sheets.googleapis.com/v4/spreadsheets/' +
+    encodeURIComponent(WS_CONFIG.SPREADSHEET_ID) +
+    '/values/' +
+    encodeURIComponent(range) +
+    '?valueRenderOption=FORMATTED_VALUE';
+  var json = sheetsApiGetJson_(url);
+  return rowsToKeidoTableHtml_(json.values || []);
+}
+
+function listSheetNames_(ss) {
+  var names = [];
+  try {
+    var sheets = ss.getSheets();
+    for (var i = 0; i < sheets.length; i++) names.push(sheets[i].getName());
+  } catch (ignored) {}
+  return names;
+}
+
+function findReportSheet_(ss) {
+  if (!ss) return null;
+  var preferred = [REPORT_CONFIG.REPORT_SHEET_NAME, '日報', 'data', 'Data', 'dashboard'];
+  for (var i = 0; i < preferred.length; i++) {
+    var sh = ss.getSheetByName(preferred[i]);
+    if (sh) return sh;
+  }
+  var sheets = ss.getSheets();
+  for (var j = 0; j < sheets.length; j++) {
+    var name = sheets[j].getName();
+    if (/日報|経堂/.test(name)) return sheets[j];
+  }
+  return null;
+}
+
+function openReportSpreadsheet_() {
+  var ids = [];
+  if (REPORT_CONFIG.SPREADSHEET_ID) ids.push(REPORT_CONFIG.SPREADSHEET_ID);
+  if (WS_CONFIG.SPREADSHEET_ID && ids.indexOf(WS_CONFIG.SPREADSHEET_ID) === -1) {
+    ids.push(WS_CONFIG.SPREADSHEET_ID);
+  }
+  var lastErr = '';
+  for (var i = 0; i < ids.length; i++) {
+    try {
+      var ss = SpreadsheetApp.openById(ids[i]);
+      var sh = findReportSheet_(ss);
+      if (sh) return { ss: ss, sheet: sh, id: ids[i], names: listSheetNames_(ss) };
+      lastErr = ids[i] + ' sheets=' + listSheetNames_(ss).join(',');
+    } catch (err) {
+      lastErr = String(err && err.message ? err.message : err);
+    }
+  }
+  throw new Error(lastErr || '日報シートが見つかりません');
+}
+
+function buildKeidoTableHtmlSafe_() {
+  try {
+    var found = openReportSpreadsheet_();
+    var html = buildKeidoTableHtml_(found.sheet);
+    if (html) return { html: html, err: '', sheet: found.sheet.getName(), id: found.id };
+    return { html: '', err: 'empty table on ' + found.sheet.getName(), sheet: found.sheet.getName(), id: found.id };
+  } catch (err) {
+    return { html: '', err: String(err && err.message ? err.message : err) };
+  }
+}
+
+function buildDailyReportPackage_(doneTasks, kansouRaw) {
   var gyomuHtml = buildGyomuNaiyoHtml_(doneTasks);
   var kansouBlockHtml = buildKansouHtml_(kansouRaw);
 
@@ -429,7 +1216,11 @@ function buildDailyReportPackage_(doneTasks, kansouRaw) {
   var subject = subjectPrefix + '　' + formattedDate;
 
   var lastPTResult = fetchLastPTResultFromGmail_([subjectPrefix, legacySubjectPrefix]);
-  var tableHtml = buildKeidoTableHtml_(reportSheet);
+  var packed = buildKeidoTableHtmlSafe_();
+  var tableHtml = packed && packed.html ? packed.html : '';
+  if (!tableHtml) {
+    tableHtml = '<tr><td style="padding:6px 0;color:#64748b;font-size:10pt;">（経堂数値を取得できませんでした）</td></tr>';
+  }
 
   var baseFontSize = '10.5pt';
   var themeColor = '#1f2937';
@@ -702,6 +1493,12 @@ function buildKeidoTableHtml_(sheet) {
  * Workspace用のスプレッドシートを開く。
  * openById が権限で失敗した場合は、バインド先スプレッドシートへフォールバックを試行。
  */
+function authorizeWorkspaceAccess() {
+  UrlFetchApp.fetch('https://www.google.com', { muteHttpExceptions: true });
+  var ss = SpreadsheetApp.openById(WS_CONFIG.SPREADSHEET_ID);
+  return { ok: true, name: ss.getName() };
+}
+
 function openWorkspaceSpreadsheet_() {
   try {
     return SpreadsheetApp.openById(WS_CONFIG.SPREADSHEET_ID);
@@ -709,7 +1506,6 @@ function openWorkspaceSpreadsheet_() {
     try {
       var active = SpreadsheetApp.getActiveSpreadsheet();
       if (active) {
-        // バインド型プロジェクトならこれで継続可能。
         return active;
       }
     } catch (ignored) {}
@@ -739,49 +1535,70 @@ function polishKansouWithGemini(rawText) {
           'GEMINI_API_KEY が未設定です。プロジェクトの設定 → スクリプトのプロパティ にキーを追加してください。',
       };
     }
-    var url =
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' +
-      encodeURIComponent(key);
-    var body = {
-      contents: [
-        {
-          parts: [
-            {
-              text:
-                '以下はフィットネス施設のスタッフ日報「所感」欄の下書きです。ビジネスメール向けの敬語に整え、誤字脱字を修正し、300文字以内で簡潔にまとめてください。事実と意味は変えないでください。出力は所感の本文のみ（説明・見出し・引用符は不要）。\n\n' +
-                String(rawText),
-            },
-          ],
-        },
-      ],
-    };
-    var res = UrlFetchApp.fetch(url, {
-      method: 'post',
-      contentType: 'application/json',
-      payload: JSON.stringify(body),
-      muteHttpExceptions: true,
-    });
-    var code = res.getResponseCode();
-    var json = JSON.parse(res.getContentText());
-    if (code !== 200) {
-      return {
-        ok: false,
-        message: (json.error && json.error.message) || 'API エラー（コード ' + code + '）',
-      };
+    var prompt =
+      '以下はフィットネス施設のスタッフ日報「所感」欄の下書きです。ビジネスメール向けの敬語に整え、誤字脱字を修正し、300文字以内で簡潔にまとめてください。事実と意味は変えないでください。出力は所感の本文のみ（説明・見出し・引用符は不要）。\n\n' +
+      String(rawText);
+    var models = [
+      'gemini-2.5-flash-lite',
+      'gemini-3.1-flash-lite',
+      'gemini-2.5-flash',
+      'gemini-3.5-flash'
+    ];
+    var lastMessage = '返答を取得できませんでした。';
+    for (var m = 0; m < models.length; m++) {
+      var url =
+        'https://generativelanguage.googleapis.com/v1beta/models/' +
+        encodeURIComponent(models[m]) +
+        ':generateContent?key=' +
+        encodeURIComponent(key);
+      var res = UrlFetchApp.fetch(url, {
+        method: 'post',
+        contentType: 'application/json',
+        payload: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.4, maxOutputTokens: 1024 }
+        }),
+        muteHttpExceptions: true
+      });
+      var code = res.getResponseCode();
+      var raw = res.getContentText() || '';
+      var json = null;
+      try {
+        json = raw ? JSON.parse(raw) : null;
+      } catch (parseErr) {
+        lastMessage = 'Gemini の応答が JSON ではありません（' + code + '）';
+        continue;
+      }
+      if (code !== 200) {
+        lastMessage = (json && json.error && json.error.message) || ('API エラー（コード ' + code + '）');
+        if (code === 404 || /not found|deprecated|INVALID_ARGUMENT/i.test(String(lastMessage))) {
+          continue;
+        }
+        return { ok: false, message: lastMessage };
+      }
+      var text = extractGeminiText_(json);
+      if (text) {
+        return { ok: true, text: String(text).trim() };
+      }
+      lastMessage = '返答を取得できませんでした。';
     }
-    var text =
-      json.candidates &&
-      json.candidates[0] &&
-      json.candidates[0].content &&
-      json.candidates[0].content.parts &&
-      json.candidates[0].content.parts[0] &&
-      json.candidates[0].content.parts[0].text;
-    if (!text) {
-      return { ok: false, message: '返答を取得できませんでした。' };
+    return { ok: false, message: lastMessage };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
+function extractGeminiText_(json) {
+  try {
+    var parts = json.candidates[0].content.parts || [];
+    var out = [];
+    for (var i = 0; i < parts.length; i++) {
+      if (parts[i] && parts[i].thought) continue;
+      var t = parts[i] && parts[i].text ? String(parts[i].text).trim() : '';
+      if (t) out.push(t);
     }
-    return { ok: true, text: String(text).trim() };
+    return out.join('\n').trim();
   } catch (e) {
-    console.error(e);
-    return { ok: false, message: String(e.message || e) };
+    return '';
   }
 }
