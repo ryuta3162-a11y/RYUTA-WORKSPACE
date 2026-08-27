@@ -1936,12 +1936,17 @@
       { id: 'waiting', label: '返答待ち' },
       { id: 'followup', label: '継続確認' },
       { id: 'done', label: '完了' },
+      { id: 'history', label: '過去' },
     ];
     var personalTasks = [];
     var todoBucket = 'today';
     var todoEditId = '';
     var personalSaveTimers = {};
     var todayEvents = [];
+    var pastGyomuLines = [];
+    var pastGyomuLoaded = false;
+    var pastGyomuLoading = false;
+    var pastGyomuCounts = {};
 
     function todayKey_() {
       try {
@@ -2127,15 +2132,79 @@
     }
 
     function bucketCount_(id) {
+      if (id === 'history') return pastGyomuLines.length || 0;
       return personalTasks.filter(function (t) {
         if (id === 'done') return t.status === 'done';
         return t.status !== 'done' && t.bucket === id;
       }).length;
     }
 
+    function titleInToday_(title) {
+      var n = normalizeGyomuLine_(title);
+      var today = todayKey_();
+      return personalTasks.some(function (t) {
+        if (!t || normalizeGyomuLine_(t.title) !== n) return false;
+        if (t.status === 'done') return t.done_at === today;
+        return t.bucket === 'today';
+      });
+    }
+
+    function loadPastGyomuHistory_(force) {
+      if (pastGyomuLoading) return;
+      if (pastGyomuLoaded && !force) {
+        renderMemoTodos();
+        return;
+      }
+      pastGyomuLoading = true;
+      renderMemoTodos();
+      fetch('/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'previewGyomuFromMail' }),
+        cache: 'no-store',
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+          pastGyomuLoading = false;
+          if (res && res.ok && Array.isArray(res.lines)) {
+            pastGyomuLines = res.lines;
+            pastGyomuCounts = res.counts || {};
+            pastGyomuLoaded = true;
+          }
+          renderMemoTodos();
+        })
+        .catch(function () {
+          pastGyomuLoading = false;
+          renderMemoTodos();
+        });
+    }
+
+    function addPastTitleToToday_(title, checked) {
+      var text = String(title || '').trim();
+      if (!text) return;
+      if (!checked) return;
+      if (titleInToday_(text)) {
+        renderMemoTodos();
+        return;
+      }
+      var task = normalizeClientTask_({
+        title: text,
+        bucket: 'today',
+        due_date: todayKey_(),
+        priority: 'mid',
+        status: 'open',
+      });
+      personalTasks.unshift(task);
+      persistPersonalTask_(task);
+      todoBucket = 'today';
+      todoEditId = '';
+      renderMemoTodos();
+    }
+
     function visiblePersonalTasks_() {
       var list = personalTasks.filter(function (t) {
         if (todoBucket === 'done') return t.status === 'done';
+        if (todoBucket === 'history') return false;
         return t.status !== 'done' && t.bucket === todoBucket;
       });
       var pri = { high: 0, mid: 1, low: 2 };
@@ -2165,16 +2234,47 @@
       var box = document.getElementById('todo-buckets');
       if (!box) return;
       box.innerHTML = TODO_BUCKETS.map(function (b) {
+        var n = bucketCount_(b.id);
         return '<button type="button" class="todo-bucket' + (todoBucket === b.id ? ' on' : '') + '" data-bucket="' + b.id + '">' +
           escapeHtml(b.label) +
-          '<span class="n">' + bucketCount_(b.id) + '</span>' +
+          '<span class="n">' + n + '</span>' +
           '</button>';
+      }).join('');
+    }
+
+    function renderHistoryTodos_() {
+      var box = document.getElementById('todo-list');
+      if (!box) return;
+      if (pastGyomuLoading) {
+        box.innerHTML = '<div class="todo-empty">過去の業務を読み込み中…</div>';
+        return;
+      }
+      if (!pastGyomuLines.length) {
+        box.innerHTML = '<div class="todo-empty">過去の業務内容が見つかりません。日報メールを確認してください。</div>';
+        return;
+      }
+      box.innerHTML = pastGyomuLines.map(function (title, i) {
+        var inToday = titleInToday_(title);
+        var cnt = pastGyomuCounts[title] ? '<span class="n">' + pastGyomuCounts[title] + '</span>' : '';
+        return '<label class="todo-item' + (inToday ? ' done' : '') + '">' +
+          '<input type="checkbox" data-history="' + i + '"' + (inToday ? ' checked' : '') + '>' +
+          '<div><div class="todo-item-title">' + escapeHtml(title) + '</div>' +
+          '<div class="todo-item-sub">過去' + cnt + (inToday ? ' · 今日に追加済' : ' · チェックで今日へ') + '</div></div>' +
+          '</label>';
       }).join('');
     }
 
     function renderMemoTodos() {
       renderTodoBuckets();
       renderTodayPanel();
+      var addWrap = document.querySelector('.todo-add');
+      var metaWrap = document.querySelector('.todo-meta');
+      if (addWrap) addWrap.style.display = todoBucket === 'history' ? 'none' : '';
+      if (metaWrap) metaWrap.style.display = todoBucket === 'history' ? 'none' : '';
+      if (todoBucket === 'history') {
+        renderHistoryTodos_();
+        return;
+      }
       var box = document.getElementById('todo-list');
       if (!box) return;
       var list = visiblePersonalTasks_();
@@ -2218,7 +2318,7 @@
       var dueEl = document.getElementById('todo-due');
       var priEl = document.getElementById('todo-priority');
       var urlEl = document.getElementById('todo-url');
-      var bucket = todoBucket === 'done' ? 'today' : todoBucket;
+      var bucket = todoBucket === 'done' || todoBucket === 'history' ? 'today' : todoBucket;
       var task = normalizeClientTask_({
         title: text,
         bucket: bucket,
@@ -2359,15 +2459,9 @@
             setSyncStatus('TODO×', 'err');
             return;
           }
-          // スプシを正とする。空のときだけローカルを上げる
-          var localBackup = personalTasks.slice();
+          // スプシを正とする（空なら空のまま）
           personalTasks = res.tasks.map(normalizeClientTask_);
-          if (!personalTasks.length && localBackup.length) {
-            personalTasks = localBackup;
-            personalTasks.forEach(function (t) { persistPersonalTask_(t); });
-          } else {
-            savePersonalTasksLocal_();
-          }
+          savePersonalTasksLocal_();
           setSyncStatus('SHEET', 'ok');
           applyTodayTodosToGyomu_();
           renderMemoTodos();
@@ -3329,7 +3423,8 @@
           if (!btn) return;
           todoBucket = btn.getAttribute('data-bucket') || 'today';
           todoEditId = '';
-          renderMemoTodos();
+          if (todoBucket === 'history') loadPastGyomuHistory_(false);
+          else renderMemoTodos();
         });
       }
       var todoList = document.getElementById('todo-list');
@@ -3337,6 +3432,11 @@
         todoList.addEventListener('change', function (e) {
           var el = e.target;
           if (!el || !el.getAttribute) return;
+          if (el.getAttribute('data-history') != null) {
+            var hi = Number(el.getAttribute('data-history'));
+            addPastTitleToToday_(pastGyomuLines[hi], el.checked);
+            return;
+          }
           if (el.getAttribute('data-todo')) {
             toggleMemoTodo(el.getAttribute('data-todo'), el.checked);
             return;

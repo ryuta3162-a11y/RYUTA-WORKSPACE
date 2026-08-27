@@ -973,6 +973,7 @@ function handlePersonalTasksPost_(body) {
   if (action === 'seedSample') return seedPersonalTasksSample_();
   if (action === 'seedFromMail') return seedPersonalTasksFromMail_();
   if (action === 'previewGyomuFromMail') return previewGyomuFromMail_();
+  if (action === 'clearAll') return clearAllPersonalTasks_();
   return { ok: false, message: 'Unknown personalTasks action: ' + action };
 }
 
@@ -1150,6 +1151,23 @@ function clearSamplePersonalTasks_() {
     }
   }
   return removed;
+}
+
+/** Tasks シートの全タスクを削除（ヘッダは残す） */
+function clearAllPersonalTasks_() {
+  try {
+    var ss = openWorkspaceSpreadsheet_();
+    var sheet = getOrCreateTasksSheet_(ss);
+    var last = sheet.getLastRow();
+    var cleared = 0;
+    if (last >= 2) {
+      cleared = last - 1;
+      sheet.deleteRows(2, cleared);
+    }
+    return { ok: true, cleared: cleared };
+  } catch (e) {
+    return { ok: false, message: String(e.message || e) };
+  }
 }
 
 function shortenGyomuTitle_(line) {
