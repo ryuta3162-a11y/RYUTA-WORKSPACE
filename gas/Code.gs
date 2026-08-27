@@ -83,25 +83,33 @@ function unauthorized_() {
 }
 
 /** 今日のカレンダー + Workspace 同期データ（Vercel / AI 用） */
-function getDayContextForApi_() {
+function getDayContextForApi_(dateYmd) {
   var tz = Session.getScriptTimeZone();
   var today = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+  var ymd = String(dateYmd || '').trim() || today;
   var tasks = loadWorkspaceTasksFromSheet();
   return {
     ok: true,
-    date: today,
+    date: ymd,
+    today: today,
     timezone: tz,
-    calendarEvents: getTodayCalendarEvents_(),
+    calendarEvents: getCalendarEventsForYmd_(ymd),
     workspace: tasks,
   };
 }
 
 function getTodayCalendarEvents_() {
+  return getCalendarEventsForYmd_(
+    Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd')
+  );
+}
+
+function getCalendarEventsForYmd_(ymd) {
   try {
-    var start = new Date();
-    start.setHours(0, 0, 0, 0);
-    var end = new Date();
-    end.setHours(23, 59, 59, 999);
+    var parts = String(ymd || '').split('-');
+    if (parts.length < 3) return [];
+    var start = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), 0, 0, 0, 0);
+    var end = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), 23, 59, 59, 999);
     var events = CalendarApp.getDefaultCalendar().getEvents(start, end);
     var out = [];
     for (var i = 0; i < events.length; i++) {
@@ -128,7 +136,7 @@ function handleApiGet_(e) {
     }
     if (api === 'dayContext') {
       if (!isApiAuthorized_(e, null)) return unauthorized_();
-      return jsonOutput_(getDayContextForApi_());
+      return jsonOutput_(getDayContextForApi_(e && e.parameter ? e.parameter.date : ''));
     }
     if (api === 'personalTasks') {
       if (!isApiAuthorized_(e, null)) return unauthorized_();
