@@ -1079,7 +1079,7 @@
     }
     .todo-meta {
       display: grid;
-      grid-template-columns: 118px 72px minmax(0, 1fr);
+      grid-template-columns: 72px minmax(0, 1fr);
       gap: 6px;
       padding: 0 16px 8px;
       flex: none;
@@ -1122,7 +1122,7 @@
     .todo-overdue { color: #d4d4d4; }
     .todo-edit {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 118px 72px;
+      grid-template-columns: minmax(0, 1fr) 72px;
       gap: 6px;
       margin-top: 6px;
     }
@@ -1187,11 +1187,10 @@
       </div>
       <div id="todo-buckets" class="todo-buckets"></div>
       <div class="todo-add">
-        <input id="todo-input" type="text" placeholder="忘れないこと" maxlength="200">
+        <input id="todo-input" type="text" placeholder="" maxlength="200">
         <button type="button" id="todo-add-btn" title="追加">+</button>
       </div>
       <div class="todo-meta">
-        <input id="todo-due" type="date">
         <select id="todo-priority" aria-label="優先度">
           <option value="mid">中</option>
           <option value="high">高</option>
@@ -1930,12 +1929,9 @@
     var TODO_KEY = 'ryuta_pro_personal_tasks_v1';
     var TODO_MIGRATED_KEY = 'ryuta_pro_personal_tasks_migrated_v1';
     var TODO_BUCKETS = [
-      { id: 'today', label: '今日' },
-      { id: 'week', label: '今週' },
-      { id: 'month', label: '今月' },
-      { id: 'waiting', label: '返答待ち' },
-      { id: 'followup', label: '継続確認' },
-      { id: 'done', label: '完了' },
+      { id: 'today', label: '毎日' },
+      { id: 'week', label: '定期' },
+      { id: 'month', label: 'いずれ' },
       { id: 'history', label: '過去' },
     ];
     var personalTasks = [];
@@ -2134,18 +2130,16 @@
     function bucketCount_(id) {
       if (id === 'history') return pastGyomuLines.length || 0;
       return personalTasks.filter(function (t) {
-        if (id === 'done') return t.status === 'done';
         return t.status !== 'done' && t.bucket === id;
       }).length;
     }
 
     function titleInToday_(title) {
       var n = normalizeGyomuLine_(title);
-      var today = todayKey_();
       return personalTasks.some(function (t) {
-        if (!t || normalizeGyomuLine_(t.title) !== n) return false;
-        if (t.status === 'done') return t.done_at === today;
-        return t.bucket === 'today';
+        if (!t || t.status === 'done') return false;
+        if (t.bucket !== 'today') return false;
+        return normalizeGyomuLine_(t.title) === n;
       });
     }
 
@@ -2190,7 +2184,7 @@
       var task = normalizeClientTask_({
         title: text,
         bucket: 'today',
-        due_date: todayKey_(),
+        due_date: '',
         priority: 'mid',
         status: 'open',
       });
@@ -2203,7 +2197,6 @@
 
     function visiblePersonalTasks_() {
       var list = personalTasks.filter(function (t) {
-        if (todoBucket === 'done') return t.status === 'done';
         if (todoBucket === 'history') return false;
         return t.status !== 'done' && t.bucket === todoBucket;
       });
@@ -2212,7 +2205,7 @@
         var pa = pri[a.priority] != null ? pri[a.priority] : 1;
         var pb = pri[b.priority] != null ? pri[b.priority] : 1;
         if (pa !== pb) return pa - pb;
-        return String(a.due_date || '9999').localeCompare(String(b.due_date || '9999'));
+        return String(a.title || '').localeCompare(String(b.title || ''), 'ja');
       });
       return list;
     }
@@ -2279,22 +2272,23 @@
       if (!box) return;
       var list = visiblePersonalTasks_();
       if (!list.length) {
-        box.innerHTML = '<div class="todo-empty">この分類にタスクはありません。</div>';
+        var emptyMsg = {
+          today: '毎日やることを入力して Enter。',
+          week: '定期的にやることを入力して Enter。',
+          month: 'いずれやることを入力して Enter。',
+        };
+        box.innerHTML = '<div class="todo-empty">' + (emptyMsg[todoBucket] || 'この分類にタスクはありません。') + '</div>';
         return;
       }
-      var today = todayKey_();
       box.innerHTML = list.map(function (t) {
-        var overdue = t.status !== 'done' && t.due_date && t.due_date < today;
         var sub = [];
-        if (t.due_date) sub.push('<span class="' + (overdue ? 'todo-overdue' : '') + '">' + escapeHtml(formatDue_(t.due_date)) + '</span>');
         sub.push('<span class="todo-pri-' + escapeHtml(t.priority) + '">' + priLabel_(t.priority) + '</span>');
         if (t.url) sub.push('<a href="' + escapeHtml(t.url) + '" target="_blank" rel="noopener noreferrer">URL</a>');
         var body = '<div class="todo-item-title" data-edit="' + escapeHtml(t.id) + '">' + escapeHtml(t.title) + '</div>' +
           '<div class="todo-item-sub">' + sub.join('') + '</div>';
-        if (todoEditId === t.id && t.status !== 'done') {
+        if (todoEditId === t.id) {
           body += '<div class="todo-edit">' +
             '<input type="text" data-field="title" data-id="' + escapeHtml(t.id) + '" value="' + escapeHtml(t.title) + '" maxlength="200">' +
-            '<input type="date" data-field="due_date" data-id="' + escapeHtml(t.id) + '" value="' + escapeHtml(t.due_date || '') + '">' +
             '<select data-field="priority" data-id="' + escapeHtml(t.id) + '">' +
               '<option value="high"' + (t.priority === 'high' ? ' selected' : '') + '>高</option>' +
               '<option value="mid"' + (t.priority === 'mid' ? ' selected' : '') + '>中</option>' +
@@ -2315,14 +2309,14 @@
       var input = document.getElementById('todo-input');
       var text = input ? String(input.value || '').trim() : '';
       if (!text) return;
-      var dueEl = document.getElementById('todo-due');
+      if (todoBucket === 'history') return;
       var priEl = document.getElementById('todo-priority');
       var urlEl = document.getElementById('todo-url');
-      var bucket = todoBucket === 'done' || todoBucket === 'history' ? 'today' : todoBucket;
+      var bucket = todoBucket === 'week' || todoBucket === 'month' ? todoBucket : 'today';
       var task = normalizeClientTask_({
         title: text,
         bucket: bucket,
-        due_date: dueEl ? dueEl.value : '',
+        due_date: '',
         priority: priEl ? priEl.value : 'mid',
         url: urlEl ? urlEl.value : '',
         status: 'open',
@@ -2332,6 +2326,7 @@
       if (urlEl) urlEl.value = '';
       persistPersonalTask_(task);
       renderMemoTodos();
+      if (input) input.focus();
     }
 
     function toggleMemoTodo(id, checked) {
