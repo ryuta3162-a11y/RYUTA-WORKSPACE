@@ -1,4 +1,4 @@
-const CACHE = 'rs-worklog-v16';
+const CACHE = 'rs-worklog-v17';
 const PRECACHE = ['/workspace.html', '/case.html', '/manifest.webmanifest', '/manifest-case.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', (event) => {

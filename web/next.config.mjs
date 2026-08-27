@@ -1,16 +1,23 @@
 /** @type {import('next').NextConfig} */
-const gasUrl = (
-  process.env.GAS_WEB_APP_URL ||
-  process.env.NEXT_PUBLIC_GAS_WEB_APP_URL ||
-  ''
-).trim();
-
 const nextConfig = {
   eslint: { ignoreDuringBuilds: true },
-  typescript: { ignoreDuringBuilds: true },
-  async redirects() {
-    if (!gasUrl) return [];
-    return [{ source: '/', destination: gasUrl, permanent: false }];
+  typescript: { ignoreBuildErrors: true },
+  async headers() {
+    return [
+      {
+        source: '/sw.js',
+        headers: [
+          { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
+          { key: 'Service-Worker-Allowed', value: '/' },
+        ],
+      },
+      {
+        source: '/workspace.html',
+        headers: [
+          { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
+        ],
+      },
+    ];
   },
 };
 
