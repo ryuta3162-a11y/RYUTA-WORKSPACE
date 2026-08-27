@@ -2096,20 +2096,34 @@
       var id = task.id;
       clearTimeout(personalSaveTimers[id]);
       personalSaveTimers[id] = setTimeout(function () {
+        setSyncStatus('…', '');
         fetch('/api/tasks', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'upsert', task: task }),
-        }).catch(function () {});
+        })
+          .then(function (r) { return r.json(); })
+          .then(function (res) {
+            if (res && res.ok) setSyncStatus('SHEET', 'ok');
+            else setSyncStatus('TODO×', 'err');
+          })
+          .catch(function () { setSyncStatus('TODO×', 'err'); });
       }, 400);
     }
 
     function queueDeletePersonalTask_(id) {
+      setSyncStatus('…', '');
       fetch('/api/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'delete', id: id }),
-      }).catch(function () {});
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+          if (res && res.ok) setSyncStatus('SHEET', 'ok');
+          else setSyncStatus('TODO×', 'err');
+        })
+        .catch(function () { setSyncStatus('TODO×', 'err'); });
     }
 
     function bucketCount_(id) {
@@ -2332,21 +2346,36 @@
       });
       if (carried) savePersonalTasksLocal_();
       renderMemoTodos();
-      fetch('/api/tasks')
-        .then(function (r) { return r.json(); })
-        .then(function (res) {
-          if (!res || !res.ok || !Array.isArray(res.tasks)) return;
-          if (res.tasks.length) {
-            personalTasks = res.tasks.map(normalizeClientTask_);
-            savePersonalTasksLocal_();
-          } else if (personalTasks.length) {
-            personalTasks.forEach(function (t) { persistPersonalTask_(t); });
+      setSyncStatus('…', '');
+      fetch('/api/tasks', { cache: 'no-store' })
+        .then(function (r) {
+          return r.json().then(function (res) {
+            return { httpOk: r.ok, res: res };
+          });
+        })
+        .then(function (pack) {
+          var res = pack && pack.res;
+          if (!res || !res.ok || !Array.isArray(res.tasks)) {
+            setSyncStatus('TODO×', 'err');
+            return;
           }
+          // スプシを正とする。空のときだけローカルを上げる
+          var localBackup = personalTasks.slice();
+          personalTasks = res.tasks.map(normalizeClientTask_);
+          if (!personalTasks.length && localBackup.length) {
+            personalTasks = localBackup;
+            personalTasks.forEach(function (t) { persistPersonalTask_(t); });
+          } else {
+            savePersonalTasksLocal_();
+          }
+          setSyncStatus('SHEET', 'ok');
           applyTodayTodosToGyomu_();
           renderMemoTodos();
         })
-        .catch(function () {});
-      fetch('/api/context')
+        .catch(function () {
+          setSyncStatus('TODO×', 'err');
+        });
+      fetch('/api/context', { cache: 'no-store' })
         .then(function (r) { return r.json(); })
         .then(function (res) {
           if (res && res.ok && Array.isArray(res.calendarEvents)) {
