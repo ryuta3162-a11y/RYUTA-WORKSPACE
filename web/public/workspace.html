@@ -1006,11 +1006,10 @@
       transform: scale(1.06);
     }
     .todo-head {
-      padding: 14px 16px 8px;
+      padding: 14px 44px 8px 16px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      border-bottom: 1px solid rgba(255,255,255,0.06);
       flex: none;
       position: relative;
       z-index: 2;
@@ -1021,16 +1020,41 @@
       font-weight: 600;
       color: #fff;
     }
-    .todo-add {
+    .todo-buckets {
       display: flex;
-      gap: 8px;
-      padding: 10px 16px 8px;
+      flex-wrap: wrap;
+      gap: 4px;
+      padding: 0 16px 8px;
       flex: none;
       position: relative;
       z-index: 2;
     }
-    .todo-add input {
-      flex: 1;
+    .todo-bucket {
+      font-size: 10px;
+      letter-spacing: 0.04em;
+      color: #a3a3a3;
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 999px;
+      padding: 4px 8px;
+      cursor: pointer;
+      line-height: 1.2;
+    }
+    .todo-bucket.on {
+      color: #000;
+      background: #fff;
+      border-color: #fff;
+    }
+    .todo-bucket .n { margin-left: 3px; opacity: 0.65; }
+    .todo-add {
+      display: flex;
+      gap: 8px;
+      padding: 0 16px 6px;
+      flex: none;
+      position: relative;
+      z-index: 2;
+    }
+    .todo-add input, .todo-meta input, .todo-meta select, .todo-edit input, .todo-edit select {
       min-width: 0;
       background: #000;
       border: 1px solid rgba(255,255,255,0.14);
@@ -1039,7 +1063,9 @@
       font-size: 12px;
       padding: 8px 10px;
       outline: none;
+      color-scheme: dark;
     }
+    .todo-add input { flex: 1; }
     .todo-add button {
       width: 36px;
       border: 1px solid #fff;
@@ -1049,6 +1075,16 @@
       font-size: 18px;
       line-height: 1;
       cursor: pointer;
+      flex: none;
+    }
+    .todo-meta {
+      display: grid;
+      grid-template-columns: 118px 72px minmax(0, 1fr);
+      gap: 6px;
+      padding: 0 16px 8px;
+      flex: none;
+      position: relative;
+      z-index: 2;
     }
     .todo-list {
       flex: 1 1 0;
@@ -1066,11 +1102,69 @@
       padding: 8px 4px;
       border-bottom: 1px solid rgba(255,255,255,0.06);
     }
-    .todo-item input { margin-top: 3px; accent-color: #fff; }
-    .todo-item span { font-size: 13px; color: #e5e5e5; line-height: 1.45; word-break: break-word; }
-    .todo-item.done span { color: #737373; text-decoration: line-through; }
+    .todo-item > input[type="checkbox"] { margin-top: 3px; accent-color: #fff; }
+    .todo-item-title { font-size: 13px; color: #e5e5e5; line-height: 1.45; word-break: break-word; cursor: pointer; }
+    .todo-item.done .todo-item-title { color: #737373; text-decoration: line-through; }
+    .todo-item-sub {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 4px;
+      font-size: 10px;
+      color: #737373;
+      align-items: center;
+    }
+    .todo-item-sub a { color: #a3a3a3; text-decoration: none; }
+    .todo-item-sub a:hover { color: #fff; }
+    .todo-pri-high { color: #f5f5f5; }
+    .todo-pri-mid { color: #a3a3a3; }
+    .todo-pri-low { color: #525252; }
+    .todo-overdue { color: #d4d4d4; }
+    .todo-edit {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 118px 72px;
+      gap: 6px;
+      margin-top: 6px;
+    }
     .todo-del { border: 0; background: transparent; color: #737373; cursor: pointer; font-size: 14px; padding: 0; }
     .todo-empty { font-size: 12px; color: #737373; padding: 20px 8px; }
+    .today-head {
+      padding: 12px 44px 6px 16px;
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+      flex: none;
+      position: relative;
+      z-index: 2;
+    }
+    .today-title {
+      font-size: 11px;
+      letter-spacing: 0.22em;
+      font-weight: 600;
+      color: #fff;
+    }
+    .today-date { font-size: 10px; color: #a3a3a3; }
+    .today-list {
+      flex: 1 1 0;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 2px 14px 10px;
+      position: relative;
+      z-index: 2;
+    }
+    .today-row {
+      display: grid;
+      grid-template-columns: 72px minmax(0, 1fr);
+      gap: 8px;
+      align-items: start;
+      padding: 5px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    .today-row b { font-weight: 500; color: #a3a3a3; }
+    .today-row span { color: #e5e5e5; word-break: break-word; }
   </style>
 </head>
 <body class="h-screen w-screen relative">
@@ -1082,18 +1176,45 @@
     <div class="brand-name">WORK-LOG</div>
     <div class="brand-save" id="sync-status-brand"></div>
   </header>
-  <div class="flex-1 min-h-0 grid grid-cols-2 grid-rows-2 gap-3 sm:gap-4 p-3 sm:p-4 pt-2">
-
-    <div class="pro-panel" id="panel-sheet">
-      <button type="button" class="focus-btn" onclick="toggleFocus('panel-sheet')" title="Fullscreen">
+  <div class="flex-1 min-h-0 grid grid-cols-2 gap-3 sm:gap-4 p-3 sm:p-4 pt-2">
+    <div class="min-h-0 min-w-0 grid gap-3 sm:gap-4" style="grid-template-rows: minmax(0,1fr) 148px;">
+    <div class="pro-panel" id="panel-todo">
+      <button type="button" class="focus-btn" onclick="toggleFocus('panel-todo')" title="Fullscreen">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
       </button>
-      <div class="iframe-wrapper">
-        <!-- 差し替え: あなたのメインシート URL -->
-        <iframe title="Sheet" src="https://docs.google.com/spreadsheets/d/1deuG2zYdIMegMnCCT7lVl4AD7J75K8KisEsH2NVH10Q/edit?rm=minimal" class="w-full h-full border-0"></iframe>
+      <div class="todo-head">
+        <div class="todo-title">TODO</div>
       </div>
+      <div id="todo-buckets" class="todo-buckets"></div>
+      <div class="todo-add">
+        <input id="todo-input" type="text" placeholder="忘れないこと" maxlength="200">
+        <button type="button" id="todo-add-btn" title="追加">+</button>
+      </div>
+      <div class="todo-meta">
+        <input id="todo-due" type="date">
+        <select id="todo-priority" aria-label="優先度">
+          <option value="mid">中</option>
+          <option value="high">高</option>
+          <option value="low">低</option>
+        </select>
+        <input id="todo-url" type="url" placeholder="関連URL" maxlength="500">
+      </div>
+      <div id="todo-list" class="todo-list"></div>
     </div>
 
+    <div class="pro-panel" id="panel-today">
+      <button type="button" class="focus-btn" onclick="toggleFocus('panel-today')" title="Fullscreen">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
+      </button>
+      <div class="today-head">
+        <div class="today-title">TODAY</div>
+        <div id="today-date" class="today-date"></div>
+      </div>
+      <div id="today-list" class="today-list"></div>
+    </div>
+    </div>
+
+    <div class="min-h-0 min-w-0 grid grid-rows-2 gap-3 sm:gap-4">
     <div class="pro-panel" id="panel-apps" data-view="link">
       <button type="button" class="focus-btn" onclick="toggleFocus('panel-apps')" title="Fullscreen">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
@@ -1124,20 +1245,6 @@
           <button type="button" class="tax-copy" id="tax-copy">結果をコピー</button>
         </div>
       </div>
-    </div>
-
-    <div class="pro-panel" id="panel-ops">
-      <button type="button" class="focus-btn" onclick="toggleFocus('panel-ops')" title="Fullscreen">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
-      </button>
-      <div class="todo-head">
-        <div class="todo-title">TODO</div>
-      </div>
-      <div class="todo-add">
-        <input id="todo-input" type="text" placeholder="忘れないこと" maxlength="200">
-        <button type="button" id="todo-add-btn" title="追加">+</button>
-      </div>
-      <div id="todo-list" class="todo-list"></div>
     </div>
 
     <div class="pro-panel" id="panel-tasks">
@@ -1207,6 +1314,7 @@
 
       <div class="p-2 bg-[#05060f]/60 backdrop-blur-md flex-none border-t border-white/[0.06] relative z-30"></div>
       <button type="button" id="daily-react-btn" onclick="handleMascotClick()" title="リアクション">●</button>
+    </div>
     </div>
   </div>
   </div>
@@ -1278,6 +1386,7 @@
     const SCHEDULE_URL = 'https://calendar.app.google/egS9bVik7BJTZ8Jb9';
 
     const apps = [
+      { category: 'core', key: 'd', name: 'SHEET', url: 'https://docs.google.com/spreadsheets/d/1deuG2zYdIMegMnCCT7lVl4AD7J75K8KisEsH2NVH10Q/edit', color: 0xffffff },
       { category: 'core', key: '1', name: 'MAIL', url: 'https://mail.google.com/mail/u/0/#inbox', color: 0xff3366 },
       { category: 'core', key: '2', name: 'CHAT', url: 'https://mail.google.com/mail/u/0/#chat/home', color: 0x33ccff },
       { category: 'core', key: 'o', name: 'TOP', url: 'https://sites.google.com/okamoto-group.co.jp/top2020/top%E3%83%9A%E3%83%BC%E3%82%B8', color: 0xffaa00 },
@@ -1817,11 +1926,46 @@
         .filter(function (v) { return !!v; });
     }
 
-    var TODO_KEY = 'ryuta_pro_memo_todos_v1';
-    var memoTodos = [];
+    var TODO_LEGACY_KEY = 'ryuta_pro_memo_todos_v1';
+    var TODO_KEY = 'ryuta_pro_personal_tasks_v1';
+    var TODO_MIGRATED_KEY = 'ryuta_pro_personal_tasks_migrated_v1';
+    var TODO_BUCKETS = [
+      { id: 'today', label: '今日' },
+      { id: 'week', label: '今週' },
+      { id: 'month', label: '今月' },
+      { id: 'waiting', label: '返答待ち' },
+      { id: 'followup', label: '継続確認' },
+      { id: 'done', label: '完了' },
+    ];
+    var personalTasks = [];
+    var todoBucket = 'today';
+    var todoEditId = '';
+    var personalSaveTimers = {};
+    var todayEvents = [];
 
     function todayKey_() {
-      var d = new Date();
+      try {
+        return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Tokyo' });
+      } catch (e) {
+        var d = new Date();
+        var m = String(d.getMonth() + 1);
+        var day = String(d.getDate());
+        if (m.length < 2) m = '0' + m;
+        if (day.length < 2) day = '0' + day;
+        return d.getFullYear() + '-' + m + '-' + day;
+      }
+    }
+
+    function newTaskId_() {
+      return 't_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+    }
+
+    function ymdToDate_(ymd) {
+      var parts = String(ymd || '').split('-');
+      return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    }
+
+    function dateToYmd_(d) {
       var m = String(d.getMonth() + 1);
       var day = String(d.getDate());
       if (m.length < 2) m = '0' + m;
@@ -1829,19 +1973,298 @@
       return d.getFullYear() + '-' + m + '-' + day;
     }
 
-    function loadMemoTodos() {
+    function weekMondayYmd_(ymd) {
+      var d = ymdToDate_(ymd);
+      var day = d.getDay();
+      var diff = day === 0 ? -6 : 1 - day;
+      d.setDate(d.getDate() + diff);
+      return dateToYmd_(d);
+    }
+
+    function weekSundayYmd_(ymd) {
+      var d = ymdToDate_(weekMondayYmd_(ymd));
+      d.setDate(d.getDate() + 6);
+      return dateToYmd_(d);
+    }
+
+    function monthEndYmd_(ymd) {
+      var parts = String(ymd || '').split('-');
+      return dateToYmd_(new Date(Number(parts[0]), Number(parts[1]), 0));
+    }
+
+    function personalPeriodKey_(bucket, ymd) {
+      if (bucket === 'today') return ymd;
+      if (bucket === 'week') return 'W' + weekMondayYmd_(ymd);
+      if (bucket === 'month') return String(ymd).slice(0, 7);
+      return '';
+    }
+
+    function personalCarryDue_(bucket, due, ymd) {
+      if (due && due >= ymd) return due;
+      if (bucket === 'today') return ymd;
+      if (bucket === 'week') return weekSundayYmd_(ymd);
+      if (bucket === 'month') return monthEndYmd_(ymd);
+      return due || '';
+    }
+
+    function normalizeClientTask_(raw) {
+      var ymd = todayKey_();
+      var bucket = String((raw && raw.bucket) || 'today');
+      if (!{ today: 1, week: 1, month: 1, waiting: 1, followup: 1 }[bucket]) bucket = 'today';
+      var pri = String((raw && raw.priority) || 'mid');
+      if (pri !== 'high' && pri !== 'low') pri = 'mid';
+      var status = (raw && raw.status) === 'done' || (raw && raw.done) ? 'done' : 'open';
+      var title = String((raw && (raw.title || raw.text)) || '').trim();
+      return {
+        id: String((raw && raw.id) || '') || newTaskId_(),
+        title: title,
+        bucket: bucket,
+        due_date: String((raw && raw.due_date) || '').trim(),
+        priority: pri,
+        url: String((raw && raw.url) || '').trim(),
+        status: status,
+        done_at: status === 'done' ? String((raw && (raw.done_at || raw.doneDate)) || ymd) : '',
+        created_at: String((raw && raw.created_at) || ''),
+        updated_at: String((raw && raw.updated_at) || ''),
+        note: String((raw && raw.note) || ''),
+        period_key: String((raw && raw.period_key) || '') || personalPeriodKey_(bucket, ymd),
+      };
+    }
+
+    function carryPersonalTask_(t, ymd) {
+      if (!t || t.status === 'done') return false;
+      if (t.bucket !== 'today' && t.bucket !== 'week' && t.bucket !== 'month') return false;
+      var nextKey = personalPeriodKey_(t.bucket, ymd);
+      var due = String(t.due_date || '');
+      var dueStale = due && due < ymd;
+      var keyStale = t.period_key !== nextKey;
+      if (!keyStale && !dueStale) return false;
+      t.period_key = nextKey;
+      t.due_date = personalCarryDue_(t.bucket, due, ymd);
+      t.updated_at = new Date().toISOString();
+      return true;
+    }
+
+    function loadPersonalTasksLocal_() {
       try {
         var v = JSON.parse(localStorage.getItem(TODO_KEY) || '[]');
-        memoTodos = Array.isArray(v) ? v : [];
+        personalTasks = Array.isArray(v) ? v.map(normalizeClientTask_) : [];
       } catch (e) {
-        memoTodos = [];
+        personalTasks = [];
       }
     }
 
-    function saveMemoTodos() {
+    function savePersonalTasksLocal_() {
       try {
-        localStorage.setItem(TODO_KEY, JSON.stringify(memoTodos));
+        localStorage.setItem(TODO_KEY, JSON.stringify(personalTasks));
       } catch (e) {}
+    }
+
+    function migrateMemoTodos_() {
+      try {
+        if (localStorage.getItem(TODO_MIGRATED_KEY)) return;
+        if (personalTasks.length) {
+          localStorage.setItem(TODO_MIGRATED_KEY, '1');
+          return;
+        }
+        var old = JSON.parse(localStorage.getItem(TODO_LEGACY_KEY) || '[]');
+        if (Array.isArray(old) && old.length) {
+          personalTasks = old.map(function (t) {
+            return normalizeClientTask_({
+              id: t && t.id,
+              title: t && t.text,
+              bucket: 'today',
+              status: t && t.done ? 'done' : 'open',
+              done_at: t && t.doneDate,
+            });
+          }).filter(function (t) { return !!t.title; });
+          savePersonalTasksLocal_();
+        }
+        localStorage.setItem(TODO_MIGRATED_KEY, '1');
+      } catch (e) {}
+    }
+
+    function findPersonalTask_(id) {
+      for (var i = 0; i < personalTasks.length; i++) {
+        if (personalTasks[i].id === id) return personalTasks[i];
+      }
+      return null;
+    }
+
+    function persistPersonalTask_(task) {
+      savePersonalTasksLocal_();
+      var id = task.id;
+      clearTimeout(personalSaveTimers[id]);
+      personalSaveTimers[id] = setTimeout(function () {
+        fetch('/api/tasks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'upsert', task: task }),
+        }).catch(function () {});
+      }, 400);
+    }
+
+    function queueDeletePersonalTask_(id) {
+      fetch('/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete', id: id }),
+      }).catch(function () {});
+    }
+
+    function bucketCount_(id) {
+      return personalTasks.filter(function (t) {
+        if (id === 'done') return t.status === 'done';
+        return t.status !== 'done' && t.bucket === id;
+      }).length;
+    }
+
+    function visiblePersonalTasks_() {
+      var list = personalTasks.filter(function (t) {
+        if (todoBucket === 'done') return t.status === 'done';
+        return t.status !== 'done' && t.bucket === todoBucket;
+      });
+      var pri = { high: 0, mid: 1, low: 2 };
+      list.sort(function (a, b) {
+        var pa = pri[a.priority] != null ? pri[a.priority] : 1;
+        var pb = pri[b.priority] != null ? pri[b.priority] : 1;
+        if (pa !== pb) return pa - pb;
+        return String(a.due_date || '9999').localeCompare(String(b.due_date || '9999'));
+      });
+      return list;
+    }
+
+    function priLabel_(p) {
+      if (p === 'high') return '高';
+      if (p === 'low') return '低';
+      return '中';
+    }
+
+    function formatDue_(ymd) {
+      if (!ymd) return '';
+      var p = String(ymd).split('-');
+      if (p.length < 3) return ymd;
+      return Number(p[1]) + '/' + Number(p[2]);
+    }
+
+    function renderTodoBuckets() {
+      var box = document.getElementById('todo-buckets');
+      if (!box) return;
+      box.innerHTML = TODO_BUCKETS.map(function (b) {
+        return '<button type="button" class="todo-bucket' + (todoBucket === b.id ? ' on' : '') + '" data-bucket="' + b.id + '">' +
+          escapeHtml(b.label) +
+          '<span class="n">' + bucketCount_(b.id) + '</span>' +
+          '</button>';
+      }).join('');
+    }
+
+    function renderMemoTodos() {
+      renderTodoBuckets();
+      renderTodayPanel();
+      var box = document.getElementById('todo-list');
+      if (!box) return;
+      var list = visiblePersonalTasks_();
+      if (!list.length) {
+        box.innerHTML = '<div class="todo-empty">この分類にタスクはありません。</div>';
+        return;
+      }
+      var today = todayKey_();
+      box.innerHTML = list.map(function (t) {
+        var overdue = t.status !== 'done' && t.due_date && t.due_date < today;
+        var sub = [];
+        if (t.due_date) sub.push('<span class="' + (overdue ? 'todo-overdue' : '') + '">' + escapeHtml(formatDue_(t.due_date)) + '</span>');
+        sub.push('<span class="todo-pri-' + escapeHtml(t.priority) + '">' + priLabel_(t.priority) + '</span>');
+        if (t.url) sub.push('<a href="' + escapeHtml(t.url) + '" target="_blank" rel="noopener noreferrer">URL</a>');
+        var body = '<div class="todo-item-title" data-edit="' + escapeHtml(t.id) + '">' + escapeHtml(t.title) + '</div>' +
+          '<div class="todo-item-sub">' + sub.join('') + '</div>';
+        if (todoEditId === t.id && t.status !== 'done') {
+          body += '<div class="todo-edit">' +
+            '<input type="text" data-field="title" data-id="' + escapeHtml(t.id) + '" value="' + escapeHtml(t.title) + '" maxlength="200">' +
+            '<input type="date" data-field="due_date" data-id="' + escapeHtml(t.id) + '" value="' + escapeHtml(t.due_date || '') + '">' +
+            '<select data-field="priority" data-id="' + escapeHtml(t.id) + '">' +
+              '<option value="high"' + (t.priority === 'high' ? ' selected' : '') + '>高</option>' +
+              '<option value="mid"' + (t.priority === 'mid' ? ' selected' : '') + '>中</option>' +
+              '<option value="low"' + (t.priority === 'low' ? ' selected' : '') + '>低</option>' +
+            '</select>' +
+            '<input type="url" data-field="url" data-id="' + escapeHtml(t.id) + '" value="' + escapeHtml(t.url || '') + '" placeholder="関連URL" maxlength="500" style="grid-column:1/-1">' +
+            '</div>';
+        }
+        return '<div class="todo-item' + (t.status === 'done' ? ' done' : '') + '">' +
+          '<input type="checkbox" data-todo="' + escapeHtml(t.id) + '"' + (t.status === 'done' ? ' checked' : '') + '>' +
+          '<div>' + body + '</div>' +
+          '<button type="button" class="todo-del" data-del="' + escapeHtml(t.id) + '" title="削除">×</button>' +
+          '</div>';
+      }).join('');
+    }
+
+    function addMemoTodo() {
+      var input = document.getElementById('todo-input');
+      var text = input ? String(input.value || '').trim() : '';
+      if (!text) return;
+      var dueEl = document.getElementById('todo-due');
+      var priEl = document.getElementById('todo-priority');
+      var urlEl = document.getElementById('todo-url');
+      var bucket = todoBucket === 'done' ? 'today' : todoBucket;
+      var task = normalizeClientTask_({
+        title: text,
+        bucket: bucket,
+        due_date: dueEl ? dueEl.value : '',
+        priority: priEl ? priEl.value : 'mid',
+        url: urlEl ? urlEl.value : '',
+        status: 'open',
+      });
+      personalTasks.unshift(task);
+      if (input) input.value = '';
+      if (urlEl) urlEl.value = '';
+      persistPersonalTask_(task);
+      renderMemoTodos();
+    }
+
+    function toggleMemoTodo(id, checked) {
+      var t = findPersonalTask_(id);
+      if (!t) return;
+      t.status = checked ? 'done' : 'open';
+      t.done_at = t.status === 'done' ? todayKey_() : '';
+      persistPersonalTask_(t);
+      renderMemoTodos();
+      if (t.status === 'done') addGyomuLine_(t.title);
+      else removeGyomuLine_(t.title);
+    }
+
+    function removeMemoTodo(id) {
+      var t = findPersonalTask_(id);
+      if (t && t.status === 'done' && t.done_at === todayKey_()) removeGyomuLine_(t.title);
+      personalTasks = personalTasks.filter(function (x) { return x.id !== id; });
+      savePersonalTasksLocal_();
+      queueDeletePersonalTask_(id);
+      if (todoEditId === id) todoEditId = '';
+      renderMemoTodos();
+    }
+
+    function updatePersonalField_(id, field, value) {
+      var t = findPersonalTask_(id);
+      if (!t) return;
+      if (field === 'title') {
+        t.title = String(value || '').trim();
+        if (!t.title) return;
+      } else if (field === 'due_date') {
+        t.due_date = String(value || '').trim();
+      } else if (field === 'priority') {
+        t.priority = value === 'high' || value === 'low' ? value : 'mid';
+      } else if (field === 'url') {
+        t.url = String(value || '').trim();
+      } else {
+        return;
+      }
+      persistPersonalTask_(t);
+      renderMemoTodos();
+    }
+
+    function applyTodayTodosToGyomu_() {
+      var today = todayKey_();
+      personalTasks.forEach(function (t) {
+        if (t && t.status === 'done' && t.done_at === today) addGyomuLine_(t.title);
+      });
     }
 
     function addGyomuLine_(line) {
@@ -1865,56 +2288,73 @@
       autosaveDailyNow_();
     }
 
-    function applyTodayTodosToGyomu_() {
-      var today = todayKey_();
-      memoTodos.forEach(function (t) {
-        if (t && t.done && t.doneDate === today) addGyomuLine_(t.text);
-      });
-    }
-
-    function renderMemoTodos() {
-      var box = document.getElementById('todo-list');
-      if (!box) return;
-      if (!memoTodos.length) {
-        box.innerHTML = '<div class="todo-empty">メモを書いて、終わったらチェック。</div>';
-        return;
+    function renderTodayPanel() {
+      var dateEl = document.getElementById('today-date');
+      if (dateEl) {
+        try {
+          dateEl.textContent = new Date().toLocaleDateString('ja-JP', {
+            timeZone: 'Asia/Tokyo',
+            month: 'numeric',
+            day: 'numeric',
+            weekday: 'short',
+          });
+        } catch (e) {
+          dateEl.textContent = todayKey_();
+        }
       }
-      box.innerHTML = memoTodos.map(function (t, i) {
-        return '<label class="todo-item' + (t.done ? ' done' : '') + '">' +
-          '<input type="checkbox" data-todo="' + i + '"' + (t.done ? ' checked' : '') + '>' +
-          '<span>' + escapeHtml(t.text || '') + '</span>' +
-          '<button type="button" class="todo-del" data-del="' + i + '" title="削除">×</button>' +
-          '</label>';
-      }).join('');
+      var box = document.getElementById('today-list');
+      if (!box) return;
+      var rows = [];
+      (todayEvents || []).forEach(function (ev) {
+        var when = ev.isAllDay ? '終日' : String((ev.start || '') + (ev.end ? '–' + ev.end : ''));
+        rows.push('<div class="today-row"><b>' + escapeHtml(when) + '</b><span>' + escapeHtml(ev.title || '') + '</span></div>');
+      });
+      var today = todayKey_();
+      var openToday = personalTasks.filter(function (t) {
+        return t.status !== 'done' && (t.bucket === 'today' || t.due_date === today);
+      });
+      openToday.forEach(function (t) {
+        rows.push('<div class="today-row"><b>TODO</b><span>' + escapeHtml(t.title) + '</span></div>');
+      });
+      box.innerHTML = rows.length ? rows.join('') : '<div class="todo-empty" style="padding:8px 0;">本日の予定はありません。</div>';
     }
 
-    function addMemoTodo() {
-      var input = document.getElementById('todo-input');
-      var text = input ? String(input.value || '').trim() : '';
-      if (!text) return;
-      memoTodos.unshift({ id: Date.now(), text: text, done: false, doneDate: '' });
-      if (input) input.value = '';
-      saveMemoTodos();
+    function initPersonalTasks() {
+      loadPersonalTasksLocal_();
+      migrateMemoTodos_();
+      var ymd = todayKey_();
+      var carried = false;
+      personalTasks.forEach(function (t) {
+        if (carryPersonalTask_(t, ymd)) {
+          carried = true;
+          persistPersonalTask_(t);
+        }
+      });
+      if (carried) savePersonalTasksLocal_();
       renderMemoTodos();
-    }
-
-    function toggleMemoTodo(index, checked) {
-      var t = memoTodos[index];
-      if (!t) return;
-      t.done = !!checked;
-      t.doneDate = t.done ? todayKey_() : '';
-      saveMemoTodos();
-      renderMemoTodos();
-      if (t.done) addGyomuLine_(t.text);
-      else removeGyomuLine_(t.text);
-    }
-
-    function removeMemoTodo(index) {
-      var t = memoTodos[index];
-      if (t && t.done && t.doneDate === todayKey_()) removeGyomuLine_(t.text);
-      memoTodos.splice(index, 1);
-      saveMemoTodos();
-      renderMemoTodos();
+      fetch('/api/tasks')
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+          if (!res || !res.ok || !Array.isArray(res.tasks)) return;
+          if (res.tasks.length) {
+            personalTasks = res.tasks.map(normalizeClientTask_);
+            savePersonalTasksLocal_();
+          } else if (personalTasks.length) {
+            personalTasks.forEach(function (t) { persistPersonalTask_(t); });
+          }
+          applyTodayTodosToGyomu_();
+          renderMemoTodos();
+        })
+        .catch(function () {});
+      fetch('/api/context')
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+          if (res && res.ok && Array.isArray(res.calendarEvents)) {
+            todayEvents = res.calendarEvents;
+            renderTodayPanel();
+          }
+        })
+        .catch(function () {});
     }
 
     function fillDailyDate_() {
@@ -2821,8 +3261,7 @@
 
     window.onload = function () {
       renderAppLinks();
-      loadMemoTodos();
-      renderMemoTodos();
+      initPersonalTasks();
       loadDataFromGAS();
       loadFromSheet();
       renderTasks();
@@ -2854,18 +3293,58 @@
           addMemoTodo();
         }
       });
+      var todoBuckets = document.getElementById('todo-buckets');
+      if (todoBuckets) {
+        todoBuckets.addEventListener('click', function (e) {
+          var btn = e.target && e.target.closest ? e.target.closest('[data-bucket]') : null;
+          if (!btn) return;
+          todoBucket = btn.getAttribute('data-bucket') || 'today';
+          todoEditId = '';
+          renderMemoTodos();
+        });
+      }
       var todoList = document.getElementById('todo-list');
       if (todoList) {
         todoList.addEventListener('change', function (e) {
-          var cb = e.target && e.target.getAttribute ? e.target : null;
-          if (!cb || !cb.getAttribute('data-todo')) return;
-          toggleMemoTodo(Number(cb.getAttribute('data-todo')), cb.checked);
+          var el = e.target;
+          if (!el || !el.getAttribute) return;
+          if (el.getAttribute('data-todo')) {
+            toggleMemoTodo(el.getAttribute('data-todo'), el.checked);
+            return;
+          }
+          if (el.getAttribute('data-field') && el.getAttribute('data-id')) {
+            updatePersonalField_(el.getAttribute('data-id'), el.getAttribute('data-field'), el.value);
+          }
+        });
+        todoList.addEventListener('input', function (e) {
+          var el = e.target;
+          if (!el || !el.getAttribute || !el.getAttribute('data-field')) return;
+          var field = el.getAttribute('data-field');
+          if (field !== 'title' && field !== 'url') return;
+          var t = findPersonalTask_(el.getAttribute('data-id'));
+          if (!t) return;
+          if (field === 'title') {
+            var next = String(el.value || '').trim();
+            if (!next) return;
+            t.title = next;
+          } else {
+            t.url = String(el.value || '').trim();
+          }
+          persistPersonalTask_(t);
         });
         todoList.addEventListener('click', function (e) {
-          var btn = e.target && e.target.closest ? e.target.closest('[data-del]') : null;
-          if (!btn) return;
-          e.preventDefault();
-          removeMemoTodo(Number(btn.getAttribute('data-del')));
+          var del = e.target && e.target.closest ? e.target.closest('[data-del]') : null;
+          if (del) {
+            e.preventDefault();
+            removeMemoTodo(del.getAttribute('data-del'));
+            return;
+          }
+          var edit = e.target && e.target.closest ? e.target.closest('[data-edit]') : null;
+          if (edit) {
+            var id = edit.getAttribute('data-edit');
+            todoEditId = todoEditId === id ? '' : id;
+            renderMemoTodos();
+          }
         });
       }
       ['ops-title-input', 'ops-company-input', 'ops-amount-input', 'ops-reply-input', 'ops-mail-input', 'ops-product-input', 'ops-stuck-input', 'ops-status-input'].forEach(function (id) {

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * RYUTA Workspace — サーバ側
  * スプレッドシートIDは 1 本にまとめる想定（日報ブックに WorkspaceSync シートを追加する形を推奨）
  */
@@ -143,11 +143,24 @@ function handleApiGet_(e) {
     if (api === 'vendorMail') {
       return jsonOutput_(syncOneVendorFromGmail_(
         String((e.parameter && e.parameter.company) || ''),
-        String((e.parameter && e.parameter.email) || '')
+        String((e.parameter && e.parameter.email) || ''),
+        String((e.parameter && e.parameter.since) || '')
       ));
     }
     if (api === 'vendorDiscover') {
       return jsonOutput_(discoverVendorEmails_(String((e.parameter && e.parameter.company) || '')));
+    }
+    if (api === 'vendorFiles') {
+      if (!isApiAuthorized_(e, null)) return unauthorized_();
+      return jsonOutput_(listVendorFiles_(String((e.parameter && e.parameter.threadId) || '')));
+    }
+    if (api === 'vendorFile') {
+      if (!isApiAuthorized_(e, null)) return unauthorized_();
+      return jsonOutput_(getVendorFile_(
+        String((e.parameter && e.parameter.threadId) || ''),
+        String((e.parameter && e.parameter.messageId) || ''),
+        String((e.parameter && e.parameter.index) || '0')
+      ));
     }
     if (api === 'keidoPreview') {
       var packed = buildKeidoTableHtmlSafe_();
@@ -300,6 +313,8 @@ var VENDOR_COMPANIES_ = [
   { name: 'SEKAI', keys: ['SEKAI', 'セカイ'], domains: ['sekai.co.jp'], contacts: [
     { name: '志賀', email: 'a-shiga@sekai.co.jp' },
     { name: 'SEKAI team', email: 'team@sekai.co.jp' },
+    { name: '添田', email: 'e-soeta@sekai.co.jp' },
+    { name: '渋谷メーリス', email: 'shibuya_sekai@sekai.co.jp' },
   ] },
   { name: 'Lifefitness', keys: ['Lifefitness', 'Life Fitness', 'ライフフィットネス'], domains: ['lifefitness.com'], contacts: [
     { name: 'Life Fitness CS', email: 'customerservice.jp@lifefitness.com' },
@@ -311,6 +326,7 @@ var VENDOR_COMPANIES_ = [
   { name: '鳳商事', keys: ['鳳商事'], domains: ['ohtori-s.co.jp'], contacts: [
     { name: '齋藤 翔', email: 'm-saito@ohtori-s.co.jp' },
     { name: '首都圏支店', email: 'shutoken@ohtori-s.co.jp' },
+    { name: '本部受注', email: 'honbu-order@ohtori-s.co.jp' },
   ] },
   { name: 'アイリスオーヤマ', keys: ['アイリスオーヤマ', 'IRIS'], domains: ['irisohyama.co.jp'] },
   { name: 'KH', keys: ['KH', 'gracene'], domains: ['gracene.com'], contacts: [
@@ -399,6 +415,23 @@ function vendorQuery_(keys, domains) {
       q += ' OR from:@' + domains[d] + ' OR to:@' + domains[d];
     }
   }
+  return q;
+}
+
+function withMailWindow_(query, since) {
+  var q = String(query || '').replace(/\s+newer_than:\S+/g, '').replace(/\s+after:\S+/g, '').trim();
+  var s = String(since || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+    var d = new Date(s.slice(0, 10) + 'T00:00:00+09:00');
+    d.setDate(d.getDate() - 1);
+    var y = d.getFullYear();
+    var m = d.getMonth() + 1;
+    var day = d.getDate();
+    var mm = (m < 10 ? '0' : '') + m;
+    var dd = (day < 10 ? '0' : '') + day;
+    return q + ' after:' + y + '/' + mm + '/' + dd;
+  }
+  if (/^\d+d$/.test(s) || /^\d+m$/.test(s)) return q + ' newer_than:' + s;
   return q + ' newer_than:5m';
 }
 
@@ -458,7 +491,7 @@ function vendorEmailsQuery_(emails, myEmail) {
       parts.push('to:' + email);
     }
   }
-  return '(' + parts.join(' OR ') + ') newer_than:5m';
+  return '(' + parts.join(' OR ') + ')';
 }
 
 function packVendorItem_(row, vendor, query, mode, externals) {
@@ -481,14 +514,88 @@ function packVendorItem_(row, vendor, query, mode, externals) {
   };
 }
 
+function isUsefulAttachment_(att) {
+  var name = String(att.getName() || '');
+  var type = String(att.getContentType() || '').toLowerCase();
+  var size = 0;
+  try { size = Number(att.getSize() || 0); } catch (ignored) {}
+  if (/\.(xlsx|xls|xlsm|csv|pdf|png|jpe?g|gif|webp|docx|doc|pptx|ppt)$/i.test(name)) return true;
+  if (type.indexOf('pdf') >= 0 || type.indexOf('spreadsheet') >= 0 || type.indexOf('excel') >= 0) return true;
+  if (type.indexOf('officedocument') >= 0) return true;
+  if (type.indexOf('image/') === 0 && size >= 20000) return true;
+  return false;
+}
+
+function listVendorFiles_(threadId) {
+  try {
+    threadId = String(threadId || '').trim();
+    if (!threadId) return { ok: false, message: 'threadId がありません' };
+    var thread = GmailApp.getThreadById(threadId);
+    if (!thread) return { ok: false, message: 'スレッドが見つかりません' };
+    var messages = thread.getMessages();
+    var files = [];
+    for (var m = 0; m < messages.length; m++) {
+      var msg = messages[m];
+      var atts = msg.getAttachments();
+      for (var a = 0; a < atts.length; a++) {
+        var att = atts[a];
+        if (!isUsefulAttachment_(att)) continue;
+        var size = 0;
+        try { size = Number(att.getSize() || 0); } catch (ignoredSize) {}
+        files.push({
+          messageId: String(msg.getId() || ''),
+          index: a,
+          name: String(att.getName() || '添付'),
+          type: String(att.getContentType() || ''),
+          size: size
+        });
+      }
+    }
+    return { ok: true, files: files };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
+function getVendorFile_(threadId, messageId, index) {
+  try {
+    var idx = parseInt(String(index || '0'), 10);
+    if (isNaN(idx) || idx < 0) return { ok: false, message: 'index が不正です' };
+    var msg = null;
+    if (messageId) {
+      msg = GmailApp.getMessageById(String(messageId));
+    } else if (threadId) {
+      var thread = GmailApp.getThreadById(String(threadId));
+      var messages = thread ? thread.getMessages() : [];
+      msg = messages.length ? messages[messages.length - 1] : null;
+    }
+    if (!msg) return { ok: false, message: 'メールが見つかりません' };
+    var atts = msg.getAttachments();
+    if (idx >= atts.length) return { ok: false, message: '添付が見つかりません' };
+    var att = atts[idx];
+    var bytes = att.getBytes();
+    if (bytes.length > 6 * 1024 * 1024) {
+      return { ok: false, message: '6MB超です。Gmailで開いてください。' };
+    }
+    return {
+      ok: true,
+      name: String(att.getName() || '添付'),
+      type: String(att.getContentType() || 'application/octet-stream'),
+      data: Utilities.base64Encode(bytes)
+    };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
 function vendorPinnedQuery_(email, myEmail) {
   email = sanitizeEmail_(email);
   myEmail = sanitizeEmail_(myEmail);
   if (!email) return '';
   if (myEmail) {
-    return '(from:' + email + ' to:' + myEmail + ') OR (from:' + myEmail + ' to:' + email + ') newer_than:5m';
+    return '(from:' + email + ' to:' + myEmail + ') OR (from:' + myEmail + ' to:' + email + ')';
   }
-  return '(from:' + email + ' OR to:' + email + ') newer_than:5m';
+  return '(from:' + email + ' OR to:' + email + ')';
 }
 
 function gmailOpenUrl_(thread, company) {
@@ -585,7 +692,7 @@ function summarizeThread_(thread, myEmail, company) {
   return row;
 }
 
-function syncOneVendorFromGmail_(name, pinnedEmail) {
+function syncOneVendorFromGmail_(name, pinnedEmail, since) {
   try {
     var vendor = null;
     for (var i = 0; i < VENDOR_COMPANIES_.length; i++) {
@@ -616,7 +723,9 @@ function syncOneVendorFromGmail_(name, pinnedEmail) {
       mode = 'address';
       query = vendorEmailsQuery_(sheetEmails, myEmail);
     }
-    var threads = GmailApp.search(query, 0, 8);
+    query = withMailWindow_(query, since);
+    var limit = /^\d{4}-\d{2}-\d{2}/.test(String(since || '')) || /^\d+d$/.test(String(since || '')) ? 5 : 8;
+    var threads = GmailApp.search(query, 0, limit);
     var items = [];
     for (var t = 0; t < threads.length; t++) {
       var thread = threads[t];
@@ -658,7 +767,7 @@ function discoverVendorEmails_(name) {
       myEmail = String(Session.getActiveUser().getEmail() || '').toLowerCase();
     } catch (ignored) {}
 
-    var threads = GmailApp.search(vendorQuery_(vendor.keys, vendor.domains), 0, 15);
+    var threads = GmailApp.search(withMailWindow_(vendorQuery_(vendor.keys, vendor.domains), '5m'), 0, 15);
     var counts = {};
     var samples = {};
     for (var t = 0; t < threads.length; t++) {
@@ -725,7 +834,7 @@ function syncVendorCasesFromGmail_() {
 
     for (var i = 0; i < VENDOR_COMPANIES_.length; i++) {
       var vendor = VENDOR_COMPANIES_[i];
-      var threads = GmailApp.search(vendorQuery_(vendor.keys, vendor.domains), 0, 10);
+      var threads = GmailApp.search(withMailWindow_(vendorQuery_(vendor.keys, vendor.domains), '5m'), 0, 10);
       for (var t = 0; t < threads.length; t++) {
         var row = summarizeThread_(threads[t], myEmail, vendor.name);
         row.company = vendor.name;
@@ -2100,70 +2209,49 @@ function polishKansouWithGemini(rawText) {
           'GEMINI_API_KEY が未設定です。プロジェクトの設定 → スクリプトのプロパティ にキーを追加してください。',
       };
     }
-    var prompt =
-      '以下はフィットネス施設のスタッフ日報「所感」欄の下書きです。ビジネスメール向けの敬語に整え、誤字脱字を修正し、300文字以内で簡潔にまとめてください。事実と意味は変えないでください。出力は所感の本文のみ（説明・見出し・引用符は不要）。\n\n' +
-      String(rawText);
-    var models = [
-      'gemini-2.5-flash-lite',
-      'gemini-3.1-flash-lite',
-      'gemini-2.5-flash',
-      'gemini-3.5-flash'
-    ];
-    var lastMessage = '返答を取得できませんでした。';
-    for (var m = 0; m < models.length; m++) {
-      var url =
-        'https://generativelanguage.googleapis.com/v1beta/models/' +
-        encodeURIComponent(models[m]) +
-        ':generateContent?key=' +
-        encodeURIComponent(key);
-      var res = UrlFetchApp.fetch(url, {
-        method: 'post',
-        contentType: 'application/json',
-        payload: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.4, maxOutputTokens: 1024 }
-        }),
-        muteHttpExceptions: true
-      });
-      var code = res.getResponseCode();
-      var raw = res.getContentText() || '';
-      var json = null;
-      try {
-        json = raw ? JSON.parse(raw) : null;
-      } catch (parseErr) {
-        lastMessage = 'Gemini の応答が JSON ではありません（' + code + '）';
-        continue;
-      }
-      if (code !== 200) {
-        lastMessage = (json && json.error && json.error.message) || ('API エラー（コード ' + code + '）');
-        if (code === 404 || /not found|deprecated|INVALID_ARGUMENT/i.test(String(lastMessage))) {
-          continue;
-        }
-        return { ok: false, message: lastMessage };
-      }
-      var text = extractGeminiText_(json);
-      if (text) {
-        return { ok: true, text: String(text).trim() };
-      }
-      lastMessage = '返答を取得できませんでした。';
+    var url =
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' +
+      encodeURIComponent(key);
+    var body = {
+      contents: [
+        {
+          parts: [
+            {
+              text:
+                '以下はフィットネス施設のスタッフ日報「所感」欄の下書きです。ビジネスメール向けの敬語に整え、誤字脱字を修正し、300文字以内で簡潔にまとめてください。事実と意味は変えないでください。出力は所感の本文のみ（説明・見出し・引用符は不要）。\n\n' +
+                String(rawText),
+            },
+          ],
+        },
+      ],
+    };
+    var res = UrlFetchApp.fetch(url, {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify(body),
+      muteHttpExceptions: true,
+    });
+    var code = res.getResponseCode();
+    var json = JSON.parse(res.getContentText());
+    if (code !== 200) {
+      return {
+        ok: false,
+        message: (json.error && json.error.message) || 'API エラー（コード ' + code + '）',
+      };
     }
-    return { ok: false, message: lastMessage };
-  } catch (err) {
-    return { ok: false, message: String(err && err.message ? err.message : err) };
-  }
-}
-
-function extractGeminiText_(json) {
-  try {
-    var parts = json.candidates[0].content.parts || [];
-    var out = [];
-    for (var i = 0; i < parts.length; i++) {
-      if (parts[i] && parts[i].thought) continue;
-      var t = parts[i] && parts[i].text ? String(parts[i].text).trim() : '';
-      if (t) out.push(t);
+    var text =
+      json.candidates &&
+      json.candidates[0] &&
+      json.candidates[0].content &&
+      json.candidates[0].content.parts &&
+      json.candidates[0].content.parts[0] &&
+      json.candidates[0].content.parts[0].text;
+    if (!text) {
+      return { ok: false, message: '返答を取得できませんでした。' };
     }
-    return out.join('\n').trim();
+    return { ok: true, text: String(text).trim() };
   } catch (e) {
-    return '';
+    console.error(e);
+    return { ok: false, message: String(e.message || e) };
   }
 }
