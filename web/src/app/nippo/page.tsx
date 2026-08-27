@@ -85,7 +85,7 @@ export default function NippoStudioPage() {
     <main style={{ maxWidth: 720, margin: '0 auto', padding: '2rem 1.25rem' }}>
       <p style={{ margin: '0 0 1rem' }}>
         <a href="/" style={{ color: '#93c5fd', fontSize: 13 }}>
-          ← Workspace（4分割）に戻る
+          ← RS-LOG に戻る
         </a>
       </p>
       <p style={{ fontSize: 12, letterSpacing: '0.12em', color: '#71717a', margin: 0 }}>

@@ -77,57 +77,40 @@
       display: none;
     }
 
-    .brand-bar {
+    .app-shell {
       position: relative;
-      z-index: 12;
-      flex: none;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 10px 18px 2px;
+      z-index: 10;
+      height: 100%;
+      width: 100%;
+      box-sizing: border-box;
+      padding: 10px;
     }
-    .brand-mark {
-      width: 28px;
-      height: 28px;
-      border-radius: 50%;
-      background: #000;
-      border: 1.5px solid #fff;
-      color: #fff;
+    .work-grid {
+      height: 100%;
+      width: 100%;
       display: grid;
-      place-items: center;
-      font-family: 'Syne', 'Outfit', sans-serif;
-      font-weight: 800;
-      font-size: 10px;
-      letter-spacing: -0.08em;
-    }
-    .brand-name {
-      font-family: 'Syne', 'Outfit', sans-serif;
-      font-weight: 800;
-      font-size: 13px;
-      letter-spacing: 0.28em;
-      color: #fff;
-    }
-    .brand-save {
-      margin-left: auto;
-      font-size: 10px;
-      letter-spacing: 0.18em;
-      text-transform: uppercase;
-      color: #737373;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+      gap: 10px;
+      min-height: 0;
+      min-width: 0;
     }
 
     .pro-panel {
       position: relative;
       z-index: 1;
-      background: rgba(8, 8, 8, 0.82);
-      backdrop-filter: blur(22px) saturate(120%);
-      -webkit-backdrop-filter: blur(22px) saturate(120%);
-      border: 1px solid rgba(255, 255, 255, 0.10);
-      border-radius: 22px;
-      box-shadow: 0 24px 60px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.06);
+      background: linear-gradient(165deg, rgba(18, 18, 18, 0.94) 0%, rgba(6, 6, 6, 0.96) 100%);
+      backdrop-filter: blur(28px) saturate(130%);
+      -webkit-backdrop-filter: blur(28px) saturate(130%);
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      border-radius: 18px;
+      box-shadow:
+        0 1px 0 rgba(255,255,255,0.05) inset,
+        0 18px 48px rgba(0,0,0,0.55);
       display: flex;
       flex-direction: column;
       overflow: hidden;
-      transition: border-color 0.35s ease, box-shadow 0.35s ease;
+      transition: border-color 0.25s ease, box-shadow 0.25s ease;
       min-width: 0;
       min-height: 0;
     }
@@ -137,47 +120,20 @@
       inset: 0;
       border-radius: inherit;
       padding: 1px;
-      background: linear-gradient(135deg, rgba(255,255,255,0.18), transparent 40%, rgba(160,160,160,0.18));
+      background: linear-gradient(145deg, rgba(255,255,255,0.16), transparent 42%, rgba(255,255,255,0.04));
       -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
       mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
       -webkit-mask-composite: xor;
       mask-composite: exclude;
       pointer-events: none;
-      opacity: 0.45;
+      opacity: 0.5;
     }
     .pro-panel:hover {
-      border-color: rgba(255, 255, 255, 0.18);
-      box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.10), 0 32px 100px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06);
+      border-color: rgba(255, 255, 255, 0.14);
+      box-shadow:
+        0 1px 0 rgba(255,255,255,0.06) inset,
+        0 22px 56px rgba(0,0,0,0.62);
     }
-
-    .pro-panel.focused-panel {
-      position: fixed;
-      inset: 1rem;
-      z-index: 50;
-      height: calc(100vh - 2rem);
-      background: rgba(6, 8, 14, 0.92);
-    }
-
-    .focus-btn {
-      position: absolute;
-      top: 12px;
-      right: 12px;
-      background: rgba(255,255,255,0.06);
-      border: 1px solid rgba(255,255,255,0.1);
-      color: #e8e8ec;
-      width: 28px;
-      height: 28px;
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      opacity: 0;
-      transition: opacity 0.2s, background 0.2s, border-color 0.2s;
-      z-index: 20;
-    }
-    .pro-panel:hover .focus-btn { opacity: 1; }
-    .focus-btn:hover { background: rgba(255, 255, 255, 0.12); border-color: rgba(255, 255, 255, 0.28); }
 
     .task-card {
       background: rgba(255,255,255,0.03);
@@ -1006,13 +962,28 @@
       transform: scale(1.06);
     }
     .todo-head {
-      padding: 14px 44px 8px 16px;
+      padding: 12px 16px 6px;
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 10px;
       flex: none;
       position: relative;
       z-index: 2;
+    }
+    .todo-brand {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      min-width: 0;
+    }
+    .todo-brand-mark {
+      font-family: 'Syne', 'Outfit', sans-serif;
+      font-weight: 800;
+      font-size: 10px;
+      letter-spacing: 0.22em;
+      color: rgba(255,255,255,0.42);
+      flex: none;
     }
     .todo-title {
       font-size: 11px;
@@ -1020,6 +991,16 @@
       font-weight: 600;
       color: #fff;
     }
+    .todo-sync {
+      margin-left: auto;
+      font-size: 9px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: #737373;
+      flex: none;
+    }
+    .todo-sync.ok { color: #a3a3a3; }
+    .todo-sync.err { color: #d4d4d8; }
     .todo-buckets {
       display: flex;
       flex-wrap: wrap;
@@ -1124,29 +1105,29 @@
       gap: 7px;
     }
     .todo-lamp {
-      width: 12px;
-      height: 12px;
+      width: 11px;
+      height: 11px;
       border-radius: 999px;
-      border: 1px solid rgba(255,255,255,0.18);
+      border: 1px solid rgba(255,255,255,0.12);
       padding: 0;
       cursor: pointer;
       background: transparent;
-      transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
-      opacity: 0.35;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease, border-color 0.15s ease;
+      opacity: 0.38;
     }
-    .todo-lamp:hover { transform: scale(1.12); opacity: 0.85; }
-    .todo-lamp.on { opacity: 1; border-color: rgba(255,255,255,0.55); }
+    .todo-lamp:hover { transform: scale(1.14); opacity: 0.9; }
+    .todo-lamp.on { opacity: 1; border-color: rgba(255,255,255,0.45); }
     .todo-lamp-high {
-      background: #ff2d2d;
-      box-shadow: 0 0 10px rgba(255, 45, 45, 0.55);
+      background: radial-gradient(circle at 35% 30%, #ff8f7a, #e11d48 70%);
+      box-shadow: 0 0 0 1px rgba(225, 29, 72, 0.25), 0 0 12px rgba(225, 29, 72, 0.28);
     }
     .todo-lamp-mid {
-      background: #0f766e;
-      box-shadow: 0 0 10px rgba(15, 118, 110, 0.5);
+      background: radial-gradient(circle at 35% 30%, #ffe6b0, #d4a017 72%);
+      box-shadow: 0 0 0 1px rgba(212, 160, 23, 0.22), 0 0 10px rgba(212, 160, 23, 0.22);
     }
     .todo-lamp-low {
-      background: #99f6e4;
-      box-shadow: 0 0 8px rgba(153, 246, 228, 0.35);
+      background: radial-gradient(circle at 35% 30%, #d7e3f4, #7b8ea6 72%);
+      box-shadow: 0 0 0 1px rgba(123, 142, 166, 0.28), 0 0 8px rgba(123, 142, 166, 0.2);
     }
     .todo-item-lamp {
       width: 10px;
@@ -1167,8 +1148,33 @@
     }
     .todo-del { border: 0; background: transparent; color: #737373; cursor: pointer; font-size: 14px; padding: 0; }
     .todo-empty { font-size: 12px; color: #737373; padding: 20px 8px; }
+    .todo-past-filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      padding: 0 16px 8px;
+      flex: none;
+      position: relative;
+      z-index: 2;
+    }
+    .todo-past-filter {
+      font-size: 10px;
+      letter-spacing: 0.04em;
+      color: #a3a3a3;
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 999px;
+      padding: 3px 8px;
+      cursor: pointer;
+      line-height: 1.2;
+    }
+    .todo-past-filter.on {
+      color: #000;
+      background: #fff;
+      border-color: #fff;
+    }
     .today-head {
-      padding: 10px 44px 6px 12px;
+      padding: 10px 12px 6px;
       display: grid;
       grid-template-columns: 28px 1fr 28px auto;
       align-items: center;
@@ -1245,22 +1251,18 @@
 <body class="h-screen w-screen relative">
   <div class="app-bg" aria-hidden="true"></div>
 
-  <div class="relative z-10 h-full w-full flex flex-col">
-  <header class="brand-bar">
-    <div class="brand-mark">RS</div>
-    <div class="brand-name">WORK-LOG</div>
-    <div class="brand-save" id="sync-status-brand"></div>
-  </header>
-  <div class="flex-1 min-h-0 grid grid-cols-2 gap-3 sm:gap-4 p-3 sm:p-4 pt-2">
-    <div class="min-h-0 min-w-0 grid gap-3 sm:gap-4" style="grid-template-rows: minmax(0,1fr) 148px;">
+  <div class="app-shell">
+  <div class="work-grid">
     <div class="pro-panel" id="panel-todo">
-      <button type="button" class="focus-btn" onclick="toggleFocus('panel-todo')" title="Fullscreen">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
-      </button>
       <div class="todo-head">
-        <div class="todo-title">TODO</div>
+        <div class="todo-brand">
+          <span class="todo-brand-mark">WORK-LOG</span>
+          <div class="todo-title">TODO</div>
+        </div>
+        <div class="todo-sync" id="sync-status-brand"></div>
       </div>
       <div id="todo-buckets" class="todo-buckets"></div>
+      <div id="todo-past-filters" class="todo-past-filters" style="display:none;"></div>
       <div class="todo-add">
         <input id="todo-input" type="text" placeholder="" maxlength="200">
         <button type="button" id="todo-add-btn" title="追加">+</button>
@@ -1276,35 +1278,7 @@
       <div id="todo-list" class="todo-list"></div>
     </div>
 
-    <div class="pro-panel" id="panel-today">
-      <button type="button" class="focus-btn" onclick="toggleFocus('panel-today')" title="Fullscreen">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
-      </button>
-      <div class="today-head">
-        <button type="button" class="today-nav" id="today-prev" title="前日">‹</button>
-        <div class="today-date-wrap">
-          <div class="today-title">DAY</div>
-          <div id="today-date" class="today-date"></div>
-        </div>
-        <button type="button" class="today-nav" id="today-next" title="翌日">›</button>
-        <div class="today-tools">
-          <button type="button" class="today-tool" id="today-copy-book" title="予約URLをコピー">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-          </button>
-          <a class="today-tool" id="today-open-cal" href="https://calendar.google.com/calendar/u/0/r" target="_blank" rel="noopener noreferrer" title="カレンダーを開く">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-          </a>
-        </div>
-      </div>
-      <div id="today-list" class="today-list"></div>
-    </div>
-    </div>
-
-    <div class="min-h-0 min-w-0 grid grid-rows-2 gap-3 sm:gap-4">
     <div class="pro-panel" id="panel-apps" data-view="link">
-      <button type="button" class="focus-btn" onclick="toggleFocus('panel-apps')" title="Fullscreen">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
-      </button>
       <div class="app-panel-bg" aria-hidden="true"></div>
       <div class="app-panel-body">
         <div class="apps-switch">
@@ -1333,10 +1307,27 @@
       </div>
     </div>
 
+    <div class="pro-panel" id="panel-today">
+      <div class="today-head">
+        <button type="button" class="today-nav" id="today-prev" title="前日">‹</button>
+        <div class="today-date-wrap">
+          <div class="today-title">DAY</div>
+          <div id="today-date" class="today-date"></div>
+        </div>
+        <button type="button" class="today-nav" id="today-next" title="翌日">›</button>
+        <div class="today-tools">
+          <button type="button" class="today-tool" id="today-copy-book" title="予約URLをコピー">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          </button>
+          <a class="today-tool" id="today-open-cal" href="https://calendar.google.com/calendar/u/0/r" target="_blank" rel="noopener noreferrer" title="カレンダーを開く">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+          </a>
+        </div>
+      </div>
+      <div id="today-list" class="today-list"></div>
+    </div>
+
     <div class="pro-panel" id="panel-tasks">
-      <button type="button" class="focus-btn" onclick="toggleFocus('panel-tasks')" title="Fullscreen">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
-      </button>
       <div class="px-4 py-3 flex justify-between items-center flex-none border-b border-white/[0.06] relative z-30 gap-2">
         <div class="min-w-0">
           <div class="text-[11px] tracking-[0.22em] text-white font-semibold">DAILY</div>
@@ -1400,7 +1391,6 @@
 
       <div class="p-2 bg-[#05060f]/60 backdrop-blur-md flex-none border-t border-white/[0.06] relative z-30"></div>
       <button type="button" id="daily-react-btn" onclick="handleMascotClick()" title="リアクション">●</button>
-    </div>
     </div>
   </div>
   </div>
@@ -1892,7 +1882,7 @@
       const el = document.getElementById('sync-status') || document.getElementById('sync-status-brand');
       if (!el) return;
       el.textContent = text === 'LOCAL' ? '' : text;
-      el.className = (el.id === 'sync-status-brand' ? 'brand-save' : 'sync-pill') + (kind === 'ok' ? ' ok' : kind === 'err' ? ' err' : '');
+      el.className = (el.id === 'sync-status-brand' ? 'todo-sync' : 'sync-pill') + (kind === 'ok' ? ' ok' : kind === 'err' ? ' err' : '');
     }
 
     function processInputWithoutAI(text) {
@@ -2029,11 +2019,20 @@
     var personalSaveTimers = {};
     var todayEvents = [];
     var dayViewOffset = 0;
+    var dayFetchSeq = 0;
+    var dayFetchPending = false;
     var draftPriority = 'mid';
-    var pastGyomuLines = [];
-    var pastGyomuLoaded = false;
-    var pastGyomuLoading = false;
-    var pastGyomuCounts = {};
+    var pastBucketFilter = 'all';
+    var undoStack = [];
+    var redoStack = [];
+    var MAX_UNDO = 50;
+    var PAST_FILTERS = [
+      { id: 'all', label: 'すべて' },
+      { id: 'today', label: '毎日' },
+      { id: 'week', label: '定期' },
+      { id: 'month', label: 'いずれ' },
+    ];
+    var BUCKET_LABELS = { today: '毎日', week: '定期', month: 'いずれ' };
 
     function todayKey_() {
       try {
@@ -2219,76 +2218,43 @@
     }
 
     function bucketCount_(id) {
-      if (id === 'history') return pastGyomuLines.length || 0;
+      if (id === 'history') {
+        return personalTasks.filter(function (t) { return t.status === 'done'; }).length;
+      }
       return personalTasks.filter(function (t) {
         return t.status !== 'done' && t.bucket === id;
       }).length;
     }
 
-    function titleInToday_(title) {
-      var n = normalizeGyomuLine_(title);
-      return personalTasks.some(function (t) {
-        if (!t || t.status === 'done') return false;
-        if (t.bucket !== 'today') return false;
-        return normalizeGyomuLine_(t.title) === n;
-      });
-    }
-
-    function loadPastGyomuHistory_(force) {
-      if (pastGyomuLoading) return;
-      if (pastGyomuLoaded && !force) {
-        renderMemoTodos();
-        return;
-      }
-      pastGyomuLoading = true;
-      renderMemoTodos();
-      fetch('/api/tasks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'previewGyomuFromMail' }),
-        cache: 'no-store',
-      })
-        .then(function (r) { return r.json(); })
-        .then(function (res) {
-          pastGyomuLoading = false;
-          if (res && res.ok && Array.isArray(res.lines)) {
-            pastGyomuLines = res.lines;
-            pastGyomuCounts = res.counts || {};
-            pastGyomuLoaded = true;
-          }
-          renderMemoTodos();
-        })
-        .catch(function () {
-          pastGyomuLoading = false;
-          renderMemoTodos();
-        });
-    }
-
-    function addPastTitleToToday_(title, checked) {
-      var text = String(title || '').trim();
-      if (!text) return;
-      if (!checked) return;
-      if (titleInToday_(text)) {
-        renderMemoTodos();
-        return;
-      }
-      var task = normalizeClientTask_({
-        title: text,
-        bucket: 'today',
-        due_date: '',
-        priority: 'mid',
-        status: 'open',
-      });
-      personalTasks.unshift(task);
-      persistPersonalTask_(task);
-      todoBucket = 'today';
-      todoEditId = '';
-      renderMemoTodos();
+    function pastFilterCount_(id) {
+      return personalTasks.filter(function (t) {
+        if (t.status !== 'done') return false;
+        if (id === 'all') return true;
+        return t.bucket === id;
+      }).length;
     }
 
     function visiblePersonalTasks_() {
-      var list = personalTasks.filter(function (t) {
-        if (todoBucket === 'history') return false;
+      var list;
+      if (todoBucket === 'history') {
+        list = personalTasks.filter(function (t) {
+          if (t.status !== 'done') return false;
+          if (pastBucketFilter === 'all') return true;
+          return t.bucket === pastBucketFilter;
+        });
+        list.sort(function (a, b) {
+          var da = String(a.done_at || a.updated_at || '');
+          var db = String(b.done_at || b.updated_at || '');
+          if (da !== db) return db.localeCompare(da);
+          var pri = { high: 0, mid: 1, low: 2 };
+          var pa = pri[a.priority] != null ? pri[a.priority] : 1;
+          var pb = pri[b.priority] != null ? pri[b.priority] : 1;
+          if (pa !== pb) return pa - pb;
+          return String(a.title || '').localeCompare(String(b.title || ''), 'ja');
+        });
+        return list;
+      }
+      list = personalTasks.filter(function (t) {
         return t.status !== 'done' && t.bucket === todoBucket;
       });
       var pri = { high: 0, mid: 1, low: 2 };
@@ -2299,6 +2265,77 @@
         return String(a.title || '').localeCompare(String(b.title || ''), 'ja');
       });
       return list;
+    }
+
+    function renderPastFilters_() {
+      var box = document.getElementById('todo-past-filters');
+      if (!box) return;
+      if (todoBucket !== 'history') {
+        box.style.display = 'none';
+        box.innerHTML = '';
+        return;
+      }
+      box.style.display = '';
+      box.innerHTML = PAST_FILTERS.map(function (f) {
+        return '<button type="button" class="todo-past-filter' + (pastBucketFilter === f.id ? ' on' : '') + '" data-past-filter="' + f.id + '">' +
+          escapeHtml(f.label) +
+          '<span class="n"> ' + pastFilterCount_(f.id) + '</span>' +
+          '</button>';
+      }).join('');
+    }
+
+    function renderTodoBuckets() {
+      var box = document.getElementById('todo-buckets');
+      if (!box) return;
+      box.innerHTML = TODO_BUCKETS.map(function (b) {
+        var n = bucketCount_(b.id);
+        return '<button type="button" class="todo-bucket' + (todoBucket === b.id ? ' on' : '') + '" data-bucket="' + b.id + '">' +
+          escapeHtml(b.label) +
+          '<span class="n">' + n + '</span>' +
+          '</button>';
+      }).join('');
+      renderPastFilters_();
+    }
+
+    function renderMemoTodos() {
+      renderTodoBuckets();
+      renderTodayPanel();
+      var addWrap = document.querySelector('.todo-add');
+      var metaWrap = document.querySelector('.todo-meta');
+      if (addWrap) addWrap.style.display = todoBucket === 'history' ? 'none' : '';
+      if (metaWrap) metaWrap.style.display = todoBucket === 'history' ? 'none' : '';
+      var box = document.getElementById('todo-list');
+      if (!box) return;
+      var list = visiblePersonalTasks_();
+      if (!list.length) {
+        box.innerHTML = '';
+        return;
+      }
+      box.innerHTML = list.map(function (t) {
+        var sub = [];
+        if (todoBucket === 'history') {
+          sub.push('<span>' + escapeHtml(BUCKET_LABELS[t.bucket] || t.bucket || '') + '</span>');
+          if (t.done_at) {
+            var doneYmd = String(t.done_at).slice(0, 10);
+            sub.push('<span>' + escapeHtml(formatDue_(doneYmd) || doneYmd) + '</span>');
+          }
+        }
+        if (t.url) sub.push('<a href="' + escapeHtml(t.url) + '" target="_blank" rel="noopener noreferrer">URL</a>');
+        var body = '<div class="todo-item-title" data-edit="' + escapeHtml(t.id) + '">' + escapeHtml(t.title) + '</div>' +
+          (sub.length ? '<div class="todo-item-sub">' + sub.join('') + '</div>' : '');
+        if (todoEditId === t.id && todoBucket !== 'history') {
+          body += '<div class="todo-edit">' +
+            '<input type="text" data-field="title" data-id="' + escapeHtml(t.id) + '" value="' + escapeHtml(t.title) + '" maxlength="200">' +
+            '<input type="url" data-field="url" data-id="' + escapeHtml(t.id) + '" value="' + escapeHtml(t.url || '') + '" placeholder="関連URL" maxlength="500">' +
+            '</div>';
+        }
+        return '<div class="todo-item' + (t.status === 'done' ? ' done' : '') + '">' +
+          '<input type="checkbox" data-todo="' + escapeHtml(t.id) + '"' + (t.status === 'done' ? ' checked' : '') + '>' +
+          '<button type="button" class="todo-item-lamp ' + lampClass_(t.priority) + '" data-pri-cycle="' + escapeHtml(t.id) + '" title="' + escapeHtml(priLabel_(t.priority)) + '"></button>' +
+          '<div>' + body + '</div>' +
+          '<button type="button" class="todo-del" data-del="' + escapeHtml(t.id) + '" title="削除">×</button>' +
+          '</div>';
+      }).join('');
     }
 
     function priLabel_(p) {
@@ -2330,8 +2367,77 @@
 
     function ymdWithOffset_(offset) {
       var base = ymdToDate_(todayKey_());
-      base.setDate(base.getDate() + (offset || 0));
+      var n = typeof offset === 'number' ? offset : 0;
+      base.setDate(base.getDate() + n);
       return dateToYmd_(base);
+    }
+
+    function calendarDayUrl_(ymd) {
+      var p = String(ymd || '').split('-');
+      if (p.length < 3) return CALENDAR_OPEN_URL;
+      return 'https://calendar.google.com/calendar/u/0/r/day/' + p[0] + '/' + p[1] + '/' + p[2];
+    }
+
+    function snapshotApp_() {
+      var gy = document.getElementById('gyomu-main-input');
+      var kn = document.getElementById('kansou-main-input');
+      return {
+        personalTasks: JSON.parse(JSON.stringify(personalTasks)),
+        todoBucket: todoBucket,
+        pastBucketFilter: pastBucketFilter,
+        draftPriority: draftPriority,
+        gyomu: gy ? gy.value : '',
+        kansou: kn ? kn.value : '',
+      };
+    }
+
+    function pushUndo_() {
+      undoStack.push(snapshotApp_());
+      if (undoStack.length > MAX_UNDO) undoStack.shift();
+      redoStack = [];
+    }
+
+    function applyAppSnapshot_(snap) {
+      if (!snap) return;
+      var prevIds = {};
+      personalTasks.forEach(function (t) { prevIds[t.id] = 1; });
+      personalTasks = (snap.personalTasks || []).map(normalizeClientTask_);
+      todoBucket = snap.todoBucket || 'today';
+      pastBucketFilter = snap.pastBucketFilter || 'all';
+      draftPriority = snap.draftPriority || 'mid';
+      var gy = document.getElementById('gyomu-main-input');
+      var kn = document.getElementById('kansou-main-input');
+      if (gy) gy.value = snap.gyomu || '';
+      if (kn) kn.value = snap.kansou || '';
+      if (typeof parseGyomuLines_ === 'function') {
+        finishedTasks = parseGyomuLines_(snap.gyomu || '');
+        activeTasks = [];
+        kansouText = snap.kansou || '';
+        try { localStorage.setItem('ryuta_pro_kansou', kansouText); } catch (e) {}
+        saveTasks();
+      }
+      savePersonalTasksLocal_();
+      syncDraftLamps_();
+      renderMemoTodos();
+      personalTasks.forEach(function (t) { persistPersonalTask_(t); });
+      Object.keys(prevIds).forEach(function (id) {
+        if (!findPersonalTask_(id)) queueDeletePersonalTask_(id);
+      });
+      autosaveDailyNow_();
+    }
+
+    function undoApp_() {
+      if (!undoStack.length) return;
+      redoStack.push(snapshotApp_());
+      applyAppSnapshot_(undoStack.pop());
+      setSyncStatus('UNDO', 'ok');
+    }
+
+    function redoApp_() {
+      if (!redoStack.length) return;
+      undoStack.push(snapshotApp_());
+      applyAppSnapshot_(redoStack.pop());
+      setSyncStatus('REDO', 'ok');
     }
 
     function formatDayLabel_(ymd) {
@@ -2360,12 +2466,19 @@
     }
 
     function loadDayContext_(offset) {
-      dayViewOffset = offset || 0;
+      dayViewOffset = typeof offset === 'number' ? offset : 0;
       var ymd = ymdWithOffset_(dayViewOffset);
+      var seq = ++dayFetchSeq;
+      dayFetchPending = true;
+      todayEvents = [];
       renderTodayPanel();
+      var openCal = document.getElementById('today-open-cal');
+      if (openCal) openCal.setAttribute('href', calendarDayUrl_(ymd));
       fetch('/api/context?date=' + encodeURIComponent(ymd), { cache: 'no-store' })
         .then(function (r) { return r.json(); })
         .then(function (res) {
+          if (seq !== dayFetchSeq) return;
+          dayFetchPending = false;
           if (res && res.ok && Array.isArray(res.calendarEvents)) {
             todayEvents = res.calendarEvents;
           } else {
@@ -2374,6 +2487,8 @@
           renderTodayPanel();
         })
         .catch(function () {
+          if (seq !== dayFetchSeq) return;
+          dayFetchPending = false;
           todayEvents = [];
           renderTodayPanel();
         });
@@ -2386,83 +2501,12 @@
       return Number(p[1]) + '/' + Number(p[2]);
     }
 
-    function renderTodoBuckets() {
-      var box = document.getElementById('todo-buckets');
-      if (!box) return;
-      box.innerHTML = TODO_BUCKETS.map(function (b) {
-        var n = bucketCount_(b.id);
-        return '<button type="button" class="todo-bucket' + (todoBucket === b.id ? ' on' : '') + '" data-bucket="' + b.id + '">' +
-          escapeHtml(b.label) +
-          '<span class="n">' + n + '</span>' +
-          '</button>';
-      }).join('');
-    }
-
-    function renderHistoryTodos_() {
-      var box = document.getElementById('todo-list');
-      if (!box) return;
-      if (pastGyomuLoading) {
-        box.innerHTML = '<div class="todo-empty">過去の業務を読み込み中…</div>';
-        return;
-      }
-      if (!pastGyomuLines.length) {
-        box.innerHTML = '';
-        return;
-      }
-      box.innerHTML = pastGyomuLines.map(function (title, i) {
-        var inToday = titleInToday_(title);
-        var cnt = pastGyomuCounts[title] ? '<span class="n">' + pastGyomuCounts[title] + '</span>' : '';
-        return '<label class="todo-item' + (inToday ? ' done' : '') + '">' +
-          '<input type="checkbox" data-history="' + i + '"' + (inToday ? ' checked' : '') + '>' +
-          '<div><div class="todo-item-title">' + escapeHtml(title) + '</div>' +
-          '<div class="todo-item-sub">過去' + cnt + (inToday ? ' · 今日に追加済' : ' · チェックで今日へ') + '</div></div>' +
-          '</label>';
-      }).join('');
-    }
-
-    function renderMemoTodos() {
-      renderTodoBuckets();
-      renderTodayPanel();
-      var addWrap = document.querySelector('.todo-add');
-      var metaWrap = document.querySelector('.todo-meta');
-      if (addWrap) addWrap.style.display = todoBucket === 'history' ? 'none' : '';
-      if (metaWrap) metaWrap.style.display = todoBucket === 'history' ? 'none' : '';
-      if (todoBucket === 'history') {
-        renderHistoryTodos_();
-        return;
-      }
-      var box = document.getElementById('todo-list');
-      if (!box) return;
-      var list = visiblePersonalTasks_();
-      if (!list.length) {
-        box.innerHTML = '';
-        return;
-      }
-      box.innerHTML = list.map(function (t) {
-        var sub = [];
-        if (t.url) sub.push('<a href="' + escapeHtml(t.url) + '" target="_blank" rel="noopener noreferrer">URL</a>');
-        var body = '<div class="todo-item-title" data-edit="' + escapeHtml(t.id) + '">' + escapeHtml(t.title) + '</div>' +
-          (sub.length ? '<div class="todo-item-sub">' + sub.join('') + '</div>' : '');
-        if (todoEditId === t.id) {
-          body += '<div class="todo-edit">' +
-            '<input type="text" data-field="title" data-id="' + escapeHtml(t.id) + '" value="' + escapeHtml(t.title) + '" maxlength="200">' +
-            '<input type="url" data-field="url" data-id="' + escapeHtml(t.id) + '" value="' + escapeHtml(t.url || '') + '" placeholder="関連URL" maxlength="500">' +
-            '</div>';
-        }
-        return '<div class="todo-item' + (t.status === 'done' ? ' done' : '') + '">' +
-          '<input type="checkbox" data-todo="' + escapeHtml(t.id) + '"' + (t.status === 'done' ? ' checked' : '') + '>' +
-          '<button type="button" class="todo-item-lamp ' + lampClass_(t.priority) + '" data-pri-cycle="' + escapeHtml(t.id) + '" title="' + escapeHtml(priLabel_(t.priority)) + '"></button>' +
-          '<div>' + body + '</div>' +
-          '<button type="button" class="todo-del" data-del="' + escapeHtml(t.id) + '" title="削除">×</button>' +
-          '</div>';
-      }).join('');
-    }
-
     function addMemoTodo() {
       var input = document.getElementById('todo-input');
       var text = input ? String(input.value || '').trim() : '';
       if (!text) return;
       if (todoBucket === 'history') return;
+      pushUndo_();
       var urlEl = document.getElementById('todo-url');
       var bucket = todoBucket === 'week' || todoBucket === 'month' ? todoBucket : 'today';
       var task = normalizeClientTask_({
@@ -2484,6 +2528,7 @@
     function toggleMemoTodo(id, checked) {
       var t = findPersonalTask_(id);
       if (!t) return;
+      pushUndo_();
       t.status = checked ? 'done' : 'open';
       t.done_at = t.status === 'done' ? todayKey_() : '';
       persistPersonalTask_(t);
@@ -2494,7 +2539,9 @@
 
     function removeMemoTodo(id) {
       var t = findPersonalTask_(id);
-      if (t && t.status === 'done' && t.done_at === todayKey_()) removeGyomuLine_(t.title);
+      if (!t) return;
+      pushUndo_();
+      if (t.status === 'done' && t.done_at === todayKey_()) removeGyomuLine_(t.title);
       personalTasks = personalTasks.filter(function (x) { return x.id !== id; });
       savePersonalTasksLocal_();
       queueDeletePersonalTask_(id);
@@ -2562,6 +2609,10 @@
       var box = document.getElementById('today-list');
       if (!box) return;
       var rows = [];
+      if (dayFetchPending) {
+        box.innerHTML = '<div class="today-row"><b>—</b><span style="color:#737373">読み込み中…</span></div>';
+        return;
+      }
       (todayEvents || []).forEach(function (ev) {
         var when = ev.isAllDay ? '終日' : String((ev.start || '') + (ev.end ? '–' + ev.end : ''));
         rows.push('<div class="today-row"><b>' + escapeHtml(when) + '</b><span>' + escapeHtml(ev.title || '') + '</span></div>');
@@ -2574,7 +2625,7 @@
           rows.push('<div class="today-row"><b>TODO</b><span>' + escapeHtml(t.title) + '</span></div>');
         });
       }
-      box.innerHTML = rows.length ? rows.join('') : '';
+      box.innerHTML = rows.length ? rows.join('') : '<div class="today-row"><b>—</b><span style="color:#737373">予定なし</span></div>';
     }
 
     function initPersonalTasks() {
@@ -2688,6 +2739,7 @@
     }
 
     function clearDailyInputs() {
+      pushUndo_();
       var gy = document.getElementById('gyomu-main-input');
       var ks = document.getElementById('kansou-main-input');
       if (gy) gy.value = DEFAULT_GYOMU_LINES.join('\n');
@@ -2699,6 +2751,7 @@
         localStorage.setItem('ryuta_pro_kansou', '');
       } catch (e) {}
       saveTasks();
+      autosaveDailyNow_();
       setSyncStatus('CLR', 'ok');
     }
 
@@ -3007,20 +3060,6 @@
         .loadWorkspaceTasksFromSheet();
     }
 
-    let currentFocused = null;
-    function toggleFocus(panelId) {
-      const panel = document.getElementById(panelId);
-      if (currentFocused === panel) {
-        panel.classList.remove('focused-panel');
-        currentFocused = null;
-      } else {
-        if (currentFocused) currentFocused.classList.remove('focused-panel');
-        panel.classList.add('focused-panel');
-        currentFocused = panel;
-      }
-      setTimeout(function () { window.dispatchEvent(new Event('resize')); }, 350);
-    }
-
     const cmdOverlay = document.getElementById('cmd-palette-overlay');
     const cmdInput = document.getElementById('cmd-input');
     const cmdList = document.getElementById('cmd-list');
@@ -3123,8 +3162,25 @@
         return;
       }
       if (cmdOverlay.classList.contains('active')) return;
-      if (e.key === 'Escape' && currentFocused) {
-        toggleFocus(currentFocused.id);
+      var isMod = e.metaKey || e.ctrlKey;
+      var key = String(e.key || '').toLowerCase();
+      if (isMod && key === 'z') {
+        var ae = document.activeElement;
+        var tag = ae && ae.tagName ? ae.tagName.toLowerCase() : '';
+        var inText = tag === 'input' || tag === 'textarea' || (ae && ae.isContentEditable);
+        var isTodoField = ae && (ae.id === 'todo-input' || ae.id === 'todo-url' || (ae.getAttribute && ae.getAttribute('data-field')));
+        if (inText && !isTodoField) return;
+        e.preventDefault();
+        if (e.shiftKey) redoApp_();
+        else undoApp_();
+        return;
+      }
+      if (isMod && key === 'y') {
+        var ae2 = document.activeElement;
+        var tag2 = ae2 && ae2.tagName ? ae2.tagName.toLowerCase() : '';
+        if (tag2 === 'input' || tag2 === 'textarea' || (ae2 && ae2.isContentEditable)) return;
+        e.preventDefault();
+        redoApp_();
         return;
       }
       const tag = document.activeElement.tagName.toLowerCase();
@@ -3537,7 +3593,15 @@
       var mainKansou = document.getElementById('kansou-main-input');
       if (mainKansou) mainKansou.focus();
       if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js').catch(function () {});
+        var refreshing = false;
+        navigator.serviceWorker.addEventListener('controllerchange', function () {
+          if (refreshing) return;
+          refreshing = true;
+          window.location.reload();
+        });
+        navigator.serviceWorker.register('/sw.js?v=20').then(function (reg) {
+          if (reg && reg.update) reg.update();
+        }).catch(function () {});
       }
       ['gyomu-main-input', 'kansou-main-input'].forEach(function (id) {
         var el = document.getElementById(id);
@@ -3568,7 +3632,7 @@
       if (todayPrev) todayPrev.addEventListener('click', function () { loadDayContext_(dayViewOffset - 1); });
       if (todayNext) todayNext.addEventListener('click', function () { loadDayContext_(dayViewOffset + 1); });
       if (todayCopy) todayCopy.addEventListener('click', copyBookingUrl_);
-      if (todayOpen) todayOpen.setAttribute('href', CALENDAR_OPEN_URL);
+      if (todayOpen) todayOpen.setAttribute('href', calendarDayUrl_(ymdWithOffset_(dayViewOffset)));
       var todoBuckets = document.getElementById('todo-buckets');
       if (todoBuckets) {
         todoBuckets.addEventListener('click', function (e) {
@@ -3576,8 +3640,17 @@
           if (!btn) return;
           todoBucket = btn.getAttribute('data-bucket') || 'today';
           todoEditId = '';
-          if (todoBucket === 'history') loadPastGyomuHistory_(false);
-          else renderMemoTodos();
+          if (todoBucket !== 'history') pastBucketFilter = 'all';
+          renderMemoTodos();
+        });
+      }
+      var pastFilters = document.getElementById('todo-past-filters');
+      if (pastFilters) {
+        pastFilters.addEventListener('click', function (e) {
+          var btn = e.target && e.target.closest ? e.target.closest('[data-past-filter]') : null;
+          if (!btn) return;
+          pastBucketFilter = btn.getAttribute('data-past-filter') || 'all';
+          renderMemoTodos();
         });
       }
       var todoList = document.getElementById('todo-list');
@@ -3585,11 +3658,6 @@
         todoList.addEventListener('change', function (e) {
           var el = e.target;
           if (!el || !el.getAttribute) return;
-          if (el.getAttribute('data-history') != null) {
-            var hi = Number(el.getAttribute('data-history'));
-            addPastTitleToToday_(pastGyomuLines[hi], el.checked);
-            return;
-          }
           if (el.getAttribute('data-todo')) {
             toggleMemoTodo(el.getAttribute('data-todo'), el.checked);
             return;
@@ -3621,6 +3689,7 @@
             var tid = cycle.getAttribute('data-pri-cycle');
             var task = findPersonalTask_(tid);
             if (!task) return;
+            pushUndo_();
             task.priority = cyclePriority_(task.priority);
             persistPersonalTask_(task);
             renderMemoTodos();

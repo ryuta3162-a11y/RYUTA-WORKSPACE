@@ -22,13 +22,18 @@ export type DayContext = {
   };
 };
 
-export async function gasGet<T>(api: string): Promise<GasJson<T>> {
+export async function gasGet<T>(api: string, extra?: Record<string, string>): Promise<GasJson<T>> {
   if (!GAS_URL) {
     return { ok: false, message: 'GAS_WEB_APP_URL が未設定です' } as GasJson<T>;
   }
   const url = new URL(GAS_URL);
   url.searchParams.set('api', api);
   if (GAS_TOKEN) url.searchParams.set('token', GAS_TOKEN);
+  if (extra) {
+    Object.entries(extra).forEach(([key, value]) => {
+      if (value) url.searchParams.set(key, value);
+    });
+  }
 
   const res = await fetch(url.toString(), { cache: 'no-store' });
   return (await res.json()) as GasJson<T>;

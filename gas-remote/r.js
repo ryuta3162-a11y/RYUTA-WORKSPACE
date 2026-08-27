@@ -106,18 +106,19 @@ function getTodayCalendarEvents_() {
 
 function getCalendarEventsForYmd_(ymd) {
   try {
-    var parts = String(ymd || '').split('-');
-    if (parts.length < 3) return [];
-    var start = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), 0, 0, 0, 0);
-    var end = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), 23, 59, 59, 999);
+    var tz = Session.getScriptTimeZone();
+    var day = String(ymd || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return [];
+    var start = Utilities.parseDate(day + ' 00:00:00', tz, 'yyyy-MM-dd HH:mm:ss');
+    var end = Utilities.parseDate(day + ' 23:59:59', tz, 'yyyy-MM-dd HH:mm:ss');
     var events = CalendarApp.getDefaultCalendar().getEvents(start, end);
     var out = [];
     for (var i = 0; i < events.length; i++) {
       var ev = events[i];
       out.push({
         title: ev.getTitle(),
-        start: Utilities.formatDate(ev.getStartTime(), Session.getScriptTimeZone(), 'HH:mm'),
-        end: Utilities.formatDate(ev.getEndTime(), Session.getScriptTimeZone(), 'HH:mm'),
+        start: Utilities.formatDate(ev.getStartTime(), tz, 'HH:mm'),
+        end: Utilities.formatDate(ev.getEndTime(), tz, 'HH:mm'),
         isAllDay: ev.isAllDayEvent(),
       });
     }

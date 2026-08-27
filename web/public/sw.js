@@ -1,4 +1,4 @@
-const CACHE = 'rs-worklog-v17';
+const CACHE = 'rs-worklog-v20';
 const PRECACHE = ['/workspace.html', '/case.html', '/manifest.webmanifest', '/manifest-case.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', (event) => {
@@ -24,8 +24,11 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
 
-  if (url.pathname.startsWith('/api/')) {
-    event.respondWith(fetch(event.request).catch(() => caches.match(event.request)));
+  // Always take network for app shell + SW itself
+  if (url.pathname === '/sw.js' || url.pathname === '/workspace.html' || url.pathname.startsWith('/api/')) {
+    event.respondWith(
+      fetch(event.request, { cache: 'no-store' }).catch(() => caches.match(event.request))
+    );
     return;
   }
 
