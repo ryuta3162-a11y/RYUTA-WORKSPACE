@@ -3183,8 +3183,8 @@
         redoApp_();
         return;
       }
-      const tag = document.activeElement.tagName.toLowerCase();
-      if (tag === 'input' || tag === 'textarea' || document.activeElement.isContentEditable) return;
+      const activeTag = document.activeElement.tagName.toLowerCase();
+      if (activeTag === 'input' || activeTag === 'textarea' || document.activeElement.isContentEditable) return;
       const openTab = function (url) {
         const a = document.createElement('a');
         a.href = url;
@@ -3599,7 +3599,7 @@
           refreshing = true;
           window.location.reload();
         });
-        navigator.serviceWorker.register('/sw.js?v=20').then(function (reg) {
+        navigator.serviceWorker.register('/sw.js?v=21').then(function (reg) {
           if (reg && reg.update) reg.update();
         }).catch(function () {});
       }
