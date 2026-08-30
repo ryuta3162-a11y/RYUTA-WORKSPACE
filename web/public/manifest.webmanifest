@@ -1,7 +1,7 @@
 {
-  "name": "WORK-LOG",
-  "short_name": "WORK-LOG",
-  "description": "RS WORK-LOG",
+  "name": "やるしかない",
+  "short_name": "やるしかない",
+  "description": "やるしかない — TODO・日報・カレンダー",
   "start_url": "/workspace.html",
   "scope": "/",
   "display": "standalone",

@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>WORK-LOG</title>
+  <title>やるしかない</title>
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/favicon.png">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
   <meta name="theme-color" content="#000000">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="WORK-LOG">
+  <meta name="apple-mobile-web-app-title" content="やるしかない">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -36,7 +36,7 @@
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Outfit:wght@400;500;600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Noto+Sans+JP:wght@500;700;800&family=Outfit:wght@400;500;600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
   <style>
     :root {
       --bg0: #000000;
@@ -973,23 +973,17 @@
     }
     .todo-brand {
       display: flex;
-      align-items: baseline;
-      gap: 8px;
+      align-items: center;
       min-width: 0;
     }
     .todo-brand-mark {
-      font-family: 'Syne', 'Outfit', sans-serif;
+      font-family: 'Noto Sans JP', 'Hiragino Sans', 'Yu Gothic UI', sans-serif;
       font-weight: 800;
-      font-size: 10px;
-      letter-spacing: 0.22em;
-      color: rgba(255,255,255,0.42);
-      flex: none;
-    }
-    .todo-title {
-      font-size: 11px;
-      letter-spacing: 0.22em;
-      font-weight: 600;
+      font-size: 13px;
+      letter-spacing: 0.04em;
       color: #fff;
+      line-height: 1.2;
+      white-space: nowrap;
     }
     .todo-sync {
       margin-left: auto;
@@ -1256,8 +1250,7 @@
     <div class="pro-panel" id="panel-todo">
       <div class="todo-head">
         <div class="todo-brand">
-          <span class="todo-brand-mark">WORK-LOG</span>
-          <div class="todo-title">TODO</div>
+          <span class="todo-brand-mark">やるしかない</span>
         </div>
         <div class="todo-sync" id="sync-status-brand"></div>
       </div>
@@ -3599,7 +3592,7 @@
           refreshing = true;
           window.location.reload();
         });
-        navigator.serviceWorker.register('/sw.js?v=21').then(function (reg) {
+        navigator.serviceWorker.register('/sw.js?v=22').then(function (reg) {
           if (reg && reg.update) reg.update();
         }).catch(function () {});
       }

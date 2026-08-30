@@ -4,14 +4,14 @@ import PwaRegister from '@/components/PwaRegister';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'WORK-LOG',
-  description: 'RS WORK-LOG',
-  applicationName: 'WORK-LOG',
+  title: 'やるしかない',
+  description: 'やるしかない — TODO・日報・カレンダー',
+  applicationName: 'やるしかない',
   manifest: '/manifest.webmanifest',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'WORK-LOG',
+    title: 'やるしかない',
   },
   icons: {
     icon: '/favicon.png',
