@@ -13,7 +13,7 @@ export default function PwaRegister() {
     };
     navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
     navigator.serviceWorker
-      .register('/sw.js?v=23')
+      .register('/sw.js?v=24')
       .then((reg) => {
         if (reg?.update) reg.update();
       })

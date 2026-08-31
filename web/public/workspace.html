@@ -134,6 +134,22 @@
         0 1px 0 rgba(255,255,255,0.06) inset,
         0 22px 56px rgba(0,0,0,0.62);
     }
+    #panel-todo {
+      border-color: rgba(225, 29, 72, 0.18);
+      background: linear-gradient(165deg, rgba(24, 8, 14, 0.96) 0%, rgba(8, 6, 8, 0.98) 100%);
+    }
+    #panel-apps {
+      border-color: rgba(168, 85, 247, 0.14);
+      background: linear-gradient(165deg, rgba(14, 10, 24, 0.96) 0%, rgba(6, 6, 10, 0.98) 100%);
+    }
+    #panel-today {
+      border-color: rgba(66, 133, 244, 0.22);
+      background: linear-gradient(165deg, rgba(8, 12, 22, 0.96) 0%, rgba(6, 8, 12, 0.98) 100%);
+    }
+    #panel-tasks {
+      border-color: rgba(245, 158, 11, 0.16);
+      background: linear-gradient(165deg, rgba(20, 14, 6, 0.96) 0%, rgba(8, 7, 6, 0.98) 100%);
+    }
 
     .task-card {
       background: rgba(255,255,255,0.03);
@@ -492,146 +508,135 @@
       min-height: 0;
       min-width: 0;
       display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-      gap: 10px;
+      grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+      gap: 8px;
       overflow: hidden;
     }
     .tax-desk {
       flex: none;
       min-height: 0;
       margin-top: 0;
-      border: 1px solid rgba(255,255,255,0.12);
-      border-radius: 16px;
-      padding: 12px 12px 10px;
-      background: rgba(0,0,0,0.35);
+      border-radius: 14px;
+      padding: 10px;
       display: flex;
       flex-direction: column;
+      gap: 8px;
       overflow: auto;
+      background:
+        linear-gradient(155deg, rgba(28, 0, 40, 0.55) 0%, rgba(0, 12, 24, 0.75) 100%);
+      border: 1px solid rgba(255, 0, 128, 0.22);
+      box-shadow:
+        0 0 28px rgba(255, 0, 128, 0.06),
+        inset 0 0 36px rgba(0, 255, 255, 0.03);
     }
-    .tax-desk-title {
-      font-size: 11px;
-      letter-spacing: 0.22em;
-      font-weight: 600;
-      color: #fff;
-      margin-bottom: 10px;
+    .tax-hero {
+      flex: 1 1 auto;
+      min-height: 72px;
+      display: flex;
+      align-items: stretch;
     }
     .tax-row {
       display: flex;
-      gap: 6px;
-      margin-bottom: 8px;
+      gap: 5px;
+      flex: none;
     }
     .tax-chip {
       flex: 1;
-      border: 1px solid rgba(255,255,255,0.16);
-      background: transparent;
-      color: #a3a3a3;
-      border-radius: 999px;
-      padding: 7px 8px;
-      font-size: 11px;
+      border: 1px solid rgba(0, 255, 255, 0.14);
+      background: rgba(0, 0, 0, 0.35);
+      color: rgba(0, 255, 255, 0.55);
+      border-radius: 8px;
+      padding: 6px 6px;
+      font-size: 10px;
       cursor: pointer;
+      transition: all 0.15s ease;
     }
     .tax-chip.on {
-      background: #fff;
-      color: #000;
-      border-color: #fff;
+      background: rgba(255, 0, 128, 0.18);
+      color: #fda4af;
+      border-color: rgba(255, 0, 128, 0.45);
+      box-shadow: 0 0 12px rgba(255, 0, 128, 0.15);
     }
     .tax-desk input[type="text"] {
       width: 100%;
-      background: #000;
-      border: 1px solid rgba(255,255,255,0.16);
-      border-radius: 10px;
-      color: #fff;
-      font-size: 18px;
+      flex: 1;
+      background: rgba(0, 0, 0, 0.55);
+      border: 1px solid rgba(0, 255, 255, 0.28);
+      border-radius: 12px;
+      color: #67e8f9;
+      font-size: 28px;
+      font-weight: 600;
       font-family: "IBM Plex Mono", ui-monospace, monospace;
-      padding: 10px 12px;
+      padding: 12px 14px;
       outline: none;
-      margin-bottom: 10px;
+      text-align: right;
+      box-shadow: 0 0 20px rgba(0, 255, 255, 0.08), inset 0 0 24px rgba(0, 255, 255, 0.04);
     }
+    .tax-desk input[type="text"]:focus {
+      border-color: rgba(255, 0, 128, 0.5);
+      box-shadow: 0 0 24px rgba(255, 0, 128, 0.12), inset 0 0 20px rgba(0, 255, 255, 0.06);
+    }
+    .tax-desk input[type="text"]::placeholder { color: rgba(0, 255, 255, 0.22); }
     .tax-out {
       display: grid;
       grid-template-columns: 1fr 1fr 1fr;
-      gap: 8px;
-      margin-bottom: 8px;
+      gap: 6px;
+      flex: none;
     }
     .tax-out div {
-      border: 1px solid rgba(255,255,255,0.10);
-      border-radius: 10px;
-      padding: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 8px 6px;
+      text-align: center;
+      background: rgba(0, 0, 0, 0.35);
     }
-    .tax-out span {
-      display: block;
-      font-size: 10px;
-      color: #888;
-      letter-spacing: 0.08em;
-      margin-bottom: 4px;
-    }
+    .tax-out div:nth-child(1) { border-color: rgba(103, 232, 249, 0.2); }
+    .tax-out div:nth-child(2) { border-color: rgba(255, 0, 128, 0.2); }
+    .tax-out div:nth-child(3) { border-color: rgba(167, 139, 250, 0.2); }
+    .tax-out span { display: none; }
     .tax-out b {
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 600;
-      color: #fff;
+      color: #f5f5f5;
       font-family: "IBM Plex Mono", ui-monospace, monospace;
     }
     .tax-copy {
-      border: 1px solid #fff;
-      background: transparent;
-      color: #fff;
-      border-radius: 10px;
-      padding: 7px 10px;
-      font-size: 11px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: rgba(255, 255, 255, 0.04);
+      color: #d4d4d8;
+      border-radius: 8px;
+      padding: 6px;
+      font-size: 14px;
       cursor: pointer;
       width: 100%;
+      flex: none;
+      line-height: 1;
     }
+    .tax-copy:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
 
-    /* DX電卓 */
     .calc-desk {
       min-height: 0;
       min-width: 0;
       display: flex;
       flex-direction: column;
-      border-radius: 18px;
-      padding: 10px;
-      background:
-        linear-gradient(165deg, rgba(18, 22, 32, 0.95) 0%, rgba(6, 8, 14, 0.98) 100%);
-      border: 1px solid rgba(34, 211, 238, 0.18);
-      box-shadow:
-        0 0 0 1px rgba(255,255,255,0.04) inset,
-        0 12px 40px rgba(0,0,0,0.55),
-        0 0 32px rgba(34, 211, 238, 0.06);
+      border-radius: 14px;
+      padding: 8px;
+      background: rgba(0, 0, 0, 0.45);
+      border: 1px solid rgba(255, 255, 255, 0.08);
       overflow: hidden;
-    }
-    .calc-desk-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 8px;
-      flex: none;
-    }
-    .calc-desk-title {
-      font-size: 10px;
-      letter-spacing: 0.28em;
-      font-weight: 700;
-      color: rgba(34, 211, 238, 0.85);
-    }
-    .calc-desk-badge {
-      font-size: 9px;
-      letter-spacing: 0.12em;
-      color: rgba(167, 139, 250, 0.7);
-      border: 1px solid rgba(167, 139, 250, 0.25);
-      border-radius: 999px;
-      padding: 2px 8px;
     }
     .calc-display-wrap {
       flex: none;
-      margin-bottom: 10px;
-      border-radius: 12px;
+      margin-bottom: 8px;
+      border-radius: 10px;
       padding: 1px;
-      background: linear-gradient(135deg, rgba(34,211,238,0.35), rgba(167,139,250,0.2));
+      background: rgba(255, 255, 255, 0.08);
     }
     .calc-display {
-      background: #020408;
-      border-radius: 11px;
-      padding: 10px 12px 8px;
-      min-height: 52px;
+      background: #050505;
+      border-radius: 9px;
+      padding: 8px 10px 6px;
+      min-height: 48px;
       display: flex;
       flex-direction: column;
       justify-content: flex-end;
@@ -640,10 +645,9 @@
     }
     .calc-expr {
       font-family: "IBM Plex Mono", ui-monospace, monospace;
-      font-size: 10px;
-      color: rgba(161, 161, 170, 0.75);
-      letter-spacing: 0.04em;
-      min-height: 14px;
+      font-size: 9px;
+      color: rgba(161, 161, 170, 0.6);
+      min-height: 12px;
       width: 100%;
       text-align: right;
       white-space: nowrap;
@@ -652,17 +656,15 @@
     }
     .calc-value {
       font-family: "IBM Plex Mono", ui-monospace, monospace;
-      font-size: 26px;
+      font-size: 22px;
       font-weight: 600;
-      color: #ecfeff;
-      letter-spacing: 0.02em;
+      color: #fafafa;
       line-height: 1.1;
       width: 100%;
       text-align: right;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      text-shadow: 0 0 20px rgba(34, 211, 238, 0.25);
     }
     .calc-keys {
       flex: 1 1 0;
@@ -701,16 +703,16 @@
       background: linear-gradient(180deg, rgba(253,164,175,0.12) 0%, rgba(253,164,175,0.04) 100%);
     }
     .calc-key.op {
-      color: #22d3ee;
-      border-color: rgba(34, 211, 238, 0.28);
-      background: linear-gradient(180deg, rgba(34,211,238,0.16) 0%, rgba(34,211,238,0.05) 100%);
-      box-shadow: 0 2px 0 rgba(0,0,0,0.45), 0 0 12px rgba(34,211,238,0.08), inset 0 1px 0 rgba(255,255,255,0.08);
+      color: #a3a3a3;
+      border-color: rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.04);
+      box-shadow: none;
     }
     .calc-key.eq {
       color: #0a0a0a;
-      border-color: rgba(34, 211, 238, 0.5);
-      background: linear-gradient(180deg, #67e8f9 0%, #22d3ee 100%);
-      box-shadow: 0 2px 0 rgba(0,0,0,0.4), 0 0 16px rgba(34,211,238,0.25);
+      border-color: rgba(255, 255, 255, 0.35);
+      background: linear-gradient(180deg, #f5f5f5 0%, #d4d4d8 100%);
+      box-shadow: 0 2px 0 rgba(0,0,0,0.35);
     }
     .calc-key.wide { grid-column: span 2; }
     #app-list.app-link-grid::-webkit-scrollbar {
@@ -1120,9 +1122,9 @@
     .todo-brand-mark {
       font-family: 'Noto Sans JP', 'Hiragino Sans', 'Yu Gothic UI', sans-serif;
       font-weight: 800;
-      font-size: 13px;
-      letter-spacing: 0.04em;
-      color: #fff;
+      font-size: 12px;
+      letter-spacing: 0.02em;
+      color: rgba(253, 164, 175, 0.92);
       line-height: 1.2;
       white-space: nowrap;
     }
@@ -1309,50 +1311,50 @@
       border-color: #fff;
     }
     .today-head {
-      padding: 10px 12px 6px;
+      padding: 10px 12px 8px;
       display: grid;
-      grid-template-columns: 28px 1fr 28px auto;
+      grid-template-columns: 32px 1fr 32px auto;
       align-items: center;
-      gap: 6px;
+      gap: 8px;
       flex: none;
       position: relative;
       z-index: 2;
+      border-bottom: 1px solid rgba(66, 133, 244, 0.12);
     }
     .today-nav {
-      width: 28px;
-      height: 28px;
-      border-radius: 8px;
-      border: 1px solid rgba(255,255,255,0.12);
-      background: rgba(255,255,255,0.04);
-      color: #e5e5e5;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: none;
+      background: transparent;
+      color: #9aa0a6;
       cursor: pointer;
-      font-size: 16px;
+      font-size: 18px;
       line-height: 1;
     }
-    .today-nav:hover { background: rgba(255,255,255,0.1); }
+    .today-nav:hover { background: rgba(66, 133, 244, 0.12); color: #e8eaed; }
     .today-date-wrap {
       min-width: 0;
       text-align: center;
     }
-    .today-title {
-      font-size: 10px;
-      letter-spacing: 0.18em;
-      font-weight: 600;
-      color: #a3a3a3;
+    .today-date {
+      font-size: 15px;
+      font-weight: 500;
+      color: #e8eaed;
+      letter-spacing: 0.01em;
     }
-    .today-date { font-size: 12px; color: #f5f5f5; margin-top: 2px; }
     .today-tools {
       display: flex;
       align-items: center;
-      gap: 4px;
+      gap: 2px;
     }
     .today-tool {
-      width: 28px;
-      height: 28px;
-      border-radius: 8px;
-      border: 1px solid rgba(255,255,255,0.12);
-      background: rgba(255,255,255,0.04);
-      color: #e5e5e5;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: none;
+      background: transparent;
+      color: #9aa0a6;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
@@ -1360,27 +1362,136 @@
       text-decoration: none;
       padding: 0;
     }
-    .today-tool:hover { background: rgba(255,255,255,0.1); }
+    .today-tool:hover { background: rgba(66, 133, 244, 0.12); color: #e8eaed; }
     .today-list {
       flex: 1 1 0;
       min-height: 0;
       overflow-y: auto;
-      padding: 2px 14px 10px;
+      padding: 8px 10px 10px;
       position: relative;
       z-index: 2;
     }
-    .today-row {
-      display: grid;
-      grid-template-columns: 72px minmax(0, 1fr);
-      gap: 8px;
-      align-items: start;
-      padding: 5px 0;
-      border-bottom: 1px solid rgba(255,255,255,0.06);
-      font-size: 12px;
-      line-height: 1.4;
+    .cal-event {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      padding: 8px 10px 8px 8px;
+      margin-bottom: 4px;
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--ev, #4285f4) 14%, transparent);
+      border-left: 4px solid var(--ev, #4285f4);
     }
-    .today-row b { font-weight: 500; color: #a3a3a3; }
-    .today-row span { color: #e5e5e5; word-break: break-word; }
+    .cal-event-time {
+      flex: none;
+      min-width: 68px;
+      font-size: 11px;
+      font-weight: 500;
+      color: #9aa0a6;
+      line-height: 1.35;
+    }
+    .cal-event-title {
+      flex: 1;
+      min-width: 0;
+      font-size: 13px;
+      color: #e8eaed;
+      line-height: 1.35;
+      word-break: break-word;
+    }
+    .cal-empty {
+      padding: 24px 12px;
+      text-align: center;
+      font-size: 12px;
+      color: #5f6368;
+    }
+
+    .daily-head {
+      padding: 10px 14px 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex: none;
+      border-bottom: 1px solid rgba(245, 158, 11, 0.12);
+      position: relative;
+      z-index: 30;
+    }
+    .daily-date {
+      font-size: 13px;
+      font-weight: 500;
+      color: rgba(251, 191, 36, 0.9);
+      letter-spacing: 0.02em;
+    }
+    .daily-actions {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .daily-btn {
+      font-size: 10px;
+      font-weight: 600;
+      color: #d4d4d8;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      padding: 5px 10px;
+      cursor: pointer;
+    }
+    .daily-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+    .daily-btn.primary {
+      color: #0a0a0a;
+      background: rgba(251, 191, 36, 0.88);
+      border-color: rgba(251, 191, 36, 0.5);
+    }
+    .daily-btn.primary:hover { background: #fbbf24; }
+    .daily-body {
+      flex: 1 1 0;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 10px 12px;
+      position: relative;
+      z-index: 10;
+    }
+    .daily-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      height: 100%;
+      min-height: 140px;
+    }
+    .daily-field textarea {
+      width: 100%;
+      flex: 1;
+      min-height: 0;
+      background: rgba(0,0,0,0.35);
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-size: 12px;
+      color: #f4f4f5;
+      outline: none;
+      resize: none;
+      line-height: 1.65;
+    }
+    .daily-field:first-child textarea {
+      border: 1px solid rgba(245, 158, 11, 0.18);
+    }
+    .daily-field:last-child textarea {
+      border: 1px solid rgba(225, 29, 72, 0.14);
+    }
+    .daily-field:first-child textarea:focus {
+      border-color: rgba(245, 158, 11, 0.4);
+      box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.08);
+    }
+    .daily-field:last-child textarea:focus {
+      border-color: rgba(253, 164, 175, 0.35);
+      box-shadow: 0 0 0 2px rgba(225, 29, 72, 0.08);
+    }
+    .daily-field {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
   </style>
 </head>
 <body class="h-screen w-screen relative">
@@ -1407,7 +1518,7 @@
           <button type="button" class="todo-lamp todo-lamp-mid on" data-pri="mid" title="普通"></button>
           <button type="button" class="todo-lamp todo-lamp-low" data-pri="low" title="低め"></button>
         </div>
-        <input id="todo-url" type="url" placeholder="関連URL" maxlength="500">
+        <input id="todo-url" type="url" placeholder="" maxlength="500">
       </div>
       <div id="todo-list" class="todo-list"></div>
     </div>
@@ -1422,28 +1533,25 @@
         <div id="app-list" class="app-link-grid" role="list" aria-label="ショートカットリンク"></div>
         <div class="calc-desk-wrap">
           <div class="tax-desk">
-            <div class="tax-desk-title">TAX</div>
+            <div class="tax-hero">
+              <input id="tax-input" type="text" inputmode="decimal" placeholder="0">
+            </div>
             <div class="tax-row">
-              <button type="button" class="tax-chip on" id="tax-mode-gross">税込から</button>
-              <button type="button" class="tax-chip" id="tax-mode-net">税抜から</button>
+              <button type="button" class="tax-chip on" id="tax-mode-gross">税込</button>
+              <button type="button" class="tax-chip" id="tax-mode-net">税抜</button>
             </div>
             <div class="tax-row">
               <button type="button" class="tax-chip on" id="tax-rate-10">10%</button>
-              <button type="button" class="tax-chip" id="tax-rate-8">8% 軽減</button>
+              <button type="button" class="tax-chip" id="tax-rate-8">8%</button>
             </div>
-            <input id="tax-input" type="text" inputmode="decimal" placeholder="金額">
             <div class="tax-out">
-              <div><span>税抜</span><b id="tax-net">0</b></div>
-              <div><span>消費税</span><b id="tax-tax">0</b></div>
-              <div><span>税込</span><b id="tax-gross">0</b></div>
+              <div title="税抜"><b id="tax-net">0</b></div>
+              <div title="消費税"><b id="tax-tax">0</b></div>
+              <div title="税込"><b id="tax-gross">0</b></div>
             </div>
-            <button type="button" class="tax-copy" id="tax-copy">結果をコピー</button>
+            <button type="button" class="tax-copy" id="tax-copy" title="コピー">⎘</button>
           </div>
           <div class="calc-desk" id="calc-desk">
-            <div class="calc-desk-head">
-              <div class="calc-desk-title">CALC</div>
-              <span class="calc-desk-badge">DX</span>
-            </div>
             <div class="calc-display-wrap">
               <div class="calc-display">
                 <div id="calc-expr" class="calc-expr"></div>
@@ -1479,7 +1587,6 @@
       <div class="today-head">
         <button type="button" class="today-nav" id="today-prev" title="前日">‹</button>
         <div class="today-date-wrap">
-          <div class="today-title">DAY</div>
           <div id="today-date" class="today-date"></div>
         </div>
         <button type="button" class="today-nav" id="today-next" title="翌日">›</button>
@@ -1496,27 +1603,22 @@
     </div>
 
     <div class="pro-panel" id="panel-tasks">
-      <div class="px-4 py-3 flex justify-between items-center flex-none border-b border-white/[0.06] relative z-30 gap-2">
-        <div class="min-w-0">
-          <div class="text-[11px] tracking-[0.22em] text-white font-semibold">DAILY</div>
-          <div id="daily-date" class="text-[10px] text-zinc-400 mt-0.5 tracking-wide"></div>
-        </div>
-        <div class="flex items-center gap-2 flex-wrap justify-end">
-          <button type="button" id="btn-polish-daily" onclick="polishDailyKansou()" class="text-[10px] font-semibold tracking-wide text-zinc-300 bg-white/[0.08] hover:bg-white/[0.14] px-3 py-1.5 rounded-lg border border-white/[0.16]">添削</button>
-          <button type="button" onclick="clearDailyInputs()" class="text-[10px] font-semibold tracking-wide text-zinc-300 bg-white/[0.08] hover:bg-white/[0.14] px-3 py-1.5 rounded-lg border border-white/[0.16]">クリア</button>
-          <button type="button" id="btn-daily-report" onclick="createDailyReport()" class="text-[10px] font-semibold tracking-wide text-zinc-100 bg-white/[0.14] hover:bg-white/[0.20] px-3 py-1.5 rounded-lg border border-white/[0.24]">日報作成</button>
+      <div class="daily-head">
+        <div id="daily-date" class="daily-date"></div>
+        <div class="daily-actions">
+          <button type="button" id="btn-polish-daily" onclick="polishDailyKansou()" class="daily-btn">添削</button>
+          <button type="button" onclick="clearDailyInputs()" class="daily-btn">クリア</button>
+          <button type="button" id="btn-daily-report" onclick="createDailyReport()" class="daily-btn primary">日報</button>
         </div>
       </div>
 
-      <div class="flex-1 overflow-y-auto px-4 py-3 relative z-10">
-        <div class="grid grid-cols-2 gap-3 h-full min-h-[220px]">
-          <div class="flex flex-col min-h-0">
-            <div class="text-[10px] text-zinc-400 tracking-[0.08em] mb-2">業務内容</div>
-            <textarea id="gyomu-main-input" class="ruled-lines w-full flex-1 min-h-0 bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-zinc-100 placeholder:text-zinc-500 outline-none resize-none" placeholder=""></textarea>
+      <div class="daily-body">
+        <div class="daily-grid">
+          <div class="daily-field">
+            <textarea id="gyomu-main-input" class="ruled-lines" placeholder=""></textarea>
           </div>
-          <div class="flex flex-col min-h-0">
-            <div class="text-[10px] text-zinc-400 tracking-[0.08em] mb-2">所感</div>
-            <textarea id="kansou-main-input" class="ruled-lines w-full flex-1 min-h-0 bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-zinc-100 placeholder:text-zinc-500 outline-none resize-none" placeholder="今日の所感を入力"></textarea>
+          <div class="daily-field">
+            <textarea id="kansou-main-input" class="ruled-lines" placeholder=""></textarea>
           </div>
         </div>
       </div>
@@ -1846,8 +1948,8 @@
           if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(text);
           }
-          copyBtn.textContent = 'コピーした';
-          setTimeout(function () { copyBtn.textContent = '結果をコピー'; }, 1200);
+          copyBtn.textContent = '✓';
+          setTimeout(function () { copyBtn.textContent = '⎘'; }, 1200);
         });
       }
       setTaxMode('gross');
@@ -2910,36 +3012,58 @@
       autosaveDailyNow_();
     }
 
+    var CAL_EVENT_COLORS = ['#4285f4', '#33b679', '#f4511e', '#8e24aa', '#039be5', '#616161', '#e67c73'];
+
     function renderTodayPanel() {
       var ymd = ymdWithOffset_(dayViewOffset);
       var dateEl = document.getElementById('today-date');
       if (dateEl) {
-        var label = formatDayLabel_(ymd);
-        if (dayViewOffset === 0) label += ' · 今日';
-        dateEl.textContent = label;
+        try {
+          var d = ymdToDate_(ymd);
+          var label = d.toLocaleDateString('ja-JP', {
+            month: 'long',
+            day: 'numeric',
+            weekday: 'short',
+          });
+          if (dayViewOffset === 0) label = '今日 · ' + label;
+          dateEl.textContent = label;
+        } catch (e) {
+          dateEl.textContent = formatDayLabel_(ymd);
+        }
       }
-      var titleEl = document.querySelector('#panel-today .today-title');
-      if (titleEl) titleEl.textContent = dayViewOffset === 0 ? 'DAY' : 'DAY';
       var box = document.getElementById('today-list');
       if (!box) return;
       var rows = [];
+      var colorIdx = 0;
       if (dayFetchPending) {
-        box.innerHTML = '<div class="today-row"><b>—</b><span style="color:#737373">読み込み中…</span></div>';
+        box.innerHTML = '<div class="cal-empty">…</div>';
         return;
       }
       (todayEvents || []).forEach(function (ev) {
         var when = ev.isAllDay ? '終日' : String((ev.start || '') + (ev.end ? '–' + ev.end : ''));
-        rows.push('<div class="today-row"><b>' + escapeHtml(when) + '</b><span>' + escapeHtml(ev.title || '') + '</span></div>');
+        var col = CAL_EVENT_COLORS[colorIdx % CAL_EVENT_COLORS.length];
+        colorIdx++;
+        rows.push(
+          '<div class="cal-event" style="--ev:' + col + '">' +
+          '<div class="cal-event-time">' + escapeHtml(when) + '</div>' +
+          '<div class="cal-event-title">' + escapeHtml(ev.title || '') + '</div>' +
+          '</div>'
+        );
       });
       if (dayViewOffset === 0) {
         var openToday = personalTasks.filter(function (t) {
           return t.status !== 'done' && t.bucket === 'today';
         });
         openToday.forEach(function (t) {
-          rows.push('<div class="today-row"><b>TODO</b><span>' + escapeHtml(t.title) + '</span></div>');
+          rows.push(
+            '<div class="cal-event" style="--ev:#e67c73">' +
+            '<div class="cal-event-time">·</div>' +
+            '<div class="cal-event-title">' + escapeHtml(t.title) + '</div>' +
+            '</div>'
+          );
         });
       }
-      box.innerHTML = rows.length ? rows.join('') : '<div class="today-row"><b>—</b><span style="color:#737373">予定なし</span></div>';
+      box.innerHTML = rows.length ? rows.join('') : '<div class="cal-empty">—</div>';
     }
 
     function initPersonalTasks() {
@@ -3914,7 +4038,7 @@
           refreshing = true;
           window.location.reload();
         });
-        navigator.serviceWorker.register('/sw.js?v=23').then(function (reg) {
+        navigator.serviceWorker.register('/sw.js?v=24').then(function (reg) {
           if (reg && reg.update) reg.update();
         }).catch(function () {});
       }
