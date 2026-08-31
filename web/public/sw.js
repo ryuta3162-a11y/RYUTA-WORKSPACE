@@ -1,4 +1,4 @@
-const CACHE = 'yaru-shika-nai-v22';
+const CACHE = 'yaru-shika-nai-v23';
 const PRECACHE = ['/workspace.html', '/case.html', '/manifest.webmanifest', '/manifest-case.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', (event) => {

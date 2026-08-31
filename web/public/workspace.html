@@ -486,9 +486,18 @@
       scrollbar-color: rgba(180, 180, 180, 0.55) rgba(255, 255, 255, 0.08);
     }
     #panel-apps[data-view="tax"] #app-list { display: none; }
-    #panel-apps[data-view="link"] .tax-desk { display: none; }
-    .tax-desk {
+    #panel-apps[data-view="link"] .calc-desk-wrap { display: none; }
+    .calc-desk-wrap {
       flex: 1 1 0;
+      min-height: 0;
+      min-width: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 10px;
+      overflow: hidden;
+    }
+    .tax-desk {
+      flex: none;
       min-height: 0;
       margin-top: 0;
       border: 1px solid rgba(255,255,255,0.12);
@@ -572,6 +581,138 @@
       cursor: pointer;
       width: 100%;
     }
+
+    /* DX電卓 */
+    .calc-desk {
+      min-height: 0;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      border-radius: 18px;
+      padding: 10px;
+      background:
+        linear-gradient(165deg, rgba(18, 22, 32, 0.95) 0%, rgba(6, 8, 14, 0.98) 100%);
+      border: 1px solid rgba(34, 211, 238, 0.18);
+      box-shadow:
+        0 0 0 1px rgba(255,255,255,0.04) inset,
+        0 12px 40px rgba(0,0,0,0.55),
+        0 0 32px rgba(34, 211, 238, 0.06);
+      overflow: hidden;
+    }
+    .calc-desk-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      flex: none;
+    }
+    .calc-desk-title {
+      font-size: 10px;
+      letter-spacing: 0.28em;
+      font-weight: 700;
+      color: rgba(34, 211, 238, 0.85);
+    }
+    .calc-desk-badge {
+      font-size: 9px;
+      letter-spacing: 0.12em;
+      color: rgba(167, 139, 250, 0.7);
+      border: 1px solid rgba(167, 139, 250, 0.25);
+      border-radius: 999px;
+      padding: 2px 8px;
+    }
+    .calc-display-wrap {
+      flex: none;
+      margin-bottom: 10px;
+      border-radius: 12px;
+      padding: 1px;
+      background: linear-gradient(135deg, rgba(34,211,238,0.35), rgba(167,139,250,0.2));
+    }
+    .calc-display {
+      background: #020408;
+      border-radius: 11px;
+      padding: 10px 12px 8px;
+      min-height: 52px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      align-items: flex-end;
+      overflow: hidden;
+    }
+    .calc-expr {
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 10px;
+      color: rgba(161, 161, 170, 0.75);
+      letter-spacing: 0.04em;
+      min-height: 14px;
+      width: 100%;
+      text-align: right;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .calc-value {
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 26px;
+      font-weight: 600;
+      color: #ecfeff;
+      letter-spacing: 0.02em;
+      line-height: 1.1;
+      width: 100%;
+      text-align: right;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      text-shadow: 0 0 20px rgba(34, 211, 238, 0.25);
+    }
+    .calc-keys {
+      flex: 1 1 0;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      grid-template-rows: repeat(5, 1fr);
+      gap: 6px;
+    }
+    .calc-key {
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.02) 100%);
+      color: #f4f4f5;
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.08s ease, background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+      box-shadow: 0 2px 0 rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.06);
+      padding: 0;
+      min-height: 0;
+    }
+    .calc-key:hover {
+      border-color: rgba(255,255,255,0.18);
+      background: linear-gradient(180deg, rgba(255,255,255,0.11) 0%, rgba(255,255,255,0.04) 100%);
+    }
+    .calc-key:active {
+      transform: translateY(1px);
+      box-shadow: 0 1px 0 rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.04);
+    }
+    .calc-key.num { color: #fafafa; }
+    .calc-key.fn {
+      color: #fda4af;
+      border-color: rgba(253, 164, 175, 0.2);
+      background: linear-gradient(180deg, rgba(253,164,175,0.12) 0%, rgba(253,164,175,0.04) 100%);
+    }
+    .calc-key.op {
+      color: #22d3ee;
+      border-color: rgba(34, 211, 238, 0.28);
+      background: linear-gradient(180deg, rgba(34,211,238,0.16) 0%, rgba(34,211,238,0.05) 100%);
+      box-shadow: 0 2px 0 rgba(0,0,0,0.45), 0 0 12px rgba(34,211,238,0.08), inset 0 1px 0 rgba(255,255,255,0.08);
+    }
+    .calc-key.eq {
+      color: #0a0a0a;
+      border-color: rgba(34, 211, 238, 0.5);
+      background: linear-gradient(180deg, #67e8f9 0%, #22d3ee 100%);
+      box-shadow: 0 2px 0 rgba(0,0,0,0.4), 0 0 16px rgba(34,211,238,0.25);
+    }
+    .calc-key.wide { grid-column: span 2; }
     #app-list.app-link-grid::-webkit-scrollbar {
       width: 12px;
     }
@@ -1279,23 +1420,57 @@
           <button type="button" id="apps-view-tax">計算</button>
         </div>
         <div id="app-list" class="app-link-grid" role="list" aria-label="ショートカットリンク"></div>
-        <div class="tax-desk">
-          <div class="tax-desk-title">TAX</div>
-          <div class="tax-row">
-            <button type="button" class="tax-chip on" id="tax-mode-gross">税込から</button>
-            <button type="button" class="tax-chip" id="tax-mode-net">税抜から</button>
+        <div class="calc-desk-wrap">
+          <div class="tax-desk">
+            <div class="tax-desk-title">TAX</div>
+            <div class="tax-row">
+              <button type="button" class="tax-chip on" id="tax-mode-gross">税込から</button>
+              <button type="button" class="tax-chip" id="tax-mode-net">税抜から</button>
+            </div>
+            <div class="tax-row">
+              <button type="button" class="tax-chip on" id="tax-rate-10">10%</button>
+              <button type="button" class="tax-chip" id="tax-rate-8">8% 軽減</button>
+            </div>
+            <input id="tax-input" type="text" inputmode="decimal" placeholder="金額">
+            <div class="tax-out">
+              <div><span>税抜</span><b id="tax-net">0</b></div>
+              <div><span>消費税</span><b id="tax-tax">0</b></div>
+              <div><span>税込</span><b id="tax-gross">0</b></div>
+            </div>
+            <button type="button" class="tax-copy" id="tax-copy">結果をコピー</button>
           </div>
-          <div class="tax-row">
-            <button type="button" class="tax-chip on" id="tax-rate-10">10%</button>
-            <button type="button" class="tax-chip" id="tax-rate-8">8% 軽減</button>
+          <div class="calc-desk" id="calc-desk">
+            <div class="calc-desk-head">
+              <div class="calc-desk-title">CALC</div>
+              <span class="calc-desk-badge">DX</span>
+            </div>
+            <div class="calc-display-wrap">
+              <div class="calc-display">
+                <div id="calc-expr" class="calc-expr"></div>
+                <div id="calc-value" class="calc-value">0</div>
+              </div>
+            </div>
+            <div class="calc-keys" id="calc-keys">
+              <button type="button" class="calc-key fn" data-calc="clear">C</button>
+              <button type="button" class="calc-key fn" data-calc="back">⌫</button>
+              <button type="button" class="calc-key op" data-calc="op" data-op="/">÷</button>
+              <button type="button" class="calc-key op" data-calc="op" data-op="*">×</button>
+              <button type="button" class="calc-key num" data-calc="digit" data-digit="7">7</button>
+              <button type="button" class="calc-key num" data-calc="digit" data-digit="8">8</button>
+              <button type="button" class="calc-key num" data-calc="digit" data-digit="9">9</button>
+              <button type="button" class="calc-key op" data-calc="op" data-op="-">−</button>
+              <button type="button" class="calc-key num" data-calc="digit" data-digit="4">4</button>
+              <button type="button" class="calc-key num" data-calc="digit" data-digit="5">5</button>
+              <button type="button" class="calc-key num" data-calc="digit" data-digit="6">6</button>
+              <button type="button" class="calc-key op" data-calc="op" data-op="+">+</button>
+              <button type="button" class="calc-key num" data-calc="digit" data-digit="1">1</button>
+              <button type="button" class="calc-key num" data-calc="digit" data-digit="2">2</button>
+              <button type="button" class="calc-key num" data-calc="digit" data-digit="3">3</button>
+              <button type="button" class="calc-key eq" data-calc="equals" style="grid-row: span 2;">=</button>
+              <button type="button" class="calc-key num wide" data-calc="digit" data-digit="0">0</button>
+              <button type="button" class="calc-key num" data-calc="dot">.</button>
+            </div>
           </div>
-          <input id="tax-input" type="text" inputmode="decimal" placeholder="金額">
-          <div class="tax-out">
-            <div><span>税抜</span><b id="tax-net">0</b></div>
-            <div><span>消費税</span><b id="tax-tax">0</b></div>
-            <div><span>税込</span><b id="tax-gross">0</b></div>
-          </div>
-          <button type="button" class="tax-copy" id="tax-copy">結果をコピー</button>
         </div>
       </div>
     </div>
@@ -1678,6 +1853,152 @@
       setTaxMode('gross');
       setTaxRate(10);
       calcTaxView();
+    }
+
+    var calcState = {
+      display: '0',
+      expr: '',
+      stored: null,
+      op: null,
+      fresh: true,
+    };
+
+    function formatCalcNum_(n) {
+      if (!isFinite(n)) return 'Error';
+      var s = String(n);
+      if (s.length > 14) {
+        var fixed = Number(n.toPrecision(10));
+        s = String(fixed);
+      }
+      return s;
+    }
+
+    function renderCalc_() {
+      var valEl = document.getElementById('calc-value');
+      var exprEl = document.getElementById('calc-expr');
+      if (valEl) valEl.textContent = calcState.display;
+      if (exprEl) exprEl.textContent = calcState.expr;
+    }
+
+    function calcInputDigit_(d) {
+      if (calcState.display === 'Error') calcReset_();
+      if (calcState.fresh) {
+        calcState.display = d === '0' ? '0' : d;
+        calcState.fresh = false;
+      } else if (calcState.display === '0' && d !== '.') {
+        calcState.display = d;
+      } else if (calcState.display.replace(/[^0-9]/g, '').length >= 12) {
+        return;
+      } else {
+        calcState.display += d;
+      }
+      renderCalc_();
+    }
+
+    function calcInputDot_() {
+      if (calcState.display === 'Error') calcReset_();
+      if (calcState.fresh) {
+        calcState.display = '0.';
+        calcState.fresh = false;
+      } else if (calcState.display.indexOf('.') === -1) {
+        calcState.display += '.';
+      }
+      renderCalc_();
+    }
+
+    function calcOpLabel_(op) {
+      if (op === '/') return '÷';
+      if (op === '*') return '×';
+      if (op === '-') return '−';
+      return '+';
+    }
+
+    function calcCompute_(a, b, op) {
+      if (op === '+') return a + b;
+      if (op === '-') return a - b;
+      if (op === '*') return a * b;
+      if (op === '/') return b === 0 ? NaN : a / b;
+      return b;
+    }
+
+    function calcReset_() {
+      calcState.display = '0';
+      calcState.expr = '';
+      calcState.stored = null;
+      calcState.op = null;
+      calcState.fresh = true;
+      renderCalc_();
+    }
+
+    function calcBackspace_() {
+      if (calcState.display === 'Error') { calcReset_(); return; }
+      if (calcState.fresh) return;
+      if (calcState.display.length <= 1 || (calcState.display.length === 2 && calcState.display.charAt(0) === '-')) {
+        calcState.display = '0';
+        calcState.fresh = true;
+      } else {
+        calcState.display = calcState.display.slice(0, -1);
+      }
+      renderCalc_();
+    }
+
+    function calcChooseOp_(op) {
+      var current = parseFloat(calcState.display);
+      if (calcState.display === 'Error') { calcReset_(); return; }
+      if (calcState.stored != null && calcState.op && !calcState.fresh) {
+        var result = calcCompute_(calcState.stored, current, calcState.op);
+        if (!isFinite(result)) {
+          calcState.display = 'Error';
+          calcState.expr = '';
+          calcState.stored = null;
+          calcState.op = null;
+          calcState.fresh = true;
+          renderCalc_();
+          return;
+        }
+        calcState.stored = result;
+        calcState.display = formatCalcNum_(result);
+      } else {
+        calcState.stored = current;
+      }
+      calcState.op = op;
+      calcState.expr = formatCalcNum_(calcState.stored) + ' ' + calcOpLabel_(op);
+      calcState.fresh = true;
+      renderCalc_();
+    }
+
+    function calcEquals_() {
+      if (calcState.op == null || calcState.stored == null) return;
+      if (calcState.display === 'Error') { calcReset_(); return; }
+      var current = parseFloat(calcState.display);
+      var result = calcCompute_(calcState.stored, current, calcState.op);
+      calcState.expr = formatCalcNum_(calcState.stored) + ' ' + calcOpLabel_(calcState.op) + ' ' + formatCalcNum_(current) + ' =';
+      if (!isFinite(result)) {
+        calcState.display = 'Error';
+      } else {
+        calcState.display = formatCalcNum_(result);
+      }
+      calcState.stored = null;
+      calcState.op = null;
+      calcState.fresh = true;
+      renderCalc_();
+    }
+
+    function setupCalcDesk_() {
+      var box = document.getElementById('calc-keys');
+      if (!box) return;
+      calcReset_();
+      box.addEventListener('click', function (e) {
+        var btn = e.target && e.target.closest ? e.target.closest('[data-calc]') : null;
+        if (!btn) return;
+        var kind = btn.getAttribute('data-calc');
+        if (kind === 'digit') calcInputDigit_(btn.getAttribute('data-digit') || '0');
+        else if (kind === 'dot') calcInputDot_();
+        else if (kind === 'clear') calcReset_();
+        else if (kind === 'back') calcBackspace_();
+        else if (kind === 'op') calcChooseOp_(btn.getAttribute('data-op') || '+');
+        else if (kind === 'equals') calcEquals_();
+      });
     }
 
     function setupAiMascotClick() {
@@ -3579,6 +3900,7 @@
       setupAiMascotClick();
       setupAppsViewSwitch();
       setupTaxMascot();
+      setupCalcDesk_();
       if (document.getElementById('ops-tab-ringi')) switchOpsTab('ringi');
       renderOpsFilterChips();
       setSyncStatus(typeof google !== 'undefined' && google.script ? '…' : 'LOCAL', '');
@@ -3592,7 +3914,7 @@
           refreshing = true;
           window.location.reload();
         });
-        navigator.serviceWorker.register('/sw.js?v=22').then(function (reg) {
+        navigator.serviceWorker.register('/sw.js?v=23').then(function (reg) {
           if (reg && reg.update) reg.update();
         }).catch(function () {});
       }
