@@ -104,6 +104,10 @@ function getTodayCalendarEvents_() {
   );
 }
 
+/**
+ * 指定日の予定。自分のアカウント（デフォルトカレンダー）に登録されている
+ * 予定のみを対象にする。共有された他人のカレンダーは読み込まない。
+ */
 function getCalendarEventsForYmd_(ymd) {
   try {
     var tz = Session.getScriptTimeZone();
@@ -111,22 +115,107 @@ function getCalendarEventsForYmd_(ymd) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return [];
     var start = Utilities.parseDate(day + ' 00:00:00', tz, 'yyyy-MM-dd HH:mm:ss');
     var end = Utilities.parseDate(day + ' 23:59:59', tz, 'yyyy-MM-dd HH:mm:ss');
-    var events = CalendarApp.getDefaultCalendar().getEvents(start, end);
+
+    var cal = CalendarApp.getDefaultCalendar();
+    if (!cal) return [];
+    var events = cal.getEvents(start, end) || [];
+
     var out = [];
+    var seen = {};
     for (var i = 0; i < events.length; i++) {
-      var ev = events[i];
-      out.push({
-        title: ev.getTitle(),
-        start: Utilities.formatDate(ev.getStartTime(), tz, 'HH:mm'),
-        end: Utilities.formatDate(ev.getEndTime(), tz, 'HH:mm'),
-        isAllDay: ev.isAllDayEvent(),
-      });
+      var item = packCalendarEvent_(events[i], tz);
+      if (!item) continue;
+      var key = item.title + '|' + item.start + '|' + item.end + '|' + item.isAllDay;
+      if (seen[key]) continue;
+      seen[key] = 1;
+      out.push(item);
     }
+    out.sort(function (a, b) {
+      if (a.isAllDay !== b.isAllDay) return a.isAllDay ? -1 : 1;
+      return String(a.start).localeCompare(String(b.start));
+    });
     return out;
   } catch (err) {
     console.error('Calendar:', err);
     return [];
   }
+}
+
+function packCalendarEvent_(ev, tz) {
+  if (!ev) return null;
+  var pick = function (fn) {
+    try {
+      var v = fn();
+      return v == null ? '' : String(v);
+    } catch (err) {
+      return '';
+    }
+  };
+  var isAllDay = false;
+  try {
+    isAllDay = ev.isAllDayEvent();
+  } catch (err) {
+    isAllDay = false;
+  }
+  var description = cleanEventDescription_(pick(function () { return ev.getDescription(); }));
+  var location = pick(function () { return ev.getLocation(); });
+  var guests = [];
+  try {
+    var list = ev.getGuestList(true) || [];
+    for (var i = 0; i < list.length && i < 20; i++) {
+      guests.push(list[i].getName() || list[i].getEmail());
+    }
+  } catch (err) {
+    guests = [];
+  }
+  return {
+    id: pick(function () { return ev.getId(); }),
+    title: pick(function () { return ev.getTitle(); }),
+    start: isAllDay ? '' : Utilities.formatDate(ev.getStartTime(), tz, 'HH:mm'),
+    end: isAllDay ? '' : Utilities.formatDate(ev.getEndTime(), tz, 'HH:mm'),
+    isAllDay: isAllDay,
+    location: location,
+    description: description.length > 800 ? description.slice(0, 800) : description,
+    guests: guests,
+    organizer: pick(function () { return ev.getCreators().join(', '); }),
+    myStatus: pick(function () { return ev.getMyStatus(); }),
+    meetUrl: extractMeetingUrl_(location + '\n' + description),
+  };
+}
+
+/** 同期用マーカーなど、表示に不要な行を説明文から除く */
+function cleanEventDescription_(raw) {
+  return String(raw || '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]*>/g, ' ')
+    .split('\n')
+    .filter(function (line) {
+      var s = line.trim();
+      if (!s) return false;
+      if (/^\[SYNC_KEY:/.test(s)) return false;
+      if (/^(原文|同期)\s*[:：]/.test(s)) return false;
+      return true;
+    })
+    .join(' / ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** 説明・場所から Meet / Zoom / Teams 等の会議URLを拾う */
+function extractMeetingUrl_(text) {
+  var s = String(text || '');
+  if (!s) return '';
+  var patterns = [
+    /https:\/\/meet\.google\.com\/[a-z0-9\-]+/i,
+    /https:\/\/[a-z0-9.\-]*zoom\.us\/j\/[^\s<>"']+/i,
+    /https:\/\/teams\.microsoft\.com\/[^\s<>"']+/i,
+    /https:\/\/[a-z0-9.\-]*webex\.com\/[^\s<>"']+/i,
+  ];
+  for (var i = 0; i < patterns.length; i++) {
+    var m = s.match(patterns[i]);
+    if (m) return m[0];
+  }
+  return '';
 }
 
 function handleApiGet_(e) {

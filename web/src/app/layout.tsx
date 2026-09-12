@@ -4,14 +4,14 @@ import PwaRegister from '@/components/PwaRegister';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'やるしかない',
-  description: 'やるしかない — TODO・日報・カレンダー',
-  applicationName: 'やるしかない',
+  title: 'Work-Space',
+  description: 'Work-Space — TODO・日報・カレンダー',
+  applicationName: 'Work-Space',
   manifest: '/manifest.webmanifest',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'やるしかない',
+    title: 'Work-Space',
   },
   icons: {
     icon: '/favicon.png',
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#000000',
+  themeColor: '#030508',
   width: 'device-width',
   initialScale: 1,
 };

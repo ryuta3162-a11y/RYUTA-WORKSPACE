@@ -1,13 +1,13 @@
 {
-  "name": "やるしかない",
-  "short_name": "やるしかない",
-  "description": "やるしかない — TODO・日報・カレンダー",
+  "name": "Work-Space",
+  "short_name": "Work-Space",
+  "description": "Work-Space — TODO・日報・カレンダー",
   "start_url": "/workspace.html",
   "scope": "/",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#000000",
-  "theme_color": "#000000",
+  "background_color": "#030508",
+  "theme_color": "#030508",
   "lang": "ja",
   "icons": [
     {

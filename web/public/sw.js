@@ -1,6 +1,14 @@
-const CACHE = 'yaru-shika-nai-v24';
-const PRECACHE = ['/workspace.html', '/case.html', '/manifest.webmanifest', '/manifest-case.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
-
+const CACHE = 'work-space-v34';
+const PRECACHE = [
+  '/workspace.html',
+  '/case.html',
+  '/manifest.webmanifest',
+  '/manifest-case.webmanifest',
+  '/favicon.png',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
+  '/icons/apple-touch-icon.png',
+];
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
@@ -24,9 +32,15 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
 
-  // Always take network for app shell + SW itself
-  if (url.pathname === '/sw.js' || url.pathname === '/workspace.html' || url.pathname.startsWith('/api/')) {
-    event.respondWith(
+  // Always take network for app shell + SW itself + branding assets
+  if (
+    url.pathname === '/sw.js' ||
+    url.pathname === '/workspace.html' ||
+    url.pathname === '/favicon.png' ||
+    url.pathname === '/manifest.webmanifest' ||
+    url.pathname.startsWith('/icons/') ||
+    url.pathname.startsWith('/api/')
+  ) {    event.respondWith(
       fetch(event.request, { cache: 'no-store' }).catch(() => caches.match(event.request))
     );
     return;

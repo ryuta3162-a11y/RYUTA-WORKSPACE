@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>稟議APP</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/favicon.png">
+  <meta name="theme-color" content="#000000">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="稟議APP">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Syne:wght@800&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: #000; color: #e8e8e8; font-family: "Zen Kaku Gothic New", "Hiragino Sans", Meiryo, sans-serif; }
+    button { font: inherit; cursor: pointer; }
+    a { color: #fff; }
+    .bar { display: flex; align-items: center; gap: 16px; padding: 10px 18px; border-bottom: 1px solid #222; background: #000; }
+    .mark { width: 32px; height: 32px; border: 1px solid #fff; border-radius: 50%; display: grid; place-items: center; font-family: Syne, sans-serif; font-weight: 800; font-size: 11px; color: #fff; letter-spacing: -0.08em; }
+    .brand { min-width: 120px; }
+    .name { font-family: "IBM Plex Mono", monospace; font-weight: 500; letter-spacing: 0.28em; font-size: 12px; color: #fff; }
+    .sub { color: #777; font-size: 10px; margin-top: 2px; font-family: "IBM Plex Mono", monospace; letter-spacing: 0.08em; }
+    .tabs { display: flex; gap: 2px; border: 1px solid #444; padding: 2px; }
+    .tab { border: 0; background: transparent; color: #888; padding: 7px 14px; font-size: 11px; letter-spacing: 0.12em; font-family: "IBM Plex Mono", monospace; }
+    .tab.on { background: #fff; color: #000; }
+    .count { opacity: 0.6; margin-left: 6px; }
+    .wait-total { font-size: 12px; letter-spacing: 0.1em; font-family: "IBM Plex Mono", monospace; color: #111; background: #f5c518; padding: 6px 10px; }
+    .wait-total b { font-weight: 700; }
+    .grow { margin-left: auto; }
+    .sync-box { display: flex; align-items: center; gap: 10px; flex: none; }
+    .sync-meta { text-align: right; min-width: 140px; }
+    .status { color: #ccc; font-size: 12px; margin: 0; font-family: "IBM Plex Mono", monospace; line-height: 1.35; }
+    .status.busy { color: #fff; }
+    .sync-hint { color: #666; font-size: 10px; margin-top: 2px; font-family: "IBM Plex Mono", monospace; letter-spacing: 0.06em; }
+    .sync-btns { display: flex; gap: 2px; border: 1px solid #fff; }
+    .btn { border: 0; background: #fff; color: #000; padding: 10px 16px; font-size: 12px; letter-spacing: 0.12em; font-family: "IBM Plex Mono", monospace; }
+    .btn.ghost { background: #000; color: #fff; }
+    .btn:disabled { opacity: 0.4; cursor: default; }
+    .shell { display: grid; grid-template-columns: minmax(420px, 42%) 1fr; height: calc(100% - 53px); }
+    .list { border-right: 1px solid #222; overflow: auto; padding: 10px 10px 24px; }
+    .ghead { width: 100%; text-align: left; display: block; margin: 8px 0 0; padding: 12px 16px; font-size: 13px; letter-spacing: 0.18em; font-family: "IBM Plex Mono", monospace; background: #000; border: 1px solid #fff; color: #fff; }
+    .ghead:first-child { margin-top: 0; }
+    .ghead.open { background: #fff; color: #000; }
+    .ghead-top { display: flex; justify-content: space-between; align-items: center; }
+    .ghead span { color: #888; letter-spacing: 0.08em; font-size: 11px; }
+    .ghead.open span { color: #444; }
+    .ghead-people { margin-top: 6px; font-size: 11px; letter-spacing: 0.02em; color: #999; font-family: "Zen Kaku Gothic New", sans-serif; }
+    .ghead.open .ghead-people { color: #444; }
+    .card { margin: 18px 0; border: 1px solid #222; background: #0a0a0a; padding: 14px 16px; }
+    .card-t { font-size: 10px; letter-spacing: 0.2em; color: #888; font-family: "IBM Plex Mono", monospace; margin-bottom: 8px; }
+    .people { display: flex; flex-direction: column; gap: 8px; }
+    .person { display: flex; flex-direction: column; gap: 2px; }
+    .person b { font-size: 13px; font-weight: 500; color: #fff; }
+    .person a { font-size: 12px; font-family: "IBM Plex Mono", monospace; word-break: break-all; }
+    .meta { font-size: 12px; color: #999; line-height: 1.7; font-family: "IBM Plex Mono", monospace; word-break: break-all; }
+    .note { width: 100%; min-height: 96px; background: #000; color: #eee; border: 1px solid #333; padding: 10px; font: 13px/1.7 "Zen Kaku Gothic New", Meiryo, sans-serif; resize: vertical; }
+    .row { width: 100%; display: grid; grid-template-columns: 108px 1fr; gap: 10px; text-align: left; border: 0; border-bottom: 1px solid #1a1a1a; background: transparent; color: inherit; padding: 10px 14px; }
+    .row:hover { background: #111; }
+    .row.on { background: #161616; box-shadow: inset 3px 0 0 #fff; }
+    .row-date { font-size: 11px; color: #999; font-family: "IBM Plex Mono", monospace; padding-top: 2px; }
+    .row-s { font-size: 13px; font-weight: 500; line-height: 1.45; color: #fff; }
+    .row-d { margin-top: 3px; font-size: 11px; color: #888; }
+    .empty { padding: 28px 18px; color: #777; font-size: 13px; line-height: 1.7; }
+    .detail { overflow: auto; padding: 28px 40px 56px; }
+    .detail-empty { color: #666; font-size: 13px; padding: 48px 8px; font-family: "IBM Plex Mono", monospace; }
+    .kicker { font-size: 11px; letter-spacing: 0.2em; font-family: "IBM Plex Mono", monospace; color: #888; }
+    h1 { margin: 8px 0 0; font-size: 20px; font-weight: 700; line-height: 1.4; color: #fff; }
+    .when { margin-top: 10px; font-size: 12px; color: #999; font-family: "IBM Plex Mono", monospace; }
+    .actions { display: flex; flex-direction: row; flex-wrap: wrap; align-items: flex-start; gap: 16px; margin: 22px 0 18px; }
+    .act { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+    .ico { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; border: 1px solid #fff; background: #000; color: #fff; padding: 0; }
+    .ico svg { width: 22px; height: 22px; display: block; }
+    .ico:hover { background: #fff; color: #000; }
+    .ico.wip { background: #fff; color: #000; }
+    .ico.wip svg circle { fill: #000; }
+    .ico:hover svg circle { fill: #000; stroke: #000; }
+    .ico:hover svg path { stroke: #000; }
+    .ico.mail { width: auto; min-width: 56px; height: 56px; border-radius: 28px; padding: 0 18px; font-size: 13px; letter-spacing: 0.14em; font-family: "IBM Plex Mono", monospace; text-decoration: none; }
+    .ico-lab { font-size: 10px; letter-spacing: 0.12em; color: #888; font-family: "IBM Plex Mono", monospace; }
+    .draft { margin: 8px 0 22px; border: 1px solid #333; background: #0a0a0a; padding: 12px; }
+    .draft textarea { width: 100%; min-height: 180px; background: #000; color: #eee; border: 1px solid #333; padding: 10px; font: 13px/1.7 "Zen Kaku Gothic New", Meiryo, sans-serif; resize: vertical; }
+    .draft-bar { display: flex; gap: 8px; margin-top: 8px; }
+    .ghost { border: 1px solid #fff; background: transparent; color: #fff; padding: 7px 12px; font-size: 11px; letter-spacing: 0.1em; font-family: "IBM Plex Mono", monospace; }
+    .msg { margin: 12px 0; padding: 14px 16px; border: 1px solid #333; }
+    .msg-top { display: flex; justify-content: space-between; gap: 16px; align-items: baseline; }
+    .who { font-size: 12px; font-weight: 500; color: #fff; }
+    .stamp { font-size: 11px; color: #888; white-space: nowrap; font-family: "IBM Plex Mono", monospace; }
+    .route { margin-top: 4px; font-size: 11px; color: #777; }
+    .body { margin-top: 10px; font-size: 13px; line-height: 1.75; color: #ddd; white-space: pre-wrap; }
+    .dir { font-size: 10px; letter-spacing: 0.12em; font-family: "IBM Plex Mono", monospace; padding: 2px 8px; margin-right: 8px; }
+    .msg.them { background: #0c1218; border-color: #3b82f6; border-left-width: 4px; }
+    .msg.them .dir { background: #3b82f6; color: #fff; }
+    .msg.them .who { color: #93c5fd; }
+    .msg.mine { background: #141414; border-color: #a3a3a3; border-right-width: 4px; margin-left: 48px; }
+    .msg.them { margin-right: 48px; }
+    .msg.mine .dir { background: #e5e5e5; color: #111; }
+    .msg.mine .who { color: #e5e5e5; }
+    .row.warn { box-shadow: inset 3px 0 0 #f5c518; }
+    .row.on.warn { box-shadow: inset 3px 0 0 #f5c518; }
+    .mark-wait { display: inline-block; min-width: 18px; height: 18px; line-height: 18px; text-align: center; margin-left: 8px; background: #f5c518; color: #111; font-size: 12px; font-weight: 700; font-family: "IBM Plex Mono", monospace; vertical-align: middle; }
+    .ghead .mark-wait { margin-left: 10px; }
+    .wait-n { color: #f5c518; margin-left: 8px; font-size: 11px; letter-spacing: 0.08em; }
+    .ghead.open .wait-n { color: #8a6d00; }
+    .detail-wait { display: inline-block; margin-left: 10px; padding: 2px 8px; background: #f5c518; color: #111; font-size: 10px; letter-spacing: 0.12em; font-family: "IBM Plex Mono", monospace; vertical-align: middle; }
+    .files { display: flex; flex-direction: column; gap: 8px; }
+    .file { display: flex; align-items: center; gap: 10px; border: 1px solid #333; padding: 8px 10px; }
+    .file b { flex: 1; font-size: 12px; font-weight: 500; color: #eee; word-break: break-all; }
+    .file .kind { font-size: 10px; letter-spacing: 0.08em; color: #fff; font-family: "IBM Plex Mono", monospace; white-space: nowrap; padding: 4px 8px; min-width: 58px; text-align: center; }
+    .kind-excel, .kind-sheet { background: #217346; color: #fff; }
+    .kind-pdf { background: #e5252a; color: #fff; }
+    .kind-ppt { background: #c43e1c; color: #fff; }
+    .kind-slide { background: #f4b400; color: #111; }
+    .kind-form { background: #673ab7; color: #fff; }
+    .kind-word { background: #2b579a; color: #fff; }
+    .kind-image { background: #1a73e8; color: #fff; }
+    .kind-file { background: #444; color: #ddd; }
+    .file button, .file a { border: 1px solid #fff; background: transparent; color: #fff; padding: 5px 8px; font-size: 10px; letter-spacing: 0.1em; font-family: "IBM Plex Mono", monospace; cursor: pointer; text-decoration: none; }
+    .file-preview { margin-top: 10px; }
+    .file-preview img { width: 100%; max-height: 70vh; object-fit: contain; background: #000; border: 1px solid #333; }
+    .file-preview iframe { width: 100%; height: 70vh; background: #000; border: 1px solid #333; }
+    .file-note { font-size: 12px; color: #aaa; line-height: 1.7; padding: 10px 0; }
+    .sheet-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+    .sheet-tab { border: 1px solid #444; background: #000; color: #aaa; padding: 5px 10px; font-size: 11px; font-family: "IBM Plex Mono", monospace; }
+    .sheet-tab.on { background: #217346; color: #fff; border-color: #217346; }
+    .sheet-view { overflow: auto; max-height: 70vh; background: #0a0a0a; border: 1px solid #333; }
+    .sheet-view table { border-collapse: collapse; font-size: 12px; color: #eee; min-width: 100%; }
+    .sheet-view td, .sheet-view th { border: 1px solid #333; padding: 5px 8px; white-space: nowrap; vertical-align: top; }
+    .sheet-view th { background: #161616; color: #fff; font-weight: 500; }
+  </style>
+</head>
+<body>
+  <header class="bar">
+    <div class="mark">RP</div>
+    <div class="brand">
+      <div class="name">稟議APP</div>
+      <div class="sub">起動時に新着</div>
+    </div>
+    <div class="tabs">
+      <button type="button" class="tab on" id="tab-wip">対応中<span class="count" id="n-wip">0</span></button>
+      <button type="button" class="tab" id="tab-in">受信<span class="count" id="n-in">0</span></button>
+    </div>
+    <div class="wait-total" id="wait-total" hidden>未返信 <b id="n-wait">0</b></div>
+    <div class="grow"></div>
+    <div class="sync-box">
+      <div class="sync-meta">
+        <p class="status" id="status">起動時に新着を確認します</p>
+        <div class="sync-hint" id="sync-hint">手元のメールより新しい分だけ</div>
+      </div>
+      <div class="sync-btns">
+        <button type="button" class="btn" id="sync-new">新着</button>
+        <button type="button" class="btn ghost" id="sync-full">5か月</button>
+      </div>
+    </div>
+  </header>
+  <div class="shell">
+    <aside class="list" id="list"></aside>
+    <section class="detail" id="detail"><div class="detail-empty">左の一覧からメールを選んでください。</div></section>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(function () {});
+    var API = 'https://ryuta-workspace.vercel.app/api/vendor';
+    var REPLY_API = 'https://ryuta-workspace.vercel.app/api/vendor-reply';
+    var FILES_API = 'https://ryuta-workspace.vercel.app/api/vendor-files';
+    var FILE_API = 'https://ryuta-workspace.vercel.app/api/vendor-file';
+    var COMPANIES = ['SEKAI','Lifefitness','LIXIL','BICS','鳳商事','アイリスオーヤマ','KH','藤ビル','メトス','プロアバンセ','technogym'];
+    var CONTACTS = {
+      SEKAI: [{ name: '志賀', email: 'a-shiga@sekai.co.jp' }, { name: 'SEKAI team', email: 'team@sekai.co.jp' }, { name: '添田', email: 'e-soeta@sekai.co.jp' }, { name: '渋谷メーリス', email: 'shibuya_sekai@sekai.co.jp' }],
+      Lifefitness: [{ name: 'Life Fitness CS', email: 'customerservice.jp@lifefitness.com' }],
+      LIXIL: [{ name: 'LIXILお問い合わせ', email: 'lxlcc-answer105@lixil.com' }],
+      '鳳商事': [{ name: '齋藤 翔', email: 'm-saito@ohtori-s.co.jp' }, { name: '首都圏支店', email: 'shutoken@ohtori-s.co.jp' }, { name: '本部受注', email: 'honbu-order@ohtori-s.co.jp' }],
+      KH: [{ name: '劉震宇', email: 'info@gracene.com' }],
+      '藤ビル': [{ name: '小笹', email: 't-ozasa@fujibuil.co.jp' }],
+      'メトス': [{ name: '菅原 睦', email: 's.sugawara@metos.co.jp' }, { name: '三原 宏次', email: 'k.mihara@metos.co.jp' }],
+      'プロアバンセ': [{ name: '小森', email: 'maintenance@proavance.co.jp' }, { name: '角田', email: 's.tsunoda@proavance.co.jp' }]
+    };
+    var PIN_KEY = 'ringi_pins_v1';
+    var IN_KEY = 'ringi_inbox_v1';
+    var WIP_KEY = 'ringi_wip_v1';
+    var HIDE_KEY = 'ringi_hide_v1';
+    var OPEN_KEY = 'ringi_open_v1';
+    var NOTE_KEY = 'ringi_notes_v1';
+    var openGroups = {};
+    var tab = 'wip';
+    var selected = '';
+    var inbox = [];
+    var wip = [];
+    var hidden = {};
+    var notes = {};
+    var listEl = document.getElementById('list');
+    var detailEl = document.getElementById('detail');
+    var status = document.getElementById('status');
+    var syncHint = document.getElementById('sync-hint');
+    var syncNewBtn = document.getElementById('sync-new');
+    var syncFullBtn = document.getElementById('sync-full');
+
+    function esc(s) {
+      var d = document.createElement('div');
+      d.textContent = s == null ? '' : String(s);
+      return d.innerHTML;
+    }
+
+    function keyOf(item) {
+      if (item.threadId) return item.company + '|' + item.threadId;
+      return item.company + '|' + (item.subject || '') + '|' + (item.lastDate || '');
+    }
+
+    function loadJson(key, fallback) {
+      try {
+        var v = JSON.parse(localStorage.getItem(key) || '');
+        return v == null ? fallback : v;
+      } catch (e) {
+        return fallback;
+      }
+    }
+
+    function saveAll() {
+      localStorage.setItem(IN_KEY, JSON.stringify(inbox));
+      localStorage.setItem(WIP_KEY, JSON.stringify(wip));
+      localStorage.setItem(HIDE_KEY, JSON.stringify(hidden));
+      localStorage.setItem(OPEN_KEY, JSON.stringify(openGroups));
+      localStorage.setItem(NOTE_KEY, JSON.stringify(notes));
+    }
+
+    function contactsOf(company, item) {
+      if (item && item.contacts && item.contacts.length) return item.contacts;
+      return CONTACTS[company] || [];
+    }
+
+    function contactLine(company, item) {
+      return contactsOf(company, item).map(function (c) {
+        return (c.name || '') + (c.email ? ' <' + c.email + '>' : '');
+      }).filter(Boolean).join(' / ');
+    }
+
+    function pins() {
+      return loadJson(PIN_KEY, {});
+    }
+
+    function mailOpenUrl(item) {
+      var id = String(item.threadId || '');
+      if (id && item.company) return 'https://mail.google.com/mail/u/0/#search/' + encodeURIComponent(item.company) + '/' + id;
+      if (id) return 'https://mail.google.com/mail/u/0/#all/' + id;
+      var p = String(item.permalink || '');
+      if (!p || p.indexOf('plid=') !== -1) return '';
+      return p;
+    }
+
+    function currentList() {
+      return tab === 'wip' ? wip : inbox;
+    }
+
+    function findByKey(arr, key) {
+      for (var i = 0; i < arr.length; i++) if (keyOf(arr[i]) === key) return i;
+      return -1;
+    }
+
+    function upsert(arr, item) {
+      var i = findByKey(arr, keyOf(item));
+      if (i >= 0) arr[i] = item;
+      else arr.unshift(item);
+    }
+
+    function removeKey(arr, key) {
+      var i = findByKey(arr, key);
+      if (i >= 0) arr.splice(i, 1);
+    }
+
+    function stripMarks(s) {
+      return String(s || '')
+        .replace(/[\u200B-\u200D\uFE0E\uFE0F\u00AD]/g, '')
+        .replace(/[\uE000-\uF8FF]/g, '')
+        .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '')
+        .replace(/[●○■□▪▫◆◇★☆☑☐☒✅❌⬛⬜▫️▪️⬤◉◎▢▣▤▥]/g, '')
+        .replace(/\s+([。．.!?！？])/g, '$1');
+    }
+
+    function isMineMessage(m) {
+      if (!m) return false;
+      if (m.direction === '送信') return true;
+      if (m.direction === '受信') return false;
+      var from = String(m.from || '').toLowerCase();
+      return from.indexOf('okamoto-group.co.jp') !== -1 || from.indexOf('r-kusaka') !== -1;
+    }
+
+    function prettyBody(text) {
+      var s = stripMarks(String(text || ''));
+      s = s.replace(/[ \t]+/g, ' ');
+      s = s.replace(/[●○■□▪▫・◆◇★☆]/g, '\n');
+      var lines = s.split('\n');
+      var out = [];
+      for (var i = 0; i < lines.length; i++) {
+        var t = lines[i].trim();
+        if (!t) continue;
+        if (/^--\s*$/.test(t) || /^_{4,}/.test(t) || /^-{4,}/.test(t) || /^[━─=]{3,}/.test(t)) break;
+        if (i > 4 && /^(株式会社|TEL[:：]|Tel[:：]|〒|FAX[:：])/i.test(t)) break;
+        out.push(t);
+      }
+      return out.join('\n');
+    }
+
+    var ICO_DOT = '<svg viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" fill="#fff"/></svg>';
+    var ICO_RING = '<svg viewBox="0 0 14 14" fill="none" stroke="#fff" stroke-width="1.6"><circle cx="7" cy="7" r="5"/></svg>';
+    var ICO_TRASH = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8"><path d="M5 7h14M9 7V5h6v2M8 7l1 13h6l1-13"/></svg>';
+
+    function lastDirection(item) {
+      if (!item) return '';
+      var msgs = item.messages && item.messages.length ? item.messages : [];
+      if (msgs.length) {
+        var last = msgs[msgs.length - 1];
+        if (isMineMessage(last)) return '送信';
+        return last.direction || '受信';
+      }
+      return item.direction || '';
+    }
+
+    function needsReply(item) {
+      return lastDirection(item) !== '送信';
+    }
+
+    function companyPool(company) {
+      return inbox.concat(wip).filter(function (item) { return (item.company || '') === company; });
+    }
+
+    function newestInCompany(company) {
+      var list = companyPool(company).slice().sort(function (a, b) {
+        return String(b.lastDate || '').localeCompare(String(a.lastDate || ''));
+      });
+      return list[0] || null;
+    }
+
+    function isLatestWait(item) {
+      if (!item || !needsReply(item)) return false;
+      var newest = newestInCompany(item.company);
+      return !!(newest && keyOf(newest) === keyOf(item));
+    }
+
+    function waitCompanyCount() {
+      var seen = {};
+      var n = 0;
+      inbox.concat(wip).forEach(function (item) {
+        var c = item.company || '';
+        if (!c || seen[c]) return;
+        seen[c] = true;
+        var newest = newestInCompany(c);
+        if (newest && needsReply(newest)) n += 1;
+      });
+      return n;
+    }
+    function grouped(rows) {
+      var map = {};
+      rows.forEach(function (item) {
+        var c = item.company || 'その他';
+        if (!map[c]) map[c] = [];
+        map[c].push(item);
+      });
+      Object.keys(map).forEach(function (c) {
+        map[c].sort(function (a, b) {
+          return String(b.lastDate || '').localeCompare(String(a.lastDate || ''));
+        });
+      });
+      var names = COMPANIES.filter(function (c) { return map[c] && map[c].length; });
+      Object.keys(map).forEach(function (c) { if (names.indexOf(c) === -1) names.push(c); });
+      return names.map(function (c) { return { company: c, items: map[c] }; });
+    }
+
+    function render() {
+      document.getElementById('tab-wip').className = 'tab' + (tab === 'wip' ? ' on' : '');
+      document.getElementById('tab-in').className = 'tab' + (tab === 'in' ? ' on' : '');
+      document.getElementById('n-wip').textContent = String(wip.length);
+      document.getElementById('n-in').textContent = String(inbox.length);
+      var waitAll = waitCompanyCount();
+      var waitBox = document.getElementById('wait-total');
+      var waitTab = document.getElementById('n-wait');
+      if (waitTab) waitTab.textContent = String(waitAll);
+      if (waitBox) waitBox.hidden = !waitAll;
+      var rows = currentList();
+      if (!rows.length) {
+        listEl.innerHTML = '<div class="empty">' + (tab === 'wip'
+          ? '対応中はまだありません。受信から「会社対応中」で、その会社の直近メールをまとめて移します。'
+          : '受信はありません。右上の更新で、直近5ヶ月を取り込みます。') + '</div>';
+      } else {
+        listEl.innerHTML = grouped(rows).map(function (g) {
+          var opened = openGroups[g.company] !== false;
+          var people = contactLine(g.company, g.items[0]);
+          var waitN = g.items.some(isLatestWait) ? 1 : 0;
+          return '<button type="button" class="ghead' + (opened ? ' open' : '') + '" data-co="' + esc(g.company) + '">' +
+            '<div class="ghead-top"><b>' + esc(g.company) + (waitN ? '<span class="mark-wait" title="未返信">!</span>' : '') +
+            '</b><span>' + (waitN ? '<span class="wait-n">未返信</span>　' : '') +
+            (opened ? 'CLOSE' : 'OPEN') + ' ' + g.items.length + '</span></div>' +
+            (people ? '<div class="ghead-people">' + esc(people) + '</div>' : '') +
+            '</button>' +
+            (opened ? g.items.map(function (item) {
+              var k = keyOf(item);
+              var wait = isLatestWait(item);
+              var dir = lastDirection(item);
+              return '<button type="button" class="row' + (selected === k ? ' on' : '') + (wait ? ' warn' : '') + '" data-key="' + esc(k) + '">' +
+                '<div class="row-date">' + esc(item.lastDate) + '</div>' +
+                '<div><div class="row-s">' + (wait ? '<span class="mark-wait" title="未返信">!</span>' : '') +
+                esc(stripMarks(item.subject || '（件名なし）')) +
+                (dir === '送信' ? '<span class="row-dir out">自分</span>' : '<span class="row-dir in">相手</span>') +
+                '</div>' +
+                '<div class="row-d">' + esc(stripMarks((item.from || '').replace(/"/g, ''))) + '</div></div>' +
+                '</button>';
+            }).join('') : '');
+        }).join('');
+      }
+      var item = null;
+      for (var i = 0; i < rows.length; i++) if (keyOf(rows[i]) === selected) item = rows[i];
+      if (!item && rows.length) {
+        item = rows[0];
+        selected = keyOf(item);
+      }
+      if (!item) {
+        detailEl.innerHTML = '<div class="detail-empty">SELECT A THREAD</div>';
+        return;
+      }
+      var msgs = item.messages && item.messages.length ? item.messages : [{
+        from: item.from, to: item.to, date: item.lastDate, direction: item.direction, snippet: item.snippet
+      }];
+      var href = mailOpenUrl(item);
+      var people = contactsOf(item.company, item);
+      var k = keyOf(item);
+      var peopleHtml = people.length
+        ? '<div class="card"><div class="card-t">担当</div><div class="people">' + people.map(function (c) {
+            var mail = c.email || '';
+            return '<div class="person"><b>' + esc(c.name || mail) + '</b>' +
+              (mail ? '<a href="mailto:' + esc(mail) + '">' + esc(mail) + '</a>' : '') + '</div>';
+          }).join('') + '</div></div>'
+        : '';
+      detailEl.innerHTML =
+        '<div class="kicker">' + esc(item.company) + (tab === 'wip' ? ' / 対応中' : '') +
+        (isLatestWait(item) ? '<span class="detail-wait">未返信</span>' : '') + '</div>' +
+        '<h1>' + esc(stripMarks(item.subject || '（件名なし）')) + '</h1>' +
+        '<div class="when">' + esc(item.lastDate || '—') + (item.direction ? '　' + esc(item.direction) : '') + '</div>' +
+        '<div class="actions">' +
+          (tab === 'in' ? '<div class="act"><button type="button" class="ico wip" data-act="wip" title="この会社を対応中へ">' + ICO_DOT + '</button><div class="ico-lab">会社対応中</div></div>' : '') +
+          (tab === 'wip' ? '<div class="act"><button type="button" class="ico" data-act="inbox" title="この会社を受信に戻す">' + ICO_RING + '</button><div class="ico-lab">会社を戻す</div></div>' : '') +
+          '<div class="act"><button type="button" class="ico" data-act="hide" title="ゴミ箱">' + ICO_TRASH + '</button><div class="ico-lab">削除</div></div>' +
+          '<div class="act"><button type="button" class="ico mail" data-act="draft" title="ひな形">AI</button><div class="ico-lab">ひな形</div></div>' +
+          (href ? '<div class="act"><a class="ico mail" href="' + esc(href) + '" target="_blank" rel="noopener">Gmail</a><div class="ico-lab">開く</div></div>' : '') +
+        '</div>' +
+        peopleHtml +
+        '<div class="card"><div class="card-t">相手アドレス</div><div class="meta">' + esc(item.emails || '—') + '</div></div>' +
+        (tab === 'wip'
+          ? '<div class="card"><div class="card-t">対応メモ</div><textarea class="note" id="wip-note" placeholder="見積待ち、日程、次にやること">' + esc(notes[k] || '') + '</textarea></div>'
+          : '') +
+        '<div class="card"><div class="card-t">添付</div><div class="files" id="files-list">' +
+          (item.threadId ? '読み込み中…' : 'スレッドIDがないため、Gmailから開いてください。') +
+        '</div><div class="file-preview" id="file-preview"></div></div>' +
+        '<div class="draft" id="draft-box" hidden><textarea id="draft-text"></textarea>' +
+        '<div class="draft-bar"><button type="button" class="ghost" data-act="copy">コピー</button>' +
+        '<a class="ghost" id="draft-gmail" target="_blank" rel="noopener">Gmailに貼る</a></div></div>' +
+        msgs.map(function (m) {
+          var mine = isMineMessage(m);
+          return '<article class="msg ' + (mine ? 'mine' : 'them') + '">' +
+            '<div class="msg-top"><div class="who"><span class="dir">' + (mine ? '自分' : '相手') + '</span>' + esc(stripMarks(m.from || '')) + '</div><div class="stamp">' + esc(m.date || '') + '</div></div>' +
+            '<div class="route">' + esc(stripMarks(m.to ? 'To: ' + m.to : '')) + '</div>' +
+            (m.snippet ? '<div class="body">' + esc(prettyBody(m.snippet)) + '</div>' : '') +
+            '</article>';
+        }).join('');
+      loadThreadFiles(item);
+    }
+
+    var fileReq = 0;
+
+    function fileMeta(name, type, url) {
+      var n = String(name || '').toLowerCase();
+      var t = String(type || '').toLowerCase();
+      var u = String(url || '').toLowerCase();
+      if (u.indexOf('docs.google.com/forms') >= 0 || u.indexOf('forms.gle/') >= 0) return { key: 'form', label: 'FORM' };
+      if (u.indexOf('docs.google.com/presentation') >= 0) return { key: 'slide', label: 'SLIDE' };
+      if (u.indexOf('docs.google.com/spreadsheets') >= 0) return { key: 'sheet', label: 'SHEETS' };
+      if (/\.(xlsx|xls|xlsm|csv)$/.test(n) || t.indexOf('excel') >= 0 || t.indexOf('spreadsheet') >= 0) return { key: 'excel', label: 'EXCEL' };
+      if (/\.(pptx|ppt|ppsx)$/.test(n) || t.indexOf('presentation') >= 0 || t.indexOf('powerpoint') >= 0) return { key: 'ppt', label: 'PPT' };
+      if (/\.pdf$/.test(n) || t.indexOf('pdf') >= 0) return { key: 'pdf', label: 'PDF' };
+      if (/\.(docx|doc)$/.test(n) || t.indexOf('word') >= 0 || t.indexOf('msword') >= 0) return { key: 'word', label: 'WORD' };
+      if (/\.(png|jpe?g|gif|webp)$/.test(n) || t.indexOf('image/') === 0) return { key: 'image', label: '画像' };
+      return { key: 'file', label: 'FILE' };
+    }
+
+    function fileKind(name, type) {
+      return fileMeta(name, type, '').label;
+    }
+
+    function collectGoogleLinks(item) {
+      var chunks = [item && item.subject, item && item.snippet];
+      ((item && item.messages) || []).forEach(function (m) { chunks.push(m.snippet); });
+      var text = chunks.join(' ');
+      var re = /https?:\/\/(?:docs\.google\.com\/(?:forms|presentation|spreadsheets)[^ \s<>"'）)]*|forms\.gle\/[^ \s<>"'）)]*)/gi;
+      var found = text.match(re) || [];
+      var seen = {};
+      var out = [];
+      found.forEach(function (raw) {
+        var url = String(raw).replace(/[).,，、]+$/, '');
+        if (seen[url]) return;
+        seen[url] = true;
+        var meta = fileMeta('', '', url);
+        var label = meta.label === 'FORM' ? 'Googleフォーム' : meta.label === 'SLIDE' ? 'Googleスライド' : 'Googleスプレッドシート';
+        out.push({ url: url, name: label, meta: meta });
+      });
+      return out;
+    }
+
+    function fileRowHtml(kind, name, extra) {
+      return '<div class="file">' +
+        '<span class="kind kind-' + esc(kind.key) + '">' + esc(kind.label) + '</span>' +
+        '<b>' + esc(name) + '</b>' + extra +
+        '</div>';
+    }
+
+    function formatSize(n) {
+      n = Number(n || 0);
+      if (n < 1024) return n + 'B';
+      if (n < 1024 * 1024) return Math.round(n / 1024) + 'KB';
+      return (n / (1024 * 1024)).toFixed(1) + 'MB';
+    }
+
+    function loadThreadFiles(item) {
+      var el = document.getElementById('files-list');
+      if (!el || !item) return;
+      var links = collectGoogleLinks(item);
+      function paint(files) {
+        var html = (files || []).map(function (f) {
+          var kind = fileMeta(f.name, f.type, '');
+          return fileRowHtml(kind, f.name + (f.size ? '　' + formatSize(f.size) : ''),
+            '<button type="button" data-act="file-open" data-thread="' + esc(item.threadId || '') + '" data-mid="' + esc(f.messageId) + '" data-idx="' + String(f.index) + '">開く</button>' +
+            '<button type="button" data-act="file-dl" data-thread="' + esc(item.threadId || '') + '" data-mid="' + esc(f.messageId) + '" data-idx="' + String(f.index) + '">DL</button>');
+        }).join('');
+        html += links.map(function (g) {
+          return fileRowHtml(g.meta, g.name,
+            '<a href="' + esc(g.url) + '" target="_blank" rel="noopener">開く</a>');
+        }).join('');
+        el.innerHTML = html || '添付はありません';
+      }
+      if (!item.threadId) {
+        paint([]);
+        return;
+      }
+      var req = ++fileReq;
+      fetch(FILES_API + '?threadId=' + encodeURIComponent(item.threadId))
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (req !== fileReq) return;
+          if (!data || !data.ok) {
+            paint([]);
+            if (data && data.message) el.insertAdjacentHTML('afterbegin', '<div class="file"><b>' + esc(data.message) + '</b></div>');
+            return;
+          }
+          paint(data.files || []);
+        })
+        .catch(function () {
+          if (req !== fileReq) return;
+          paint([]);
+        });
+    }
+
+    function b64ToBlob(b64, type) {
+      var bin = atob(b64);
+      var bytes = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return new Blob([bytes], { type: type || 'application/octet-stream' });
+    }
+
+    function renderExcelPreview(blob, preview) {
+      if (typeof XLSX === 'undefined') {
+        preview.innerHTML = '<div class="file-note">表の表示用ライブラリを読み込めませんでした。DLで保存してください。</div>';
+        return;
+      }
+      blob.arrayBuffer().then(function (buf) {
+        var wb = XLSX.read(new Uint8Array(buf), { type: 'array' });
+        var names = wb.SheetNames || [];
+        if (!names.length) {
+          preview.innerHTML = '<div class="file-note">シートが空です。</div>';
+          return;
+        }
+        preview.innerHTML =
+          '<div class="sheet-tabs">' +
+          names.map(function (n, i) {
+            return '<button type="button" class="sheet-tab' + (i === 0 ? ' on' : '') + '" data-sheet="' + i + '">' + esc(n) + '</button>';
+          }).join('') +
+          '</div><div class="sheet-view" id="sheet-view"></div>';
+        function paint(i) {
+          var view = document.getElementById('sheet-view');
+          if (!view) return;
+          view.innerHTML = XLSX.utils.sheet_to_html(wb.Sheets[names[i]] || {}, { header: '', footer: '' });
+        }
+        paint(0);
+        var tabs = preview.querySelector('.sheet-tabs');
+        if (tabs) {
+          tabs.addEventListener('click', function (e) {
+            var b = e.target.closest ? e.target.closest('[data-sheet]') : null;
+            if (!b) return;
+            preview.querySelectorAll('.sheet-tab').forEach(function (x) { x.classList.toggle('on', x === b); });
+            paint(Number(b.getAttribute('data-sheet')));
+          });
+        }
+      }).catch(function () {
+        preview.innerHTML = '<div class="file-note">Excelを画面内で開けませんでした。DLで保存してください。</div>';
+      });
+    }
+
+    function showInAppPreview(blob, name, type) {
+      var preview = document.getElementById('file-preview');
+      if (!preview) return;
+      preview.innerHTML = '';
+      var kind = fileMeta(name, type, '').key;
+      if (kind === 'image') {
+        preview.innerHTML = '<img alt="" src="' + URL.createObjectURL(blob) + '">';
+        status.textContent = '画像を表示';
+        return;
+      }
+      if (kind === 'pdf') {
+        preview.innerHTML = '<iframe title="pdf" src="' + URL.createObjectURL(blob) + '"></iframe>';
+        status.textContent = 'PDFを表示';
+        return;
+      }
+      if (kind === 'excel' || kind === 'sheet') {
+        status.textContent = 'Excelを表示';
+        renderExcelPreview(blob, preview);
+        return;
+      }
+      preview.innerHTML = '<div class="file-note">「' + esc(name || 'このファイル') + '」はアプリ内プレビューに未対応です。右の DL で保存してください。</div>';
+      status.textContent = 'プレビュー不可';
+    }
+
+    function fetchVendorFile(btn, asDownload) {
+      var threadId = btn.getAttribute('data-thread') || '';
+      var messageId = btn.getAttribute('data-mid') || '';
+      var index = btn.getAttribute('data-idx') || '0';
+      status.textContent = asDownload ? 'ダウンロード中' : '添付を開いています';
+      var url = FILE_API + '?threadId=' + encodeURIComponent(threadId) +
+        '&messageId=' + encodeURIComponent(messageId) +
+        '&index=' + encodeURIComponent(index);
+      fetch(url).then(function (r) { return r.json(); }).then(function (data) {
+        if (!data || !data.ok || !data.data) {
+          status.textContent = (data && data.message) || '添付を開けません';
+          window.alert(status.textContent);
+          return;
+        }
+        var blob = b64ToBlob(data.data, data.type);
+        if (asDownload) {
+          var a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = data.name || '添付';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          status.textContent = 'ダウンロードしました';
+          return;
+        }
+        showInAppPreview(blob, data.name, data.type);
+      }).catch(function (err) {
+        status.textContent = '添付エラー';
+        window.alert(String(err && err.message ? err.message : err));
+      });
+    }
+
+    function boot() {
+      inbox = loadJson(IN_KEY, []).filter(function (item) { return item.company !== 'amazon'; });
+      wip = loadJson(WIP_KEY, []).filter(function (item) { return item.company !== 'amazon'; });
+      hidden = loadJson(HIDE_KEY, {});
+      openGroups = loadJson(OPEN_KEY, {});
+      notes = loadJson(NOTE_KEY, {});
+      render();
+      sync(false);
+    }
+
+    function newestSince_(company) {
+      var max = '';
+      inbox.concat(wip).forEach(function (item) {
+        if ((item.company || '') !== company) return;
+        var d = String(item.lastDate || '');
+        if (d > max) max = d;
+      });
+      if (!max) return '14d';
+      return max.slice(0, 10);
+    }
+
+    function fetchCompany(company, full) {
+      var pin = pins()[company] || '';
+      var url = API + '?company=' + encodeURIComponent(company);
+      if (pin) url += '&email=' + encodeURIComponent(pin);
+      url += '&since=' + encodeURIComponent(full ? '5m' : newestSince_(company));
+      return fetch(url).then(function (r) { return r.json(); });
+    }
+
+    function companyHasWip(company) {
+      for (var i = 0; i < wip.length; i++) if (wip[i].company === company) return true;
+      return false;
+    }
+
+    function moveCompany(fromArr, toArr, company) {
+      var n = 0;
+      var rest = [];
+      fromArr.forEach(function (row) {
+        if ((row.company || '') === company) {
+          upsert(toArr, row);
+          n += 1;
+        } else {
+          rest.push(row);
+        }
+      });
+      fromArr.length = 0;
+      rest.forEach(function (row) { fromArr.push(row); });
+      return n;
+    }
+
+    function ingest(items) {
+      (items || []).forEach(function (item) {
+        if (!item || (!item.subject && !item.lastDate)) return;
+        if ((!item.contacts || !item.contacts.length) && CONTACTS[item.company]) {
+          item.contacts = CONTACTS[item.company];
+        }
+        var k = keyOf(item);
+        if (hidden[k]) return;
+        if (findByKey(wip, k) >= 0 || companyHasWip(item.company)) {
+          upsert(wip, item);
+          return;
+        }
+        upsert(inbox, item);
+      });
+    }
+
+    function setSyncBusy(busy) {
+      if (syncNewBtn) syncNewBtn.disabled = !!busy;
+      if (syncFullBtn) syncFullBtn.disabled = !!busy;
+      if (status) status.className = 'status' + (busy ? ' busy' : '');
+    }
+
+    function setSyncHint(text) {
+      if (syncHint) syncHint.textContent = text;
+    }
+
+    function sync(full) {
+      if (syncNewBtn && syncNewBtn.disabled) return;
+      setSyncBusy(true);
+      if (full) inbox = [];
+      var errors = [];
+      var done = 0;
+      var next = 0;
+      var running = 0;
+      function finish() {
+        saveAll();
+        render();
+        status.textContent = errors.length
+          ? (full ? '5か月（一部失敗）' : '新着（一部失敗）')
+          : (full ? '5か月を取り込みました' : '新着を確認しました');
+        setSyncHint(full ? '過去も含めて取り直した' : '起動時・新着は差分のみ');
+        setSyncBusy(false);
+      }
+      function kick() {
+        while (running < 3 && next < COMPANIES.length) {
+          running += 1;
+          (function (company) {
+            status.textContent = (full ? '5か月 ' : '新着 ') + (done + 1) + '/' + COMPANIES.length + '　' + company;
+            fetchCompany(company, full)
+              .then(function (data) {
+                ingest(data && data.items && data.items.length ? data.items : (data && data.item ? [data.item] : []));
+                if (!data || !data.ok) errors.push(company);
+                render();
+              })
+              .catch(function () {
+                errors.push(company);
+              })
+              .then(function () {
+                running -= 1;
+                done += 1;
+                if (done >= COMPANIES.length) finish();
+                else kick();
+              });
+          })(COMPANIES[next++]);
+        }
+      }
+      kick();
+    }
+
+    document.getElementById('tab-wip').addEventListener('click', function () { tab = 'wip'; selected = ''; render(); });
+    document.getElementById('tab-in').addEventListener('click', function () { tab = 'in'; selected = ''; render(); });
+    listEl.addEventListener('click', function (e) {
+      var head = e.target.closest ? e.target.closest('.ghead') : null;
+      if (head) {
+        var co = head.getAttribute('data-co') || '';
+        openGroups[co] = openGroups[co] === false;
+        saveAll();
+        render();
+        return;
+      }
+      var row = e.target.closest ? e.target.closest('.row') : null;
+      if (!row) return;
+      selected = row.getAttribute('data-key') || '';
+      render();
+    });
+    detailEl.addEventListener('input', function (e) {
+      if (e.target && e.target.id === 'wip-note' && selected) {
+        notes[selected] = e.target.value;
+        localStorage.setItem(NOTE_KEY, JSON.stringify(notes));
+      }
+    });
+    function threadSnippet(item) {
+      var msgs = item.messages && item.messages.length ? item.messages : [{ snippet: item.snippet, from: item.from, date: item.lastDate }];
+      return msgs.map(function (m) {
+        return String(m.date || '') + ' ' + String(m.from || '') + '\n' + String(m.snippet || '');
+      }).join('\n\n').slice(0, 1200);
+    }
+
+    function gmailComposeUrl(item, body) {
+      var to = String(item.emails || '').split(',')[0].trim();
+      var su = String(item.subject || '');
+      if (su && !/^re:/i.test(su)) su = 'Re: ' + su;
+      var url = 'https://mail.google.com/mail/?view=cm&fs=1';
+      if (to) url += '&to=' + encodeURIComponent(to);
+      if (su) url += '&su=' + encodeURIComponent(su);
+      if (body) url += '&body=' + encodeURIComponent(body.slice(0, 1800));
+      return url;
+    }
+
+    function makeDraft(item) {
+      var box = document.getElementById('draft-box');
+      var ta = document.getElementById('draft-text');
+      var gmail = document.getElementById('draft-gmail');
+      if (!box || !ta) return;
+      box.hidden = false;
+      ta.value = '作成中…';
+      status.textContent = 'ひな形を作成中';
+      fetch(REPLY_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          company: item.company || '',
+          subject: item.subject || '',
+          snippet: threadSnippet(item)
+        })
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          var text = (data && data.draft) ? String(data.draft) : '';
+          if (!text) {
+            status.textContent = (data && data.message) || 'ひな形に失敗';
+            ta.value = '';
+            return;
+          }
+          ta.value = text;
+          if (gmail) gmail.href = gmailComposeUrl(item, text);
+          status.textContent = data.source === 'ai' ? 'ひな形（AI）' : 'ひな形（定型）';
+        })
+        .catch(function (err) {
+          ta.value = '';
+          status.textContent = 'ひな形エラー';
+          window.alert(String(err && err.message ? err.message : err));
+        });
+    }
+
+    detailEl.addEventListener('click', function (e) {
+      var btn = e.target.closest ? e.target.closest('[data-act]') : null;
+      if (!btn) return;
+      var act = btn.getAttribute('data-act');
+      var rows = currentList();
+      var item = null;
+      for (var i = 0; i < rows.length; i++) if (keyOf(rows[i]) === selected) item = rows[i];
+      if (!item) return;
+      var k = keyOf(item);
+      if (act === 'draft') {
+        makeDraft(item);
+        return;
+      }
+      if (act === 'file-open') {
+        fetchVendorFile(btn, false);
+        return;
+      }
+      if (act === 'file-dl') {
+        fetchVendorFile(btn, true);
+        return;
+      }
+      if (act === 'copy') {
+        var ta = document.getElementById('draft-text');
+        var text = ta ? ta.value : '';
+        if (!text) return;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text);
+          status.textContent = 'コピーした';
+        }
+        return;
+      }
+      if (act === 'wip') {
+        var nWip = moveCompany(inbox, wip, item.company);
+        tab = 'wip';
+        selected = k;
+        status.textContent = (item.company || '') + ' を対応中（' + nWip + '件）';
+      } else if (act === 'inbox') {
+        var nBack = moveCompany(wip, inbox, item.company);
+        tab = 'in';
+        selected = k;
+        status.textContent = (item.company || '') + ' を受信に戻した（' + nBack + '件）';
+      } else if (act === 'hide') {
+        hidden[k] = true;
+        removeKey(inbox, k);
+        removeKey(wip, k);
+        selected = '';
+      }
+      saveAll();
+      render();
+    });
+    if (syncNewBtn) syncNewBtn.addEventListener('click', function () { sync(false); });
+    if (syncFullBtn) syncFullBtn.addEventListener('click', function () { sync(true); });
+    boot();
+  </script>
+</body>
+</html>

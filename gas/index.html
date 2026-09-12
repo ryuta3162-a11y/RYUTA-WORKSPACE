@@ -221,6 +221,168 @@
     }
     .tab-btn:hover:not(.active) { color: #a1a1aa; }
 
+    .ops-tabs {
+      display: flex;
+      gap: 6px;
+    }
+    .ops-tab {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      color: #737373;
+      padding: 6px 12px;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      background: transparent;
+      cursor: pointer;
+    }
+    .ops-tab.active {
+      color: #fafafa;
+      background: rgba(255,255,255,0.10);
+      border-color: rgba(255,255,255,0.16);
+    }
+    .ops-form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+    .ops-form-grid .span-2 { grid-column: 1 / -1; }
+    .ops-list {
+      flex: 1 1 0;
+      min-height: 0;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+    .ops-card {
+      background: #111111;
+      border: 1px solid #2a2a2a;
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      cursor: pointer;
+    }
+    .ops-card:hover {
+      border-color: #525252;
+      background: #161616;
+    }
+    .ops-card-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .ops-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: #f5f5f5;
+      line-height: 1.4;
+    }
+    .ops-row {
+      font-size: 11px;
+      color: #a3a3a3;
+      margin-top: 4px;
+      line-height: 1.45;
+    }
+    .ops-row b {
+      color: #d4d4d4;
+      font-weight: 600;
+    }
+    .ops-links {
+      display: flex;
+      gap: 8px;
+      margin-top: 6px;
+      flex-wrap: wrap;
+    }
+    .ops-links a {
+      font-size: 10px;
+      font-weight: 700;
+      color: #e5e5e5;
+      text-decoration: none;
+      border: 1px solid #404040;
+      border-radius: 999px;
+      padding: 2px 8px;
+      background: #1a1a1a;
+    }
+    .ops-status {
+      flex-shrink: 0;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      padding: 3px 8px;
+      border-radius: 999px;
+      border: 1px solid #525252;
+      background: #1f1f1f;
+      color: #e5e5e5;
+      cursor: pointer;
+    }
+    .ops-empty {
+      font-size: 12px;
+      color: #737373;
+      padding: 24px 8px;
+      text-align: center;
+    }
+    .ops-page-tabs {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    .ops-page-tab {
+      flex: 1;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 7px 8px;
+      border-radius: 8px;
+      border: 1px solid #2a2a2a;
+      background: #111;
+      color: #737373;
+      cursor: pointer;
+    }
+    .ops-page-tab.active {
+      background: #f5f5f5;
+      color: #111;
+      border-color: #f5f5f5;
+    }
+    .ops-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .ops-chip {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 6px 8px;
+      border-radius: 999px;
+      border: 1px solid #3f3f3f;
+      background: #171717;
+      color: #d4d4d4;
+      cursor: pointer;
+    }
+    .ops-chip.active {
+      background: #f5f5f5;
+      color: #111;
+      border-color: #f5f5f5;
+    }
+    .ops-amount-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(0,0,0,0.45);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 10px;
+      padding: 0 10px;
+    }
+    .ops-amount-wrap span {
+      color: #a3a3a3;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .ops-amount-wrap input {
+      border: 0;
+      background: transparent;
+      box-shadow: none;
+      padding-left: 0;
+    }
+
     .iframe-wrapper {
       width: 100%;
       height: 100%;
@@ -724,13 +886,49 @@
       </div>
     </div>
 
-    <div class="pro-panel" id="panel-cal">
-      <button type="button" class="focus-btn" onclick="toggleFocus('panel-cal')" title="Fullscreen">
+    <div class="pro-panel" id="panel-ops">
+      <button type="button" class="focus-btn" onclick="toggleFocus('panel-ops')" title="Fullscreen">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
       </button>
-      <div class="iframe-wrapper">
-        <!-- 差し替え: 埋め込みカレンダー URL -->
-        <iframe title="Calendar" src="https://calendar.google.com/calendar/embed?src=r-kusaka%40okamoto-group.co.jp&mode=AGENDA&color=%23333333&showTitle=0&showNav=1&showDate=1&showPrint=0&showTabs=0&showCalendars=0&showTz=0&bgcolor=%23101010" class="w-full h-full border-0" scrolling="no"></iframe>
+      <div class="px-4 py-3 flex justify-between items-center flex-none border-b border-white/[0.06] relative z-30 gap-2">
+        <div class="ops-tabs">
+          <button type="button" id="ops-tab-ringi" class="ops-tab active" onclick="switchOpsTab('ringi')">稟議申請</button>
+          <button type="button" id="ops-tab-repair" class="ops-tab" onclick="switchOpsTab('repair')">修繕・備品</button>
+        </div>
+      </div>
+      <div class="flex-1 min-h-0 flex flex-col px-3 py-3 relative z-10">
+        <div class="ops-page-tabs flex-none">
+          <button type="button" id="ops-page-view" class="ops-page-tab active" onclick="switchOpsPage('view')">閲覧</button>
+          <button type="button" id="ops-page-add" class="ops-page-tab" onclick="switchOpsPage('add')">追加</button>
+        </div>
+        <div id="ops-view-page" class="flex-1 min-h-0 flex flex-col">
+          <div id="ops-list" class="ops-list"></div>
+        </div>
+        <form id="ops-form" class="hidden flex-1 min-h-0 overflow-y-auto ops-form-grid" onsubmit="addOpsItem(event)">
+          <input id="ops-title-input" class="pro-input span-2" type="text" autocomplete="off" placeholder="件名（例: ケーブル修繕）" />
+          <div class="span-2">
+            <div class="text-[10px] text-zinc-500 mb-1">会社（タップで選択）</div>
+            <div id="ops-company-chips" class="ops-chips"></div>
+            <input id="ops-company-input" class="pro-input mt-2" type="text" autocomplete="off" placeholder="一覧にない会社はここに入力" />
+          </div>
+          <div class="ops-amount-wrap span-2">
+            <span>¥</span>
+            <input id="ops-amount-input" class="pro-input" type="number" inputmode="numeric" min="0" step="1" placeholder="金額（数字のみ）" />
+          </div>
+          <input id="ops-reply-input" class="pro-input" type="text" inputmode="numeric" autocomplete="off" placeholder="返答日（例: 8/20）" />
+          <select id="ops-status-input" class="pro-input" style="padding: 8px 10px;">
+            <option value="未着手">未着手</option>
+            <option value="メール送信済">メール送信済</option>
+            <option value="返答待ち">返答待ち</option>
+            <option value="稟議中">稟議中</option>
+            <option value="発注済">発注済</option>
+            <option value="完了">完了</option>
+          </select>
+          <input id="ops-mail-input" class="pro-input span-2" type="url" autocomplete="off" placeholder="メールURL" />
+          <input id="ops-product-input" class="pro-input span-2" type="url" autocomplete="off" placeholder="商品URL" />
+          <input id="ops-stuck-input" class="pro-input span-2" type="text" autocomplete="off" placeholder="止まっているところ（例: メーカー返答待ち）" />
+          <button type="submit" id="ops-submit-btn" class="span-2 text-[11px] font-semibold tracking-wide text-black bg-white hover:bg-zinc-200 px-4 py-2.5 rounded-lg border border-white">保存して閲覧へ</button>
+        </form>
       </div>
     </div>
 
@@ -1829,6 +2027,218 @@
       if (e.target === cmdOverlay) closeCmdPalette();
     });
 
+    var OPS_STORAGE_KEY = 'ryuta_ops_board_v2';
+    var OPS_STATUSES = ['未着手', 'メール送信済', '返答待ち', '稟議中', '発注済', '完了'];
+    var OPS_COMPANIES = ['SEKAI', 'Lifefitness', 'LIXIL', 'BICS', 'amazon', '鳳商事', 'アイリスオーヤマ', 'KH', '藤ビル', 'メトス', 'プロアバンセ', 'technogym'];
+    var opsTab = 'ringi';
+    var opsPage = 'view';
+    var opsEditId = null;
+    var opsItems = loadOpsItems_();
+
+    function loadOpsItems_() {
+      try {
+        var raw = JSON.parse(localStorage.getItem(OPS_STORAGE_KEY) || '[]');
+        return Array.isArray(raw) ? raw : [];
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function saveOpsItems_() {
+      try {
+        localStorage.setItem(OPS_STORAGE_KEY, JSON.stringify(opsItems));
+      } catch (e) {}
+    }
+
+    function val_(id) {
+      var el = document.getElementById(id);
+      return el ? String(el.value || '').trim() : '';
+    }
+
+    function switchOpsTab(tab) {
+      opsTab = tab === 'repair' ? 'repair' : 'ringi';
+      var t1 = document.getElementById('ops-tab-ringi');
+      var t2 = document.getElementById('ops-tab-repair');
+      if (t1) t1.classList.toggle('active', opsTab === 'ringi');
+      if (t2) t2.classList.toggle('active', opsTab === 'repair');
+      switchOpsPage('view');
+    }
+
+    function setOpsSubmitLabel_() {
+      var btn = document.getElementById('ops-submit-btn');
+      if (btn) btn.textContent = opsEditId ? '更新して閲覧へ' : '保存して閲覧へ';
+      var addBtn = document.getElementById('ops-page-add');
+      if (addBtn) addBtn.textContent = opsEditId ? '修正' : '追加';
+    }
+
+    function clearOpsForm_() {
+      opsEditId = null;
+      ['ops-title-input', 'ops-company-input', 'ops-amount-input', 'ops-reply-input', 'ops-mail-input', 'ops-product-input', 'ops-stuck-input'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.value = '';
+      });
+      var statusEl = document.getElementById('ops-status-input');
+      if (statusEl) statusEl.value = '未着手';
+      setOpsSubmitLabel_();
+    }
+
+    function switchOpsPage(page) {
+      if (page === 'add' && opsPage === 'view' && !opsEditId) clearOpsForm_();
+      if (page === 'view') opsEditId = opsEditId;
+      opsPage = page === 'add' ? 'add' : 'view';
+      var viewBtn = document.getElementById('ops-page-view');
+      var addBtn = document.getElementById('ops-page-add');
+      var viewPage = document.getElementById('ops-view-page');
+      var form = document.getElementById('ops-form');
+      if (viewBtn) viewBtn.classList.toggle('active', opsPage === 'view');
+      if (addBtn) addBtn.classList.toggle('active', opsPage === 'add');
+      if (viewPage) viewPage.classList.toggle('hidden', opsPage !== 'view');
+      if (form) {
+        form.classList.toggle('hidden', opsPage !== 'add');
+        if (opsPage === 'add') renderOpsCompanyChips();
+      }
+      if (opsPage === 'view') {
+        opsEditId = null;
+        setOpsSubmitLabel_();
+        renderOpsList();
+      }
+    }
+
+    function renderOpsCompanyChips() {
+      var wrap = document.getElementById('ops-company-chips');
+      if (!wrap) return;
+      var current = val_('ops-company-input');
+      wrap.innerHTML = OPS_COMPANIES.map(function (name) {
+        var active = current === name ? ' active' : '';
+        return '<button type="button" class="ops-chip' + active + '" onclick="selectOpsCompany(\'' + name.replace(/'/g, "\\'") + '\')">' + escapeHtml(name) + '</button>';
+      }).join('');
+    }
+
+    function selectOpsCompany(name) {
+      var input = document.getElementById('ops-company-input');
+      if (input) input.value = name;
+      renderOpsCompanyChips();
+    }
+
+    function setOpsField_(id, value) {
+      var el = document.getElementById(id);
+      if (el) el.value = value == null ? '' : String(value);
+    }
+
+    function editOpsItem(id) {
+      var item = null;
+      for (var i = 0; i < opsItems.length; i++) {
+        if (opsItems[i].id === id) {
+          item = opsItems[i];
+          break;
+        }
+      }
+      if (!item) return;
+      opsEditId = id;
+      setOpsField_('ops-title-input', item.title);
+      setOpsField_('ops-company-input', item.company);
+      setOpsField_('ops-amount-input', item.amount);
+      setOpsField_('ops-reply-input', item.replyDate);
+      setOpsField_('ops-mail-input', item.mailUrl);
+      setOpsField_('ops-product-input', item.productUrl);
+      setOpsField_('ops-stuck-input', item.stuckAt);
+      setOpsField_('ops-status-input', item.status || '未着手');
+      setOpsSubmitLabel_();
+      switchOpsPage('add');
+    }
+
+    function addOpsItem(event) {
+      if (event) event.preventDefault();
+      var title = val_('ops-title-input');
+      if (!title) return;
+      var payload = {
+        kind: opsTab,
+        title: title,
+        company: val_('ops-company-input'),
+        amount: val_('ops-amount-input'),
+        replyDate: val_('ops-reply-input'),
+        mailUrl: val_('ops-mail-input'),
+        productUrl: val_('ops-product-input'),
+        stuckAt: val_('ops-stuck-input'),
+        status: val_('ops-status-input') || '未着手',
+      };
+      if (opsEditId) {
+        for (var i = 0; i < opsItems.length; i++) {
+          if (opsItems[i].id === opsEditId) {
+            opsItems[i] = Object.assign({}, opsItems[i], payload);
+            break;
+          }
+        }
+      } else {
+        payload.id = Date.now();
+        payload.createdAt = new Date().toISOString().slice(0, 10);
+        opsItems.unshift(payload);
+      }
+      saveOpsItems_();
+      clearOpsForm_();
+      switchOpsPage('view');
+    }
+
+    function cycleOpsStatus(id) {
+      for (var i = 0; i < opsItems.length; i++) {
+        if (opsItems[i].id === id) {
+          var idx = OPS_STATUSES.indexOf(opsItems[i].status);
+          opsItems[i].status = OPS_STATUSES[(idx + 1) % OPS_STATUSES.length];
+          break;
+        }
+      }
+      saveOpsItems_();
+      renderOpsList();
+    }
+
+    function removeOpsItem(id) {
+      opsItems = opsItems.filter(function (item) { return item.id !== id; });
+      saveOpsItems_();
+      renderOpsList();
+    }
+
+    function opsLink_(url, label) {
+      if (!url) return '';
+      return '<a href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer">' + label + '</a>';
+    }
+
+    function renderOpsList() {
+      var list = document.getElementById('ops-list');
+      if (!list) return;
+      var filtered = opsItems.filter(function (item) { return item.kind === opsTab; });
+      if (!filtered.length) {
+        list.innerHTML =
+          '<div class="ops-empty">' +
+          (opsTab === 'ringi' ? '稟議申請はまだありません' : '修繕・備品はまだありません') +
+          '<div class="mt-3"><button type="button" class="ops-page-tab active" style="width:auto;display:inline-block;padding:8px 14px;" onclick="switchOpsPage(\'add\')">追加する</button></div>' +
+          '</div>';
+        return;
+      }
+      list.innerHTML = filtered.map(function (item) {
+        var lines = '';
+        if (item.company) lines += '<div class="ops-row"><b>会社</b> ' + escapeHtml(item.company) + '</div>';
+        if (item.amount) lines += '<div class="ops-row"><b>金額</b> ¥' + escapeHtml(String(item.amount)) + '</div>';
+        if (item.replyDate) lines += '<div class="ops-row"><b>返答</b> ' + escapeHtml(item.replyDate) + '</div>';
+        if (item.stuckAt) lines += '<div class="ops-row"><b>停止</b> ' + escapeHtml(item.stuckAt) + '</div>';
+        var links = opsLink_(item.mailUrl, 'メール') + opsLink_(item.productUrl, '商品');
+        return (
+          '<div class="ops-card" onclick="editOpsItem(' + item.id + ')">' +
+            '<div class="ops-card-top">' +
+              '<div class="min-w-0">' +
+                '<div class="ops-title">' + escapeHtml(item.title) + '</div>' +
+              '</div>' +
+              '<button type="button" class="ops-status" onclick="event.stopPropagation(); cycleOpsStatus(' + item.id + ')">' +
+                escapeHtml(item.status || '未着手') +
+              '</button>' +
+            '</div>' +
+            lines +
+            (links ? '<div class="ops-links" onclick="event.stopPropagation()">' + links + '</div>' : '') +
+            '<button type="button" onclick="event.stopPropagation(); removeOpsItem(' + item.id + ')" class="text-[10px] text-zinc-500 hover:text-zinc-300 mt-2">削除</button>' +
+          '</div>'
+        );
+      }).join('');
+    }
+
     window.onload = function () {
       renderAppLinks();
       loadDataFromGAS();
@@ -1837,6 +2247,7 @@
       fillMainEditorsFromState_();
       setupAiMascotClick();
       setupTaxMascot();
+      switchOpsTab('ringi');
       setSyncStatus(typeof google !== 'undefined' && google.script ? '…' : 'LOCAL', '');
       setTimeout(randomMascotAction, 2200);
       var mainKansou = document.getElementById('kansou-main-input');

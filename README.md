@@ -1,31 +1,27 @@
-# RYUTA Workspace — GAS × Vercel × GitHub
+# RS-LOG — 稟議・修繕・日報 PWA
 
-業務日報を **AI で自動生成**し、**Gmail 下書き**（経堂数値つき）まで届ける構成です。
+PC 向けの黒背景アプリ。Chrome の「アプリをインストール」で追加できます。
 
 ## 構成
 
 ```
-  GitHub ──push──► Vercel (web/)
+  GitHub ──push──► Vercel (web/)  = RS-LOG PWA
                       │
-                      │ トップ / = iframe で GAS Workspace 表示
+                      │ 日報下書き API
                       ▼
-                 GAS Web App (gas/index.html + Code.gs)
-                      │
-                      ├── 4分割 UI・日報ボタン（いつもの画面）
-                      └── API（/nippo 用・dayContext など）
+                 GAS Web App (Gmail / カレンダー / スプシ)
 ```
 
 | URL | 画面 |
 |-----|------|
-| `vercel.app/` | **GAS Workspace へリダイレクト**（4分割・iframe 不可のため） |
-| `vercel.app/nippo` | 日報だけ作る簡易版（補助） |
-| GAS `/exec` 直リンク | 上と同じ Workspace |
+| `vercel.app/` | **RS-LOG**（稟議申請・修繕備品・日報） |
+| `vercel.app/nippo` | 日報だけの簡易版 |
+| GAS `/exec` | 従来の 4 分割 Workspace |
 
 | 役割 | 場所 |
 |------|------|
-| メイン UI | `gas/index.html`（Vercel から iframe 表示） |
+| メイン UI | `web/`（PWA） |
 | 日報・スプシ・Gmail | `gas/Code.gs` |
-| Vercel | ドメイン・`/nippo`・API プロキシ |
 
 ## セットアップ
 
@@ -62,9 +58,9 @@ GitHub リポジトリを Vercel に接続 → Root Directory を **`web`** に�
 
 ### 3. 動作確認
 
-1. `https://あなたの-vercel.app/` を開く
-2. **AI で業務・所感を生成** → カレンダー・Workspace をもとに文章化
-3. 編集 → **Gmail に下書き作成** → GAS が経堂数値表を付けて下書き
+1. `https://ryuta-workspace.vercel.app/` を開く
+2. Chrome で「アプリをインストール」→ デスクトップに RS-LOG
+3. 稟議 / 修繕を登録。日報タブから Gmail 下書き
 
 API 単体テスト:
 
@@ -77,7 +73,7 @@ API 単体テスト:
 |------|------|
 | `gas/Code.gs` | GAS 本番用（`dayContext` API 含む） |
 | `gas/index.html` | 従来 Workspace UI |
-| `web/` | Next.js 日報スタジオ |
+| `web/` | RS-LOG PWA（稟議・修繕・日報） |
 | `Code.gs` / `index.html`（ルート） | 開発用コピー（`gas/` と同期推奨） |
 
 ## 今後の拡張

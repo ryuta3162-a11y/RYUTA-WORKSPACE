@@ -8,10 +8,17 @@ export type DayContext = {
   date: string;
   timezone: string;
   calendarEvents: Array<{
+    id?: string;
     title: string;
     start: string;
     end: string;
     isAllDay: boolean;
+    location?: string;
+    description?: string;
+    guests?: string[];
+    organizer?: string;
+    myStatus?: string;
+    meetUrl?: string;
   }>;
   workspace: {
     ok: boolean;
