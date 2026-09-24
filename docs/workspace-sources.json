@@ -88,7 +88,7 @@
       "role": "store_ops_read_only_from_workspace",
       "sourceSheets": ["日報", "OP集計"],
       "workspaceSheet": "経堂マスタ",
-      "sync": "日報C13/C15 + hidden IMPORTRANGE OP集計!A1:E18 and OP集計!I:N (利用開始合計)",
+      "sync": "日報C13/C15 + hidden IMPORTRANGE OP集計!A1:E18 and QUERY(OP集計!I:N Col1/Col3/Col5)",
       "setupApi": "setupAllData",
       "notes": "受付状況表は変更しない。経堂マスタは司令塔のみ。OPは16種+合計。名簿・OP明細の全行は載せない。"
     },
