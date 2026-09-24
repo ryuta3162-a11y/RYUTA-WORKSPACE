@@ -76,7 +76,7 @@
       ],
       "sync": "IMPORTRANGE",
       "setupApi": "setupMachineImport",
-      "notes": "Same sheet names. Hub 入会者一覧 mirrors A:E only (mail flags D/E). F/G stay on the source book. One-way IMPORTRANGE."
+      "notes": "setupMachineImport_ styles source and hub the same (green header, widths, D/E checkboxes). Hub 入会者 is A:E; source F/G hidden not deleted. Values follow via IMPORTRANGE."
     }
   ],
   "workspaceNativeSheets": [
