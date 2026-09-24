@@ -1041,8 +1041,6 @@ function styleAllDataSheet_(sheet) {
   }
 }
 
-}
-
 var KYODO_TREND_SOURCE_ID_ = '1LOOUG97wuiKbhzl0BjJstXgLaaSCZAKNFdD8P3I5x_o';
 var KYODO_TREND_SOURCE_SHEET_ = '経堂';
 var KYODO_TREND_DEST_SHEET_ = '【経堂】会員動向';
