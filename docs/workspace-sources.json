@@ -1,0 +1,87 @@
+{
+  "updated": "2026-09-24",
+  "purpose": "RYUTA Workspace aggregation hub — shared spreadsheet IDs and sync map for handoff",
+  "hub": {
+    "name": "RYUTA Workspace",
+    "spreadsheetId": "1deuG2zYdIMegMnCCT7lVl4AD7J75K8KisEsH2NVH10Q",
+    "url": "https://docs.google.com/spreadsheets/d/1deuG2zYdIMegMnCCT7lVl4AD7J75K8KisEsH2NVH10Q/edit"
+  },
+  "gas": {
+    "scriptId": "1YjNLFjfLFNYM2Pyt248fGd90QW9wOKvAYJu-CKxHHTRobtZQNAxlobjp",
+    "localRoot": "gas-remote",
+    "serverFile": "gas-remote/r.js",
+    "webAppExec": "https://script.google.com/macros/s/AKfycbzMELimQThNdPUShwo2_KBzJd8kGy9BNdRyOYNgu_sg41t2SleVRiWXFztZJ48e2l9L/exec",
+    "deploymentId": "AKfycbzMELimQThNdPUShwo2_KBzJd8kGy9BNdRyOYNgu_sg41t2SleVRiWXFztZJ48e2l9L",
+    "setupApis": [
+      "setupPromoImport",
+      "setupReviewImport",
+      "setupMachineImport",
+      "listSheets",
+      "inspectBook",
+      "rebuildUrlIndex"
+    ]
+  },
+  "sources": [
+    {
+      "key": "promo",
+      "name": "JOYFIT24経堂追加販促",
+      "spreadsheetId": "1w7ExndmZn7t2_z55CvxRDMZy4QAcuEyNhIuj-6sUy3E",
+      "url": "https://docs.google.com/spreadsheets/d/1w7ExndmZn7t2_z55CvxRDMZy4QAcuEyNhIuj-6sUy3E/edit",
+      "role": "staff_input",
+      "sourceSheets": [
+        "乗り換え",
+        "紹介・ペア入会",
+        "学校関係者",
+        "ラグビー割",
+        "6ヶ月継続"
+      ],
+      "workspaceSheets": [
+        "販促_乗り換え",
+        "販促_紹介・ペア入会",
+        "販促_学校関係者",
+        "販促_ラグビー割",
+        "販促_6ヶ月継続"
+      ],
+      "sync": "IMPORTRANGE",
+      "setupApi": "setupPromoImport"
+    },
+    {
+      "key": "review_east",
+      "name": "EAST口コミ回答者",
+      "spreadsheetId": "13_E8m3vQa_61hcoMAPb7XZTyVDVtQ9O7rkVDNtHQvRM",
+      "url": "https://docs.google.com/spreadsheets/d/13_E8m3vQa_61hcoMAPb7XZTyVDVtQ9O7rkVDNtHQvRM/edit",
+      "role": "all_stores_read_only_from_workspace",
+      "sourceSheet": "回答シート_JOYFIT",
+      "filter": "Col2 = 'kyodo'",
+      "workspaceSheet": "口コミ_経堂",
+      "sync": "QUERY(IMPORTRANGE(...))",
+      "importRange": "A:W",
+      "setupApi": "setupReviewImport",
+      "grantAppUrl": "https://script.google.com/a/macros/okamoto-group.co.jp/s/AKfycbwu1eUxJzePa494p-343axfwgUcnHATf-db7FKw806rXZQsHn_ea0uHc6415yw-RZ80/exec",
+      "notes": "Do not edit EAST from Workspace. Point grants via EAST web app write to 回答シート_JOYFIT."
+    },
+    {
+      "key": "machine_lecture",
+      "name": "20分マシンレクチャー・自動送信メール",
+      "spreadsheetId": "1wntzhyPGcz9hW4saswppYmVG-zHINbjAibu9VkCyEQ8",
+      "url": "https://docs.google.com/spreadsheets/d/1wntzhyPGcz9hW4saswppYmVG-zHINbjAibu9VkCyEQ8/edit",
+      "role": "store_ops",
+      "sourceSheets": [
+        "マシンレクチャー申込",
+        "入会者一覧＋自動メール管理"
+      ],
+      "workspaceSheets": [
+        "マシンレクチャー申込",
+        "入会者一覧＋自動メール管理"
+      ],
+      "sync": "IMPORTRANGE",
+      "setupApi": "setupMachineImport",
+      "notes": "Same sheet names. Checkbox-style display on survey/lecture flag columns."
+    }
+  ],
+  "workspaceNativeSheets": [
+    "URL一覧",
+    "Tasks",
+    "WorkspaceSync"
+  ]
+}

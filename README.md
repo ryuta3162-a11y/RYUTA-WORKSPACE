@@ -21,7 +21,10 @@ PC 向けの黒背景アプリ。Chrome の「アプリをインストール」�
 | 役割 | 場所 |
 |------|------|
 | メイン UI | `web/`（PWA） |
-| 日報・スプシ・Gmail | `gas/Code.gs` |
+| 日報・スプシ・Gmail | `gas/Code.gs` / 本番は `gas-remote/` |
+| **集約ハブ（スプシID・同期マップ）** | [`docs/WORKSPACE_HUB.md`](docs/WORKSPACE_HUB.md) / [`docs/workspace-sources.json`](docs/workspace-sources.json) |
+
+## セットアップ
 
 ## セットアップ
 

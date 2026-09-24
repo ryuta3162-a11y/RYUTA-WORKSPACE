@@ -1,4 +1,4 @@
-/**
+﻿/**
  * RYUTA Workspace — サーバ側
  * スプレッドシートIDは 1 本にまとめる想定（日報ブックに WorkspaceSync シートを追加する形を推奨）
  */
@@ -82,6 +82,842 @@ function unauthorized_() {
   return jsonOutput_({ ok: false, message: 'Unauthorized' });
 }
 
+/** 集約ブックのシート一覧（整理用） */
+function listWorkspaceSheets_() {
+  try {
+    var ss = openWorkspaceSpreadsheet_();
+    var sheets = ss.getSheets();
+    var out = [];
+    for (var i = 0; i < sheets.length; i++) {
+      var sh = sheets[i];
+      out.push({
+        name: sh.getName(),
+        gid: sh.getSheetId(),
+        rows: sh.getLastRow(),
+        cols: sh.getLastColumn(),
+        hidden: sh.isSheetHidden()
+      });
+    }
+    return {
+      ok: true,
+      spreadsheetId: ss.getId(),
+      spreadsheetUrl: ss.getUrl(),
+      title: ss.getName(),
+      sheets: out
+    };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
+/**
+ * deta からリンクを吸い上げ、モノトーンの「URL一覧」に整形。
+ * 不要シート（MEMO / dashboard / シート4 / deta）は削除。
+ */
+function rebuildUrlIndexSheet_() {
+  try {
+    var ss = openWorkspaceSpreadsheet_();
+    var sourceNames = ['deta', 'DETA', 'data', 'Data'];
+    var source = null;
+    for (var i = 0; i < sourceNames.length; i++) {
+      source = ss.getSheetByName(sourceNames[i]);
+      if (source) break;
+    }
+    if (!source) {
+      return { ok: false, message: 'deta シートが見つかりません' };
+    }
+
+    var links = extractLinksFromSheet_(source);
+    var index = ss.getSheetByName('URL一覧');
+    if (index) {
+      ss.deleteSheet(index);
+    }
+    index = ss.insertSheet('URL一覧', 0);
+    styleUrlIndexSheet_(index, links);
+
+    var drop = ['MEMO', 'dashboard', 'シート4', 'deta', 'DETA'];
+    var deleted = [];
+    for (var d = 0; d < drop.length; d++) {
+      var doomed = ss.getSheetByName(drop[d]);
+      if (!doomed) continue;
+      // 最後の1枚は消せないので、URL一覧以外が残っているときだけ削除
+      if (ss.getSheets().length <= 1) break;
+      ss.deleteSheet(doomed);
+      deleted.push(drop[d]);
+    }
+
+    return {
+      ok: true,
+      linkCount: links.length,
+      deleted: deleted,
+      sheet: 'URL一覧',
+      spreadsheetUrl: ss.getUrl(),
+      links: links
+    };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
+function extractLinksFromSheet_(sheet) {
+  var lastRow = sheet.getLastRow();
+  var lastCol = sheet.getLastColumn();
+  if (lastRow < 1 || lastCol < 1) return [];
+
+  var values = sheet.getRange(1, 1, lastRow, lastCol).getValues();
+  var rich = sheet.getRange(1, 1, lastRow, lastCol).getRichTextValues();
+  var formulas = sheet.getRange(1, 1, lastRow, lastCol).getFormulas();
+  var found = [];
+  var seen = {};
+
+  function pushLink(url, label, note) {
+    url = String(url || '').trim();
+    if (!url) return;
+    if (!/^https?:\/\//i.test(url)) {
+      if (/^docs\.google\.com\//i.test(url) || /^drive\.google\.com\//i.test(url)) {
+        url = 'https://' + url;
+      } else {
+        return;
+      }
+    }
+    var key = url.toLowerCase();
+    if (seen[key]) return;
+    seen[key] = true;
+    label = String(label || '').replace(/\s+/g, ' ').trim();
+    if (!label || label === url) label = guessLinkLabel_(url);
+    found.push({
+      label: label,
+      url: url,
+      kind: classifyLinkKind_(url, label),
+      note: String(note || '').trim()
+    });
+  }
+
+  for (var r = 0; r < values.length; r++) {
+    for (var c = 0; c < values[r].length; c++) {
+      var text = values[r][c];
+      var formula = formulas[r][c];
+      var rt = rich[r][c];
+
+      if (formula) {
+        var hm = String(formula).match(/HYPERLINK\s*\(\s*"([^"]+)"\s*(?:,\s*"([^"]*)")?\s*\)/i);
+        if (hm) pushLink(hm[1], hm[2] || text, '');
+      }
+
+      if (rt) {
+        try {
+          var runs = rt.getRuns ? rt.getRuns() : [];
+          if (runs && runs.length) {
+            for (var k = 0; k < runs.length; k++) {
+              var runUrl = runs[k].getLinkUrl && runs[k].getLinkUrl();
+              if (runUrl) pushLink(runUrl, runs[k].getText() || text, '');
+            }
+          } else if (rt.getLinkUrl) {
+            var one = rt.getLinkUrl();
+            if (one) pushLink(one, text, '');
+          }
+        } catch (ignoredRt) {}
+      }
+
+      var cell = String(text == null ? '' : text);
+      var urlMatches = cell.match(/https?:\/\/[^\s<>"']+/gi) || [];
+      for (var u = 0; u < urlMatches.length; u++) {
+        var cleaned = urlMatches[u].replace(/[),．。]+$/g, '');
+        pushLink(cleaned, cell.replace(urlMatches[u], '').trim() || cleaned, '');
+      }
+    }
+  }
+
+  // タイトルだけの行で、同じ行にURLが無いものは「メモ」として残さない（URLのみ方針）
+  found.sort(function (a, b) {
+    if (a.kind !== b.kind) return String(a.kind).localeCompare(String(b.kind));
+    return String(a.label).localeCompare(String(b.label), 'ja');
+  });
+  return found;
+}
+
+function guessLinkLabel_(url) {
+  try {
+    var u = String(url || '');
+    if (/docs\.google\.com\/spreadsheets/i.test(u)) return 'Google スプレッドシート';
+    if (/docs\.google\.com\/document/i.test(u)) return 'Google ドキュメント';
+    if (/docs\.google\.com\/presentation/i.test(u)) return 'Google スライド';
+    if (/drive\.google\.com/i.test(u)) return 'Google ドライブ';
+    if (/vercel\.app/i.test(u)) return 'Vercel App';
+    if (/script\.google\.com/i.test(u)) return 'Google Apps Script';
+    var host = u.replace(/^https?:\/\//i, '').split('/')[0];
+    return host || u;
+  } catch (e) {
+    return url;
+  }
+}
+
+function classifyLinkKind_(url, label) {
+  var u = String(url || '').toLowerCase();
+  var l = String(label || '');
+  if (/シフト|shift|キンタイ|カレンダー/.test(l) || /shift/i.test(u)) return 'SHIFT';
+  if (/pt|パーソナル|予約/.test(l.toLowerCase())) return 'PT';
+  if (/口コミ|review|リプクル/.test(l) || /review/i.test(u)) return 'REVIEW';
+  if (/qa|qanda|未収|unpaid/.test(l.toLowerCase()) || /qa|unpaid/i.test(u)) return 'OPS';
+  if (/todo|タスク|ダッシュボード|dashboard/.test(l.toLowerCase())) return 'WORK';
+  if (/docs\.google\.com|drive\.google\.com/.test(u)) return 'DOCS';
+  if (/vercel\.app|script\.google\.com/.test(u)) return 'APP';
+  return 'LINK';
+}
+
+/** 追加販促ブック（スタッフ入力）→ 見た目整形 + Workspace へ IMPORTRANGE */
+var PROMO_SOURCE_ID_ = '1w7ExndmZn7t2_z55CvxRDMZy4QAcuEyNhIuj-6sUy3E';
+
+function setupPromoImport_() {
+  try {
+    var source = SpreadsheetApp.openById(PROMO_SOURCE_ID_);
+    var dest = openWorkspaceSpreadsheet_();
+    var styled = [];
+    var imported = [];
+    var sheets = source.getSheets();
+
+    for (var i = 0; i < sheets.length; i++) {
+      var sh = sheets[i];
+      var meta = stylePromoSheetKeepValues_(sh);
+      styled.push(meta);
+
+      var destName = '販促_' + String(sh.getName()).replace(/[\\\/\?\*\[\]]/g, '').slice(0, 80);
+      var existing = dest.getSheetByName(destName);
+      if (existing) dest.deleteSheet(existing);
+      var mirror = dest.insertSheet(destName);
+      styleImportMirrorSheet_(mirror, source.getId(), sh.getName(), meta.usedCols, meta.headers);
+      imported.push({ name: destName, source: sh.getName(), cols: meta.usedCols, rows: meta.usedRows });
+    }
+
+    // ハブは作らず、ミラーだけ（余計な説明行なし）
+    var oldHub = dest.getSheetByName('追加販促');
+    if (oldHub) {
+      try { dest.deleteSheet(oldHub); } catch (eHub) {}
+    }
+
+    // 作成時に残った空のデフォルトシートを除去
+    var leftovers = dest.getSheets();
+    for (var j = leftovers.length - 1; j >= 0; j--) {
+      var nm = leftovers[j].getName();
+      if (/^シート\d+$/.test(nm) && leftovers[j].getLastRow() === 0) {
+        try {
+          if (dest.getSheets().length > 1) dest.deleteSheet(leftovers[j]);
+        } catch (eDel) {}
+      }
+    }
+
+    return {
+      ok: true,
+      sourceId: PROMO_SOURCE_ID_,
+      sourceTitle: source.getName(),
+      sourceUrl: source.getUrl(),
+      styled: styled,
+      imported: imported,
+      workspaceUrl: dest.getUrl(),
+      note: '初回は Workspace 側で IMPORTRANGE の「アクセスを許可」が必要な場合があります'
+    };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
+/** 値は一切変えず、見た目と余分な空列のみ整理 */
+function stylePromoSheetKeepValues_(sheet) {
+  var lastRow = Math.max(sheet.getLastRow(), 1);
+  var lastCol = Math.max(sheet.getLastColumn(), 1);
+  var headers = sheet.getRange(1, 1, 1, lastCol).getDisplayValues()[0];
+  var usedCols = 0;
+  for (var c = 0; c < headers.length; c++) {
+    if (String(headers[c] || '').trim() !== '') usedCols = c + 1;
+  }
+  if (usedCols < 1) usedCols = 1;
+
+  // 実際にデータがある最終行
+  var usedRows = 1;
+  if (lastRow > 1) {
+    var vals = sheet.getRange(2, 1, lastRow - 1, usedCols).getDisplayValues();
+    for (var r = 0; r < vals.length; r++) {
+      var rowHas = false;
+      for (var k = 0; k < vals[r].length; k++) {
+        if (String(vals[r][k] || '').trim() !== '') {
+          rowHas = true;
+          break;
+        }
+      }
+      if (rowHas) usedRows = r + 2;
+    }
+  }
+
+  sheet.setHiddenGridlines(true);
+  sheet.setTabColor('#222222');
+  sheet.setFrozenRows(1);
+
+  var headerRange = sheet.getRange(1, 1, 1, usedCols);
+  headerRange
+    .setBackground('#111111')
+    .setFontColor('#FFFFFF')
+    .setFontFamily('Roboto Mono')
+    .setFontSize(10)
+    .setFontWeight('bold')
+    .setVerticalAlignment('middle')
+    .setHorizontalAlignment('left')
+    .setWrap(true);
+  sheet.setRowHeight(1, 32);
+
+  if (usedRows >= 2) {
+    var body = sheet.getRange(2, 1, usedRows - 1, usedCols);
+    body
+      .setBackground('#FAFAFA')
+      .setFontColor('#111111')
+      .setFontFamily('Roboto Mono')
+      .setFontSize(10)
+      .setVerticalAlignment('middle');
+  }
+
+  // 空列を隠す（削除するとフォーム連携が壊れることがあるので非表示）
+  var maxCols = sheet.getMaxColumns();
+  for (var col = 1; col <= usedCols; col++) {
+    try { sheet.showColumns(col); } catch (eShow) {}
+    sheet.setColumnWidth(col, col === 1 ? 150 : 140);
+  }
+  if (maxCols > usedCols) {
+    try { sheet.hideColumns(usedCols + 1, maxCols - usedCols); } catch (eHide) {}
+  }
+
+  // URLっぽい列は少し広げる / 日時は表示形式のみ
+  for (var h = 0; h < usedCols; h++) {
+    var title = String(headers[h] || '');
+    if (/リンク|URL|画像|写真/i.test(title)) sheet.setColumnWidth(h + 1, 260);
+    if (/日時|申請/.test(title)) {
+      sheet.setColumnWidth(h + 1, 160);
+      if (usedRows >= 2) {
+        sheet.getRange(2, h + 1, usedRows - 1, 1).setNumberFormat('yyyy/mm/dd HH:mm');
+      }
+    }
+    if (/メール|mail/i.test(title)) sheet.setColumnWidth(h + 1, 200);
+  }
+
+  return {
+    name: sheet.getName(),
+    usedCols: usedCols,
+    usedRows: usedRows,
+    headers: headers.slice(0, usedCols)
+  };
+}
+
+function styleImportMirrorSheet_(sheet, sourceId, sourceSheetName, usedCols, headers) {
+  sheet.clear();
+  try { sheet.clearConditionalFormatRules(); } catch (eClr) {}
+  try { sheet.getDataRange().clearDataValidations(); } catch (eVal) {}
+  sheet.setHiddenGridlines(true);
+  sheet.setTabColor('#222222');
+  sheet.setFrozenRows(1);
+
+  var cols = Math.max(Number(usedCols) || 1, 1);
+  var endCol = columnLetter_(cols);
+  // 余計な見出しなし。元シートと同じ範囲をそのまま表示
+  var formula =
+    '=IMPORTRANGE("' +
+    sourceId +
+    '","' +
+    sourceSheetName.replace(/"/g, '""') +
+    '!A:' +
+    endCol +
+    '")';
+  sheet.getRange(1, 1).setFormula(formula);
+
+  for (var c = 1; c <= cols; c++) {
+    sheet.setColumnWidth(c, c === 1 ? 160 : 140);
+  }
+
+  var hdrs = headers || [];
+  var checkCols = [];
+  var lastBody = Math.min(sheet.getMaxRows(), 1000);
+  for (var h = 0; h < hdrs.length; h++) {
+    var title = String(hdrs[h] || '');
+    if (/リンク|URL|画像|写真/i.test(title)) sheet.setColumnWidth(h + 1, 260);
+    if (/日時|申請|入会日|タイムスタンプ/.test(title)) {
+      sheet.setColumnWidth(h + 1, 160);
+      try {
+        sheet.getRange(2, h + 1, lastBody - 1, 1).setNumberFormat('yyyy/mm/dd HH:mm');
+      } catch (eFmt) {}
+    }
+    if (/メールアドレス|mail/i.test(title) && !/レクチャー|アンケート|付与/.test(title)) {
+      sheet.setColumnWidth(h + 1, 220);
+    }
+    // 口コミのポイント列と同様：チェック用途の列
+    if (isCheckboxHeader_(title)) {
+      checkCols.push(h + 1);
+      sheet.setColumnWidth(h + 1, 120);
+    }
+  }
+
+  // 見た目だけ整える（値は IMPORTRANGE）
+  try {
+    sheet.getRange(1, 1, 1, cols)
+      .setBackground('#111111')
+      .setFontColor('#FFFFFF')
+      .setFontFamily('Roboto Mono')
+      .setFontSize(10)
+      .setFontWeight('bold')
+      .setVerticalAlignment('middle');
+    sheet.setRowHeight(1, 32);
+    if (lastBody >= 2) {
+      sheet.getRange(2, 1, lastBody - 1, cols)
+        .setBackground('#FAFAFA')
+        .setFontColor('#111111')
+        .setFontFamily('Roboto Mono')
+        .setFontSize(10)
+        .setVerticalAlignment('middle');
+    }
+  } catch (eStyle) {}
+
+  // TRUE/FALSE をチェックボックス表示＋付与済みは緑（口コミと同じ考え方）
+  if (checkCols.length && lastBody >= 2) {
+    try {
+      var rules = sheet.getConditionalFormatRules() || [];
+      for (var i = 0; i < checkCols.length; i++) {
+        var col = checkCols[i];
+        var colLetter = columnLetter_(col);
+        var range = sheet.getRange(2, col, lastBody - 1, 1);
+        range.setDataValidation(
+          SpreadsheetApp.newDataValidation().requireCheckbox().setAllowInvalid(true).build()
+        );
+        rules.push(
+          SpreadsheetApp.newConditionalFormatRule()
+            .whenFormulaSatisfied('=$' + colLetter + '2=TRUE')
+            .setBackground('#E8F5E9')
+            .setRanges([range])
+            .build()
+        );
+      }
+      sheet.setConditionalFormatRules(rules);
+    } catch (eCheck) {}
+  }
+}
+
+function isCheckboxHeader_(title) {
+  var t = String(title || '');
+  if (!t) return false;
+  if (/メールアドレス|email/i.test(t) && !/レクチャー|アンケート|付与/.test(t)) return false;
+  return /アンケート|付与済|ポイント付与|レクチャーメール|送信済|済フラグ/.test(t);
+}
+
+function stylePromoHubSheet_(sheet, imported) {
+  sheet.clear();
+  sheet.setHiddenGridlines(true);
+  sheet.setTabColor('#000000');
+  sheet.setFrozenRows(1);
+
+  var rows = [['#', 'KIND', 'MIRROR SHEET', 'SOURCE SHEET', 'COLS', 'ROWS']];
+  for (var i = 0; i < imported.length; i++) {
+    rows.push([
+      i + 1,
+      'PROMO',
+      imported[i].name,
+      imported[i].source,
+      imported[i].cols,
+      imported[i].rows
+    ]);
+  }
+  sheet.getRange(1, 1, rows.length, 6).setValues(rows);
+  sheet.getRange(1, 1, 1, 6)
+    .setBackground('#111111')
+    .setFontColor('#FFFFFF')
+    .setFontFamily('Roboto Mono')
+    .setFontSize(10)
+    .setFontWeight('bold');
+  if (rows.length > 1) {
+    sheet.getRange(2, 1, rows.length - 1, 6)
+      .setBackground('#FAFAFA')
+      .setFontColor('#111111')
+      .setFontFamily('Roboto Mono')
+      .setFontSize(10);
+  }
+  sheet.setColumnWidth(1, 40);
+  sheet.setColumnWidth(2, 72);
+  sheet.setColumnWidth(3, 200);
+  sheet.setColumnWidth(4, 160);
+  sheet.setColumnWidth(5, 64);
+  sheet.setColumnWidth(6, 64);
+  try {
+    var maxCols = sheet.getMaxColumns();
+    if (maxCols > 6) sheet.deleteColumns(7, maxCols - 6);
+  } catch (e) {}
+}
+
+function columnLetter_(n) {
+  var s = '';
+  var num = Number(n);
+  while (num > 0) {
+    var m = (num - 1) % 26;
+    s = String.fromCharCode(65 + m) + s;
+    num = Math.floor((num - 1) / 26);
+  }
+  return s || 'A';
+}
+
+/** 任意ブックのシート名・ヘッダーを覗く（集約設計用） */
+function inspectSpreadsheetBook_(id) {
+  try {
+    if (!id) return { ok: false, message: 'id required' };
+    var ss = SpreadsheetApp.openById(id);
+    var sheets = ss.getSheets();
+    var out = [];
+    for (var i = 0; i < sheets.length; i++) {
+      var sh = sheets[i];
+      var lastCol = Math.max(sh.getLastColumn(), 1);
+      var lastRow = Math.max(sh.getLastRow(), 0);
+      var headers = [];
+      if (lastRow >= 1) {
+        headers = sh.getRange(1, 1, 1, Math.min(lastCol, 40)).getDisplayValues()[0];
+      }
+      var sample = [];
+      if (lastRow >= 2) {
+        sample = sh.getRange(2, 1, 1, Math.min(lastCol, 12)).getDisplayValues()[0];
+      }
+      out.push({
+        name: sh.getName(),
+        gid: sh.getSheetId(),
+        rows: lastRow,
+        cols: lastCol,
+        hidden: sh.isSheetHidden(),
+        headers: headers,
+        sampleRow2: sample
+      });
+    }
+    return {
+      ok: true,
+      id: id,
+      title: ss.getName(),
+      url: ss.getUrl(),
+      sheetCount: out.length,
+      sheets: out
+    };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err), id: id };
+  }
+}
+
+/** EAST口コミ → Workspace（読み取り専用 / IMPORTRANGE+QUERY） */
+var REVIEW_SOURCE_ID_ = '13_E8m3vQa_61hcoMAPb7XZTyVDVtQ9O7rkVDNtHQvRM';
+var REVIEW_JOYFIT_SHEET_ = '回答シート_JOYFIT';
+var REVIEW_IMPORT_COLS_ = 23; // A:W（ポイント付与済・付与日時まで）
+var REVIEW_GRANT_APP_URL_ =
+  'https://script.google.com/a/macros/okamoto-group.co.jp/s/AKfycbwu1eUxJzePa494p-343axfwgUcnHATf-db7FKw806rXZQsHn_ea0uHc6415yw-RZ80/exec';
+
+/**
+ * EAST側は一切変更しない。
+ * Workspace に QUERY(IMPORTRANGE(...)) を置き、経堂(storeId=kyodo)だけライブ同期。
+ * A1 からデータ（timestamp が1列目）。付与アプリURLは URL一覧の先頭へ。
+ */
+function setupReviewImport_() {
+  try {
+    var dest = openWorkspaceSpreadsheet_();
+    var destName = '口コミ_経堂';
+    var mirror = dest.getSheetByName(destName);
+    if (!mirror) {
+      mirror = dest.insertSheet(destName, 0);
+    } else {
+      mirror.clear();
+      try { mirror.clearConditionalFormatRules(); } catch (e0) {}
+      try { mirror.getDataRange().clearDataValidations(); } catch (e1) {}
+    }
+
+    var cols = REVIEW_IMPORT_COLS_;
+    var endCol = columnLetter_(cols);
+    var maxCols = mirror.getMaxColumns();
+    if (maxCols < cols) mirror.insertColumnsAfter(maxCols, cols - maxCols);
+
+    // A1 からライブ取得（timestamp = 1列目）
+    var formula =
+      '=QUERY(IMPORTRANGE("' +
+      REVIEW_SOURCE_ID_ +
+      '","' +
+      REVIEW_JOYFIT_SHEET_.replace(/"/g, '""') +
+      '!A:' +
+      endCol +
+      '"),"select * where Col2 = \'kyodo\'",1)';
+
+    mirror.setHiddenGridlines(true);
+    mirror.setTabColor('#1a1a1a');
+    mirror.setFrozenRows(1);
+    mirror.getRange(1, 1).setFormula(formula);
+
+    for (var c = 1; c <= cols; c++) mirror.setColumnWidth(c, 110);
+    mirror.setColumnWidth(1, 150);
+    mirror.setColumnWidth(3, 140);
+    mirror.setColumnWidth(5, 100);
+    mirror.setColumnWidth(9, 200);
+    mirror.setColumnWidth(12, 220);
+    mirror.setColumnWidth(13, 160);
+    mirror.setColumnWidth(14, 200);
+    mirror.setColumnWidth(15, 260);
+    mirror.setColumnWidth(16, 200);
+    mirror.setColumnWidth(22, 110);
+    mirror.setColumnWidth(23, 130);
+
+    try {
+      mirror.getRange(1, 1, 1, cols)
+        .setBackground('#111111')
+        .setFontColor('#FFFFFF')
+        .setFontFamily('Roboto Mono')
+        .setFontSize(10)
+        .setFontWeight('bold');
+      mirror.setRowHeight(1, 32);
+      var lastBody = Math.min(mirror.getMaxRows(), 500);
+      if (lastBody >= 2) {
+        mirror.getRange(2, 1, lastBody - 1, cols)
+          .setBackground('#FAFAFA')
+          .setFontColor('#111111')
+          .setFontFamily('Roboto Mono')
+          .setFontSize(10)
+          .setVerticalAlignment('middle');
+        mirror.getRange('A2:A' + lastBody).setNumberFormat('yyyy/mm/dd HH:mm');
+        mirror.getRange('W2:W' + lastBody).setNumberFormat('yyyy/mm/dd HH:mm');
+        var rules = [];
+        rules.push(
+          SpreadsheetApp.newConditionalFormatRule()
+            .whenFormulaSatisfied('=$V2=TRUE')
+            .setBackground('#E8F5E9')
+            .setRanges([mirror.getRange('V2:V' + lastBody)])
+            .build()
+        );
+        mirror.setConditionalFormatRules(rules);
+      }
+    } catch (eStyle) {}
+
+    // 付与アプリURLは URL一覧の一番上（データ1行目）へ
+    upsertReviewGrantUrlIndexTop_(dest);
+
+    var leftovers = dest.getSheets();
+    for (var j = leftovers.length - 1; j >= 0; j--) {
+      var nm = leftovers[j].getName();
+      if (/^シート\d+$/.test(nm) && leftovers[j].getLastRow() === 0) {
+        try {
+          if (dest.getSheets().length > 1) dest.deleteSheet(leftovers[j]);
+        } catch (eDel) {}
+      }
+    }
+
+    removeReviewSyncTriggers_();
+
+    return {
+      ok: true,
+      mode: 'importrange-query',
+      sourceId: REVIEW_SOURCE_ID_,
+      sourceSheet: REVIEW_JOYFIT_SHEET_,
+      filter: "Col2 = 'kyodo'",
+      importRange: 'A:' + endCol,
+      grantAppUrl: REVIEW_GRANT_APP_URL_,
+      destSheet: destName,
+      formula: formula,
+      workspaceUrl: dest.getUrl(),
+      note: '口コミ_経堂は A1=timestamp。付与アプリURLは URL一覧の先頭。'
+    };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
+/** URL一覧の先頭行（2行目）に口コミ付与アプリを置く */
+function upsertReviewGrantUrlIndexTop_(ss) {
+  try {
+    var sh = ss.getSheetByName('URL一覧');
+    if (!sh) return;
+
+    var last = Math.max(sh.getLastRow(), 1);
+    // 既存の同一URL行を削除
+    if (last >= 2) {
+      var urls = sh.getRange(2, 4, last - 1, 1).getDisplayValues();
+      for (var i = urls.length - 1; i >= 0; i--) {
+        if (String(urls[i][0] || '').indexOf('AKfycbwu1eUxJzePa494p-343axfwgUcnHATf-db7FKw806rXZQsHn_ea0uHc6415yw-RZ80') !== -1) {
+          sh.deleteRow(i + 2);
+        }
+      }
+    }
+
+    // ヘッダーが無ければ作る
+    if (sh.getLastRow() < 1) {
+      sh.getRange(1, 1, 1, 4).setValues([['#', 'KIND', 'TITLE', 'URL']]);
+      sh.getRange(1, 1, 1, 4)
+        .setBackground('#111111')
+        .setFontColor('#FFFFFF')
+        .setFontFamily('Roboto Mono')
+        .setFontSize(10)
+        .setFontWeight('bold');
+    }
+
+    // 2行目に挿入して一番上へ
+    sh.insertRowAfter(1);
+    sh.getRange(2, 1, 1, 4).setValues([[
+      1,
+      'REVIEW',
+      '口コミ付与アプリ（EAST）',
+      REVIEW_GRANT_APP_URL_
+    ]]);
+    sh.getRange(2, 1, 1, 4)
+      .setBackground('#FAFAFA')
+      .setFontColor('#111111')
+      .setFontFamily('Roboto Mono')
+      .setFontSize(10)
+      .setVerticalAlignment('middle');
+    sh.getRange(2, 4).setFontColor('#1A73E8');
+    try {
+      sh.getRange(2, 4).setFormula(
+        '=HYPERLINK("' + REVIEW_GRANT_APP_URL_ + '","' + REVIEW_GRANT_APP_URL_ + '")'
+      );
+    } catch (eLink) {}
+
+    // # を振り直す
+    var endRow = sh.getLastRow();
+    if (endRow >= 2) {
+      var nums = [];
+      for (var n = 1; n <= endRow - 1; n++) nums.push([n]);
+      sh.getRange(2, 1, nums.length, 1).setValues(nums);
+    }
+  } catch (err) {}
+}
+
+/** 互換API */
+function syncReviewKyodo_() {
+  return setupReviewImport_();
+}
+
+/** マシンレクチャー／入会者一覧 → Workspace（同名シート・内容そのまま・IMPORTRANGE） */
+var MACHINE_SOURCE_ID_ = '1wntzhyPGcz9hW4saswppYmVG-zHINbjAibu9VkCyEQ8';
+
+function setupMachineImport_() {
+  try {
+    var source = SpreadsheetApp.openById(MACHINE_SOURCE_ID_);
+    var dest = openWorkspaceSpreadsheet_();
+    var sheets = source.getSheets();
+    var imported = [];
+
+    for (var i = 0; i < sheets.length; i++) {
+      var sh = sheets[i];
+      var name = String(sh.getName());
+      var lastCol = Math.max(sh.getLastColumn(), 1);
+      var headers = sh.getRange(1, 1, 1, lastCol).getDisplayValues()[0];
+      var usedCols = 0;
+      for (var c = 0; c < headers.length; c++) {
+        if (String(headers[c] || '').trim() !== '') usedCols = c + 1;
+      }
+      if (usedCols < 1) usedCols = lastCol;
+
+      var existing = dest.getSheetByName(name);
+      if (existing) dest.deleteSheet(existing);
+      var mirror = dest.insertSheet(name);
+      styleImportMirrorSheet_(mirror, source.getId(), name, usedCols, headers.slice(0, usedCols));
+      imported.push({ name: name, cols: usedCols, rows: Math.max(sh.getLastRow(), 0) });
+    }
+
+    var leftovers = dest.getSheets();
+    for (var j = leftovers.length - 1; j >= 0; j--) {
+      var nm = leftovers[j].getName();
+      if (/^シート\d+$/.test(nm) && leftovers[j].getLastRow() === 0) {
+        try {
+          if (dest.getSheets().length > 1) dest.deleteSheet(leftovers[j]);
+        } catch (eDel) {}
+      }
+    }
+
+    return {
+      ok: true,
+      sourceId: MACHINE_SOURCE_ID_,
+      sourceTitle: source.getName(),
+      sourceUrl: source.getUrl(),
+      imported: imported,
+      workspaceUrl: dest.getUrl(),
+      note: 'シート名そのまま / 内容は IMPORTRANGE。初回はアクセス許可が必要な場合あり。元ブック未変更。'
+    };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
+function removeReviewSyncTriggers_() {
+  try {
+    var handlers = { syncReviewKyodoTriggered_: 1, syncReviewKyodo_: 1 };
+    var triggers = ScriptApp.getProjectTriggers();
+    for (var i = 0; i < triggers.length; i++) {
+      var fn = triggers[i].getHandlerFunction();
+      if (handlers[fn]) ScriptApp.deleteTrigger(triggers[i]);
+    }
+  } catch (err) {
+    // script.scriptapp 未許可でも放置でOK
+  }
+}
+
+function styleUrlIndexSheet_(sheet, links) {
+  sheet.clear();
+  sheet.setHiddenGridlines(true);
+  sheet.setTabColor('#111111');
+
+  var header = [['#', 'KIND', 'TITLE', 'URL']];
+  sheet.getRange(1, 1, 1, 4).setValues(header);
+  sheet.getRange(1, 1, 1, 4)
+    .setBackground('#111111')
+    .setFontColor('#FFFFFF')
+    .setFontFamily('Roboto Mono')
+    .setFontSize(10)
+    .setFontWeight('bold')
+    .setHorizontalAlignment('left');
+
+  if (!links.length) {
+    sheet.getRange(2, 1, 1, 4).setValues([['', '', 'リンクなし', '']]);
+    sheet.setColumnWidths(1, 1, 48);
+    sheet.setColumnWidths(2, 1, 88);
+    sheet.setColumnWidths(3, 1, 360);
+    sheet.setColumnWidths(4, 1, 520);
+    return;
+  }
+
+  var rows = links.map(function (item, idx) {
+    return [idx + 1, item.kind, item.label, item.url];
+  });
+  sheet.getRange(2, 1, rows.length, 4).setValues(rows);
+
+  var body = sheet.getRange(2, 1, rows.length, 4);
+  body
+    .setBackground('#FAFAFA')
+    .setFontColor('#111111')
+    .setFontFamily('Roboto Mono')
+    .setFontSize(10)
+    .setVerticalAlignment('middle');
+
+  // ゼブラ
+  for (var i = 0; i < rows.length; i++) {
+    if (i % 2 === 1) {
+      sheet.getRange(i + 2, 1, 1, 4).setBackground('#EEEEEE');
+    }
+  }
+
+  sheet.getRange(2, 1, rows.length, 1).setFontColor('#888888').setHorizontalAlignment('right');
+  sheet.getRange(2, 2, rows.length, 1).setFontColor('#555555').setHorizontalAlignment('center');
+  sheet.getRange(2, 4, rows.length, 1).setFontColor('#1A73E8');
+
+  // URL をクリッカブルに
+  for (var r = 0; r < rows.length; r++) {
+    var url = rows[r][3];
+    sheet.getRange(r + 2, 4).setFormula('=HYPERLINK("' + String(url).replace(/"/g, '""') + '","' + String(url).replace(/"/g, '""') + '")');
+  }
+
+  sheet.setColumnWidths(1, 1, 48);
+  sheet.setColumnWidths(2, 1, 88);
+  sheet.setColumnWidths(3, 1, 360);
+  sheet.setColumnWidths(4, 1, 560);
+  sheet.setFrozenRows(1);
+  sheet.setRowHeights(1, 1, 32);
+  if (rows.length) sheet.setRowHeights(2, rows.length, 28);
+
+  // 余白列を使わない（A-Dのみ）
+  try {
+    var maxCols = sheet.getMaxColumns();
+    if (maxCols > 4) sheet.deleteColumns(5, maxCols - 4);
+  } catch (ignoredCols) {}
+}
+
 /** 今日のカレンダー + Workspace 同期データ（Vercel / AI 用） */
 function getDayContextForApi_(dateYmd) {
   var tz = Session.getScriptTimeZone();
@@ -104,6 +940,10 @@ function getTodayCalendarEvents_() {
   );
 }
 
+/**
+ * 指定日の予定。自分のアカウント（デフォルトカレンダー）に登録されている
+ * 予定のみを対象にする。共有された他人のカレンダーは読み込まない。
+ */
 function getCalendarEventsForYmd_(ymd) {
   try {
     var tz = Session.getScriptTimeZone();
@@ -111,17 +951,25 @@ function getCalendarEventsForYmd_(ymd) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return [];
     var start = Utilities.parseDate(day + ' 00:00:00', tz, 'yyyy-MM-dd HH:mm:ss');
     var end = Utilities.parseDate(day + ' 23:59:59', tz, 'yyyy-MM-dd HH:mm:ss');
-    var events = CalendarApp.getDefaultCalendar().getEvents(start, end);
+
+    var cal = CalendarApp.getDefaultCalendar();
+    if (!cal) return [];
+    var events = cal.getEvents(start, end) || [];
+
     var out = [];
+    var seen = {};
     for (var i = 0; i < events.length; i++) {
-      var ev = events[i];
-      out.push({
-        title: ev.getTitle(),
-        start: Utilities.formatDate(ev.getStartTime(), tz, 'HH:mm'),
-        end: Utilities.formatDate(ev.getEndTime(), tz, 'HH:mm'),
-        isAllDay: ev.isAllDayEvent(),
-      });
+      var item = packCalendarEvent_(events[i], tz);
+      if (!item) continue;
+      var key = item.title + '|' + item.start + '|' + item.end + '|' + item.isAllDay;
+      if (seen[key]) continue;
+      seen[key] = 1;
+      out.push(item);
     }
+    out.sort(function (a, b) {
+      if (a.isAllDay !== b.isAllDay) return a.isAllDay ? -1 : 1;
+      return String(a.start).localeCompare(String(b.start));
+    });
     return out;
   } catch (err) {
     console.error('Calendar:', err);
@@ -129,11 +977,109 @@ function getCalendarEventsForYmd_(ymd) {
   }
 }
 
+function packCalendarEvent_(ev, tz) {
+  if (!ev) return null;
+  var pick = function (fn) {
+    try {
+      var v = fn();
+      return v == null ? '' : String(v);
+    } catch (err) {
+      return '';
+    }
+  };
+  var isAllDay = false;
+  try {
+    isAllDay = ev.isAllDayEvent();
+  } catch (err) {
+    isAllDay = false;
+  }
+  var description = cleanEventDescription_(pick(function () { return ev.getDescription(); }));
+  var location = pick(function () { return ev.getLocation(); });
+  var guests = [];
+  try {
+    var list = ev.getGuestList(true) || [];
+    for (var i = 0; i < list.length && i < 20; i++) {
+      guests.push(list[i].getName() || list[i].getEmail());
+    }
+  } catch (err) {
+    guests = [];
+  }
+  return {
+    id: pick(function () { return ev.getId(); }),
+    title: pick(function () { return ev.getTitle(); }),
+    start: isAllDay ? '' : Utilities.formatDate(ev.getStartTime(), tz, 'HH:mm'),
+    end: isAllDay ? '' : Utilities.formatDate(ev.getEndTime(), tz, 'HH:mm'),
+    isAllDay: isAllDay,
+    location: location,
+    description: description.length > 800 ? description.slice(0, 800) : description,
+    guests: guests,
+    organizer: pick(function () { return ev.getCreators().join(', '); }),
+    myStatus: pick(function () { return ev.getMyStatus(); }),
+    meetUrl: extractMeetingUrl_(location + '\n' + description),
+  };
+}
+
+/** 同期用マーカーなど、表示に不要な行を説明文から除く */
+function cleanEventDescription_(raw) {
+  return String(raw || '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]*>/g, ' ')
+    .split('\n')
+    .filter(function (line) {
+      var s = line.trim();
+      if (!s) return false;
+      if (/^\[SYNC_KEY:/.test(s)) return false;
+      if (/^(原文|同期)\s*[:：]/.test(s)) return false;
+      return true;
+    })
+    .join(' / ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** 説明・場所から Meet / Zoom / Teams 等の会議URLを拾う */
+function extractMeetingUrl_(text) {
+  var s = String(text || '');
+  if (!s) return '';
+  var patterns = [
+    /https:\/\/meet\.google\.com\/[a-z0-9\-]+/i,
+    /https:\/\/[a-z0-9.\-]*zoom\.us\/j\/[^\s<>"']+/i,
+    /https:\/\/teams\.microsoft\.com\/[^\s<>"']+/i,
+    /https:\/\/[a-z0-9.\-]*webex\.com\/[^\s<>"']+/i,
+  ];
+  for (var i = 0; i < patterns.length; i++) {
+    var m = s.match(patterns[i]);
+    if (m) return m[0];
+  }
+  return '';
+}
+
 function handleApiGet_(e) {
   try {
     var api = e && e.parameter ? String(e.parameter.api || '') : '';
     if (api === 'status') {
       return jsonOutput_({ ok: true, service: 'ryuta-workspace-gas', version: 'v2-vercel' });
+    }
+    if (api === 'listSheets') {
+      return jsonOutput_(listWorkspaceSheets_());
+    }
+    if (api === 'rebuildUrlIndex') {
+      return jsonOutput_(rebuildUrlIndexSheet_());
+    }
+    if (api === 'setupPromoImport') {
+      return jsonOutput_(setupPromoImport_());
+    }
+    if (api === 'inspectBook') {
+      return jsonOutput_(inspectSpreadsheetBook_(String((e.parameter && e.parameter.id) || '')));
+    }
+    if (api === 'setupReviewImport') {
+      return jsonOutput_(setupReviewImport_());
+    }
+    if (api === 'syncReviewKyodo') {
+      return jsonOutput_(syncReviewKyodo_());
+    }
+    if (api === 'setupMachineImport') {
+      return jsonOutput_(setupMachineImport_());
     }
     if (api === 'dayContext') {
       if (!isApiAuthorized_(e, null)) return unauthorized_();
@@ -152,11 +1098,24 @@ function handleApiGet_(e) {
     if (api === 'vendorMail') {
       return jsonOutput_(syncOneVendorFromGmail_(
         String((e.parameter && e.parameter.company) || ''),
-        String((e.parameter && e.parameter.email) || '')
+        String((e.parameter && e.parameter.email) || ''),
+        String((e.parameter && e.parameter.since) || '')
       ));
     }
     if (api === 'vendorDiscover') {
       return jsonOutput_(discoverVendorEmails_(String((e.parameter && e.parameter.company) || '')));
+    }
+    if (api === 'vendorFiles') {
+      if (!isApiAuthorized_(e, null)) return unauthorized_();
+      return jsonOutput_(listVendorFiles_(String((e.parameter && e.parameter.threadId) || '')));
+    }
+    if (api === 'vendorFile') {
+      if (!isApiAuthorized_(e, null)) return unauthorized_();
+      return jsonOutput_(getVendorFile_(
+        String((e.parameter && e.parameter.threadId) || ''),
+        String((e.parameter && e.parameter.messageId) || ''),
+        String((e.parameter && e.parameter.index) || '0')
+      ));
     }
     if (api === 'keidoPreview') {
       var packed = buildKeidoTableHtmlSafe_();
@@ -309,6 +1268,8 @@ var VENDOR_COMPANIES_ = [
   { name: 'SEKAI', keys: ['SEKAI', 'セカイ'], domains: ['sekai.co.jp'], contacts: [
     { name: '志賀', email: 'a-shiga@sekai.co.jp' },
     { name: 'SEKAI team', email: 'team@sekai.co.jp' },
+    { name: '添田', email: 'e-soeta@sekai.co.jp' },
+    { name: '渋谷メーリス', email: 'shibuya_sekai@sekai.co.jp' },
   ] },
   { name: 'Lifefitness', keys: ['Lifefitness', 'Life Fitness', 'ライフフィットネス'], domains: ['lifefitness.com'], contacts: [
     { name: 'Life Fitness CS', email: 'customerservice.jp@lifefitness.com' },
@@ -320,6 +1281,7 @@ var VENDOR_COMPANIES_ = [
   { name: '鳳商事', keys: ['鳳商事'], domains: ['ohtori-s.co.jp'], contacts: [
     { name: '齋藤 翔', email: 'm-saito@ohtori-s.co.jp' },
     { name: '首都圏支店', email: 'shutoken@ohtori-s.co.jp' },
+    { name: '本部受注', email: 'honbu-order@ohtori-s.co.jp' },
   ] },
   { name: 'アイリスオーヤマ', keys: ['アイリスオーヤマ', 'IRIS'], domains: ['irisohyama.co.jp'] },
   { name: 'KH', keys: ['KH', 'gracene'], domains: ['gracene.com'], contacts: [
@@ -408,6 +1370,23 @@ function vendorQuery_(keys, domains) {
       q += ' OR from:@' + domains[d] + ' OR to:@' + domains[d];
     }
   }
+  return q;
+}
+
+function withMailWindow_(query, since) {
+  var q = String(query || '').replace(/\s+newer_than:\S+/g, '').replace(/\s+after:\S+/g, '').trim();
+  var s = String(since || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+    var d = new Date(s.slice(0, 10) + 'T00:00:00+09:00');
+    d.setDate(d.getDate() - 1);
+    var y = d.getFullYear();
+    var m = d.getMonth() + 1;
+    var day = d.getDate();
+    var mm = (m < 10 ? '0' : '') + m;
+    var dd = (day < 10 ? '0' : '') + day;
+    return q + ' after:' + y + '/' + mm + '/' + dd;
+  }
+  if (/^\d+d$/.test(s) || /^\d+m$/.test(s)) return q + ' newer_than:' + s;
   return q + ' newer_than:5m';
 }
 
@@ -467,7 +1446,7 @@ function vendorEmailsQuery_(emails, myEmail) {
       parts.push('to:' + email);
     }
   }
-  return '(' + parts.join(' OR ') + ') newer_than:5m';
+  return '(' + parts.join(' OR ') + ')';
 }
 
 function packVendorItem_(row, vendor, query, mode, externals) {
@@ -490,14 +1469,88 @@ function packVendorItem_(row, vendor, query, mode, externals) {
   };
 }
 
+function isUsefulAttachment_(att) {
+  var name = String(att.getName() || '');
+  var type = String(att.getContentType() || '').toLowerCase();
+  var size = 0;
+  try { size = Number(att.getSize() || 0); } catch (ignored) {}
+  if (/\.(xlsx|xls|xlsm|csv|pdf|png|jpe?g|gif|webp|docx|doc|pptx|ppt)$/i.test(name)) return true;
+  if (type.indexOf('pdf') >= 0 || type.indexOf('spreadsheet') >= 0 || type.indexOf('excel') >= 0) return true;
+  if (type.indexOf('officedocument') >= 0) return true;
+  if (type.indexOf('image/') === 0 && size >= 20000) return true;
+  return false;
+}
+
+function listVendorFiles_(threadId) {
+  try {
+    threadId = String(threadId || '').trim();
+    if (!threadId) return { ok: false, message: 'threadId がありません' };
+    var thread = GmailApp.getThreadById(threadId);
+    if (!thread) return { ok: false, message: 'スレッドが見つかりません' };
+    var messages = thread.getMessages();
+    var files = [];
+    for (var m = 0; m < messages.length; m++) {
+      var msg = messages[m];
+      var atts = msg.getAttachments();
+      for (var a = 0; a < atts.length; a++) {
+        var att = atts[a];
+        if (!isUsefulAttachment_(att)) continue;
+        var size = 0;
+        try { size = Number(att.getSize() || 0); } catch (ignoredSize) {}
+        files.push({
+          messageId: String(msg.getId() || ''),
+          index: a,
+          name: String(att.getName() || '添付'),
+          type: String(att.getContentType() || ''),
+          size: size
+        });
+      }
+    }
+    return { ok: true, files: files };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
+function getVendorFile_(threadId, messageId, index) {
+  try {
+    var idx = parseInt(String(index || '0'), 10);
+    if (isNaN(idx) || idx < 0) return { ok: false, message: 'index が不正です' };
+    var msg = null;
+    if (messageId) {
+      msg = GmailApp.getMessageById(String(messageId));
+    } else if (threadId) {
+      var thread = GmailApp.getThreadById(String(threadId));
+      var messages = thread ? thread.getMessages() : [];
+      msg = messages.length ? messages[messages.length - 1] : null;
+    }
+    if (!msg) return { ok: false, message: 'メールが見つかりません' };
+    var atts = msg.getAttachments();
+    if (idx >= atts.length) return { ok: false, message: '添付が見つかりません' };
+    var att = atts[idx];
+    var bytes = att.getBytes();
+    if (bytes.length > 6 * 1024 * 1024) {
+      return { ok: false, message: '6MB超です。Gmailで開いてください。' };
+    }
+    return {
+      ok: true,
+      name: String(att.getName() || '添付'),
+      type: String(att.getContentType() || 'application/octet-stream'),
+      data: Utilities.base64Encode(bytes)
+    };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
 function vendorPinnedQuery_(email, myEmail) {
   email = sanitizeEmail_(email);
   myEmail = sanitizeEmail_(myEmail);
   if (!email) return '';
   if (myEmail) {
-    return '(from:' + email + ' to:' + myEmail + ') OR (from:' + myEmail + ' to:' + email + ') newer_than:5m';
+    return '(from:' + email + ' to:' + myEmail + ') OR (from:' + myEmail + ' to:' + email + ')';
   }
-  return '(from:' + email + ' OR to:' + email + ') newer_than:5m';
+  return '(from:' + email + ' OR to:' + email + ')';
 }
 
 function gmailOpenUrl_(thread, company) {
@@ -594,7 +1647,7 @@ function summarizeThread_(thread, myEmail, company) {
   return row;
 }
 
-function syncOneVendorFromGmail_(name, pinnedEmail) {
+function syncOneVendorFromGmail_(name, pinnedEmail, since) {
   try {
     var vendor = null;
     for (var i = 0; i < VENDOR_COMPANIES_.length; i++) {
@@ -625,7 +1678,9 @@ function syncOneVendorFromGmail_(name, pinnedEmail) {
       mode = 'address';
       query = vendorEmailsQuery_(sheetEmails, myEmail);
     }
-    var threads = GmailApp.search(query, 0, 8);
+    query = withMailWindow_(query, since);
+    var limit = /^\d{4}-\d{2}-\d{2}/.test(String(since || '')) || /^\d+d$/.test(String(since || '')) ? 5 : 8;
+    var threads = GmailApp.search(query, 0, limit);
     var items = [];
     for (var t = 0; t < threads.length; t++) {
       var thread = threads[t];
@@ -667,7 +1722,7 @@ function discoverVendorEmails_(name) {
       myEmail = String(Session.getActiveUser().getEmail() || '').toLowerCase();
     } catch (ignored) {}
 
-    var threads = GmailApp.search(vendorQuery_(vendor.keys, vendor.domains), 0, 15);
+    var threads = GmailApp.search(withMailWindow_(vendorQuery_(vendor.keys, vendor.domains), '5m'), 0, 15);
     var counts = {};
     var samples = {};
     for (var t = 0; t < threads.length; t++) {
@@ -734,7 +1789,7 @@ function syncVendorCasesFromGmail_() {
 
     for (var i = 0; i < VENDOR_COMPANIES_.length; i++) {
       var vendor = VENDOR_COMPANIES_[i];
-      var threads = GmailApp.search(vendorQuery_(vendor.keys, vendor.domains), 0, 10);
+      var threads = GmailApp.search(withMailWindow_(vendorQuery_(vendor.keys, vendor.domains), '5m'), 0, 10);
       for (var t = 0; t < threads.length; t++) {
         var row = summarizeThread_(threads[t], myEmail, vendor.name);
         row.company = vendor.name;
@@ -2127,70 +3182,49 @@ function polishKansouWithGemini(rawText) {
           'GEMINI_API_KEY が未設定です。プロジェクトの設定 → スクリプトのプロパティ にキーを追加してください。',
       };
     }
-    var prompt =
-      '以下はフィットネス施設のスタッフ日報「所感」欄の下書きです。ビジネスメール向けの敬語に整え、誤字脱字を修正し、300文字以内で簡潔にまとめてください。事実と意味は変えないでください。出力は所感の本文のみ（説明・見出し・引用符は不要）。\n\n' +
-      String(rawText);
-    var models = [
-      'gemini-2.5-flash-lite',
-      'gemini-3.1-flash-lite',
-      'gemini-2.5-flash',
-      'gemini-3.5-flash'
-    ];
-    var lastMessage = '返答を取得できませんでした。';
-    for (var m = 0; m < models.length; m++) {
-      var url =
-        'https://generativelanguage.googleapis.com/v1beta/models/' +
-        encodeURIComponent(models[m]) +
-        ':generateContent?key=' +
-        encodeURIComponent(key);
-      var res = UrlFetchApp.fetch(url, {
-        method: 'post',
-        contentType: 'application/json',
-        payload: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.4, maxOutputTokens: 1024 }
-        }),
-        muteHttpExceptions: true
-      });
-      var code = res.getResponseCode();
-      var raw = res.getContentText() || '';
-      var json = null;
-      try {
-        json = raw ? JSON.parse(raw) : null;
-      } catch (parseErr) {
-        lastMessage = 'Gemini の応答が JSON ではありません（' + code + '）';
-        continue;
-      }
-      if (code !== 200) {
-        lastMessage = (json && json.error && json.error.message) || ('API エラー（コード ' + code + '）');
-        if (code === 404 || /not found|deprecated|INVALID_ARGUMENT/i.test(String(lastMessage))) {
-          continue;
-        }
-        return { ok: false, message: lastMessage };
-      }
-      var text = extractGeminiText_(json);
-      if (text) {
-        return { ok: true, text: String(text).trim() };
-      }
-      lastMessage = '返答を取得できませんでした。';
+    var url =
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' +
+      encodeURIComponent(key);
+    var body = {
+      contents: [
+        {
+          parts: [
+            {
+              text:
+                '以下はフィットネス施設のスタッフ日報「所感」欄の下書きです。ビジネスメール向けの敬語に整え、誤字脱字を修正し、300文字以内で簡潔にまとめてください。事実と意味は変えないでください。出力は所感の本文のみ（説明・見出し・引用符は不要）。\n\n' +
+                String(rawText),
+            },
+          ],
+        },
+      ],
+    };
+    var res = UrlFetchApp.fetch(url, {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify(body),
+      muteHttpExceptions: true,
+    });
+    var code = res.getResponseCode();
+    var json = JSON.parse(res.getContentText());
+    if (code !== 200) {
+      return {
+        ok: false,
+        message: (json.error && json.error.message) || 'API エラー（コード ' + code + '）',
+      };
     }
-    return { ok: false, message: lastMessage };
-  } catch (err) {
-    return { ok: false, message: String(err && err.message ? err.message : err) };
-  }
-}
-
-function extractGeminiText_(json) {
-  try {
-    var parts = json.candidates[0].content.parts || [];
-    var out = [];
-    for (var i = 0; i < parts.length; i++) {
-      if (parts[i] && parts[i].thought) continue;
-      var t = parts[i] && parts[i].text ? String(parts[i].text).trim() : '';
-      if (t) out.push(t);
+    var text =
+      json.candidates &&
+      json.candidates[0] &&
+      json.candidates[0].content &&
+      json.candidates[0].content.parts &&
+      json.candidates[0].content.parts[0] &&
+      json.candidates[0].content.parts[0].text;
+    if (!text) {
+      return { ok: false, message: '返答を取得できませんでした。' };
     }
-    return out.join('\n').trim();
+    return { ok: true, text: String(text).trim() };
   } catch (e) {
-    return '';
+    console.error(e);
+    return { ok: false, message: String(e.message || e) };
   }
 }
