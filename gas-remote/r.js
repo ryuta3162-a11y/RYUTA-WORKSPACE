@@ -872,9 +872,17 @@ function setupKengakuImport_(ss) {
     sh.getRange(1, 1, 1, 9).setValues([[
       'タイムスタンプ', '区分', '名前', 'メール', '電話', '性別', '年代', '希望日', '時刻'
     ]]);
-    sh.getRange(2, 1).setFormula(
+    var srcBook = SpreadsheetApp.openById(KENGAKU_SOURCE_ID_);
+    var src = srcBook.getSheetByName(KENGAKU_SOURCE_SHEET_);
+    var lastRow = Math.max(src.getLastRow(), 1);
+    var copied = src.getRange(1, 1, lastRow, 9).getValues();
+    if (copied.length) {
+      sh.getRange(2, 1, copied.length, 9).setValues(copied);
+    }
+    sh.getRange('AA1').setFormula(
       '=IMPORTRANGE("' + KENGAKU_SOURCE_ID_ + '","' + KENGAKU_SOURCE_SHEET_ + '!A:I")'
     );
+    try { sh.hideColumns(27, 1); } catch (eHide) {}
     sh.getRange(1, 1, 1, 9)
       .setBackground('#0F1419')
       .setFontColor('#FFFFFF')
