@@ -76,7 +76,7 @@
       ],
       "sync": "IMPORTRANGE",
       "setupApi": "setupMachineImport",
-      "notes": "Same sheet names. One-way IMPORTRANGE (source → hub). Copy source column widths, header format, and checkbox columns including レクチャー済. Do not two-way link; edits belong on the source book."
+      "notes": "Same sheet names. Hub 入会者一覧 mirrors A:E only (mail flags D/E). F/G stay on the source book. One-way IMPORTRANGE."
     }
   ],
   "workspaceNativeSheets": [

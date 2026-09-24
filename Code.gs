@@ -860,6 +860,10 @@ function setupMachineImport_() {
         if (String(headers[c] || '').trim() !== '') usedCols = c + 1;
       }
       if (usedCols < 1) usedCols = lastCol;
+      // ハブはメール印の D・E まで。F アンケート済 / G レクチャー済は原本に残す
+      if (name === '入会者一覧＋自動メール管理' && usedCols > 5) {
+        usedCols = 5;
+      }
 
       var existing = dest.getSheetByName(name);
       if (existing) dest.deleteSheet(existing);
