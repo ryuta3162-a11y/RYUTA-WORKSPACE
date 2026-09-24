@@ -863,26 +863,19 @@ function setupKengakuImport_(ss) {
   try {
     var dest = ss || openWorkspaceSpreadsheet_();
     var existing = dest.getSheetByName(KENGAKU_DEST_SHEET_);
-    var sh = existing || dest.insertSheet(KENGAKU_DEST_SHEET_);
-    sh.clear();
-    try { sh.clearConditionalFormatRules(); } catch (e0) {}
+    if (existing) dest.deleteSheet(existing);
+    var sh = dest.insertSheet(KENGAKU_DEST_SHEET_);
     sh.setHiddenGridlines(true);
     sh.setTabColor('#1B2838');
     sh.setFrozenRows(1);
     sh.getRange(1, 1, 1, 9).setValues([[
       'タイムスタンプ', '区分', '名前', 'メール', '電話', '性別', '年代', '希望日', '時刻'
     ]]);
-    var srcBook = SpreadsheetApp.openById(KENGAKU_SOURCE_ID_);
-    var src = srcBook.getSheetByName(KENGAKU_SOURCE_SHEET_);
+    var src = SpreadsheetApp.openById(KENGAKU_SOURCE_ID_).getSheetByName(KENGAKU_SOURCE_SHEET_);
+    if (!src) return { ok: false, message: 'source sheet not found' };
     var lastRow = Math.max(src.getLastRow(), 1);
-    var copied = src.getRange(1, 1, lastRow, 9).getValues();
-    if (copied.length) {
-      sh.getRange(2, 1, copied.length, 9).setValues(copied);
-    }
-    sh.getRange('AA1').setFormula(
-      '=IMPORTRANGE("' + KENGAKU_SOURCE_ID_ + '","' + KENGAKU_SOURCE_SHEET_ + '!A:I")'
-    );
-    try { sh.hideColumns(27, 1); } catch (eHide) {}
+    var copied = src.getRange(1, 1, lastRow, 9).getDisplayValues();
+    sh.getRange(2, 1, copied.length, 9).setValues(copied);
     sh.getRange(1, 1, 1, 9)
       .setBackground('#0F1419')
       .setFontColor('#FFFFFF')
@@ -910,7 +903,7 @@ function setupKengakuImport_(ss) {
       sourceId: KENGAKU_SOURCE_ID_,
       sourceSheet: KENGAKU_SOURCE_SHEET_,
       workspaceUrl: dest.getUrl() + '#gid=' + sh.getSheetId(),
-      note: '元ブック未変更。初回は IMPORTRANGE のアクセス許可が必要。'
+      note: '元ブック未変更。値は setup 時にコピー。経堂マスタ Z6 に IMPORTRANGE あり。'
     };
   } catch (err) {
     return { ok: false, message: String(err && err.message ? err.message : err) };
