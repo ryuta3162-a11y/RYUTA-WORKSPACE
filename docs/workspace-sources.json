@@ -76,7 +76,7 @@
       ],
       "sync": "IMPORTRANGE",
       "setupApi": "setupMachineImport",
-      "notes": "Same sheet names. Checkbox-style display on survey/lecture flag columns."
+      "notes": "Same sheet names. One-way IMPORTRANGE (source → hub). Copy source column widths, header format, and checkbox columns including レクチャー済. Do not two-way link; edits belong on the source book."
     }
   ],
   "workspaceNativeSheets": [
