@@ -64,7 +64,7 @@ function getBoundSpreadsheet_() {
 }
 
 function onOpen() {
-  // カスタムメニューは出さない。数値は毎日の自動更新が書く。
+  installAnketoMenu_();
   try {
     const sh = getBoundSpreadsheet_().getSheetByName(SHEET_NAME_OP);
     if (sh) migrateOpLogTtoI_(sh);
@@ -73,36 +73,22 @@ function onOpen() {
   }
 }
 
-/**
- * メニュー「更新」
- * ①ラベルを修正 … Gmailラベルを正しい状態に直す（数値は触らない）
- * ②数値を更新 … 日報B1の当月でOP・入会退会を最新化
- */
-function installSimpleUpdateMenu_() {
+/** 残すメニューはアンケートだけ。入会・退会／OP／6ヶ月はシートは残し、メニューには出さない。 */
+function installAnketoMenu_() {
   SpreadsheetApp.getUi()
-    .createMenu("更新")
-    .addItem("① ラベルを修正", "fixJoyfitMailLabels")
-    .addItem("② 数値を更新", "runSimpleDailyUpdate")
+    .createMenu("アンケート")
+    .addItem("管理を開く", "openAnketoManagement")
     .addToUi();
 }
 
-/**
- * メニュー再表示 … スプレッドシートのタブを閉じて開き直す（onOpen が動く）。
- * ※ Apps Script エディタから installJoyfitMenu_ を実行してもメニューは出ません（UI コンテキストが無いため）。
- */
+/** @deprecated 互換。アンケート以外のカスタムメニューは出さない */
+function installSimpleUpdateMenu_() {
+  installAnketoMenu_();
+}
+
+/** @deprecated 互換。アンケート以外のカスタムメニューは出さない */
 function installJoyfitMenu_() {
-  SpreadsheetApp.getUi()
-    .createMenu("JOYFIT")
-    .addItem("入退会更新（年月選択）", "openMembershipMonthUpdateDialog")
-    .addSeparator()
-    .addItem("① ラベルを修正", "fixJoyfitMailLabels")
-    .addItem("② 数値を更新", "runSimpleDailyUpdate")
-    .addSeparator()
-    .addItem("◪6カ月継続管理", "kyodoOpenCampaignManagement")
-    .addItem("◪入会・退会管理", "openMembershipMonthManagement")
-    .addItem("◪オプション管理", "openOptionManagement")
-    .addItem("◪アンケート管理", "openAnketoManagement")
-    .addToUi();
+  installAnketoMenu_();
 }
 
 /** 廃止した競合分析の週次トリガーを外す（関数本体は削除済み） */

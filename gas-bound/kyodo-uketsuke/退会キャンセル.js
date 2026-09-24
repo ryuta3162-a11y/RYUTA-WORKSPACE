@@ -1061,7 +1061,7 @@ function kyodoGetDefaultMailBody_() {
   lines.push("お手数ですが、どちらがご希望かお教えください。");
   lines.push("");
   lines.push("【A】退会を確定し、解約金を支払う");
-  lines.push("キャンペーン時の値引き相当額（途中解約金）をお支払いいただきます。");
+  lines.push("途中解約金は 33,000円（税込）です。");
   lines.push("");
   lines.push("【B】退会をキャンセルし、必須期間まで会員を継続する");
   lines.push("一度退会をキャンセルし、必須在籍期間まで会員としてご継続いただきます。");
