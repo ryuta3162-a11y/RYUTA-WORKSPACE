@@ -880,13 +880,13 @@ function irN_(yyCell, a1) {
 
 function irNippoIfCurrent_(a1) {
   return (
-    '=IF(TEXT($B$2,"yymm")=TEXT(TODAY(),"yymm"),IFERROR(N(IMPORTRANGE($Z$1,"日報!' + a1 + '")),),)'
+    '=IF(TEXT($Z$5,"yymm")=TEXT(TODAY(),"yymm"),IFERROR(N(IMPORTRANGE($Z$1,"日報!' + a1 + '")),),)'
   );
 }
 
 function irNippoSumIfCurrent_(a1) {
   return (
-    '=IF(TEXT($B$2,"yymm")=TEXT(TODAY(),"yymm"),IFERROR(SUM(IMPORTRANGE($Z$1,"日報!' + a1 + '")),),)'
+    '=IF(TEXT($Z$5,"yymm")=TEXT(TODAY(),"yymm"),IFERROR(SUM(IMPORTRANGE($Z$1,"日報!' + a1 + '")),),)'
   );
 }
 
@@ -902,23 +902,26 @@ function styleAllDataSheet_(sheet) {
   sheet.setFrozenRows(3);
 
   var now = new Date();
-  var thisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   var monthList = [];
-  for (var i = 0; i < 18; i++) {
-    monthList.push(new Date(now.getFullYear(), now.getMonth() - i, 1));
+  var jpYm = function (d) {
+    return d.getFullYear() + '年' + (d.getMonth() + 1) + '月';
+  };
+  for (var i = 0; i < 24; i++) {
+    monthList.push(jpYm(new Date(now.getFullYear(), now.getMonth() - i, 1)));
   }
 
   sheet.getRange('Z1').setValue(UKETSUKE_SOURCE_ID_);
-  sheet.getRange('Z2').setFormula('=TEXT($B$2,"yymm")');
-  sheet.getRange('Z3').setFormula('=TEXT(EDATE($B$2,-1),"yymm")');
+  sheet.getRange('Z5').setFormula('=DATE(VALUE(LEFT($B$2,4)),VALUE(REGEXEXTRACT($B$2,"年(\\d+)月")),1)');
+  sheet.getRange('Z2').setFormula('=TEXT($Z$5,"yymm")');
+  sheet.getRange('Z3').setFormula('=TEXT(EDATE($Z$5,-1),"yymm")');
   sheet.getRange('Z4').setFormula('=IMPORTRANGE($Z$1,"日報!B1")');
   sheet.hideColumns(26, 1);
 
   sheet.getRange('A1').setValue('ALLDATA');
   sheet.getRange('A1:D1').merge();
   sheet.getRange('A2').setValue('年月');
-  sheet.getRange('B2').setValue(thisMonth);
-  sheet.getRange('B2').setNumberFormat('yyyy"年"m"月"');
+  sheet.getRange('B2').setNumberFormat('@');
+  sheet.getRange('B2').setValue(jpYm(new Date(now.getFullYear(), now.getMonth(), 1)));
   sheet.getRange('B2').setDataValidation(
     SpreadsheetApp.newDataValidation()
       .requireValueInList(monthList, true)
@@ -927,8 +930,8 @@ function styleAllDataSheet_(sheet) {
   );
 
   sheet.getRange('A3').setValue('項目');
-  sheet.getRange('B3').setFormula('=TEXT($B$2,"yyyy年m月")');
-  sheet.getRange('C3').setFormula('=TEXT(EDATE($B$2,-1),"yyyy年m月")');
+  sheet.getRange('B3').setFormula('=$B$2');
+  sheet.getRange('C3').setFormula('=TEXT(EDATE($Z$5,-1),"yyyy年m月")');
   sheet.getRange('D3').setValue('差');
 
   var items = [
@@ -940,14 +943,14 @@ function styleAllDataSheet_(sheet) {
     ['休会', irNippoIfCurrent_('C18'), ''],
     ['OP契約', irSum_('$Z$2', 'C21:C36'), irSum_('$Z$3', 'C21:C36')],
     ['OP解約', irNippoSumIfCurrent_('E21:E36'), ''],
-    ['口コミ', monthCountQuery_('口コミ_経堂', '$B$2', 'EDATE($B$2,1)'), monthCountQuery_('口コミ_経堂', 'EDATE($B$2,-1)', '$B$2')],
-    ['マシンレクチャー', monthCountQuery_('マシンレクチャー申込', '$B$2', 'EDATE($B$2,1)'), monthCountQuery_('マシンレクチャー申込', 'EDATE($B$2,-1)', '$B$2')],
-    ['入会者', monthCountQuery_('入会者一覧＋自動メール管理', '$B$2', 'EDATE($B$2,1)'), monthCountQuery_('入会者一覧＋自動メール管理', 'EDATE($B$2,-1)', '$B$2')],
-    ['乗り換え', monthCountQuery_('販促_乗り換え', '$B$2', 'EDATE($B$2,1)'), monthCountQuery_('販促_乗り換え', 'EDATE($B$2,-1)', '$B$2')],
-    ['紹介・ペア', monthCountQuery_('販促_紹介・ペア入会', '$B$2', 'EDATE($B$2,1)'), monthCountQuery_('販促_紹介・ペア入会', 'EDATE($B$2,-1)', '$B$2')],
-    ['学校関係者', monthCountQuery_('販促_学校関係者', '$B$2', 'EDATE($B$2,1)'), monthCountQuery_('販促_学校関係者', 'EDATE($B$2,-1)', '$B$2')],
-    ['ラグビー割', monthCountQuery_('販促_ラグビー割', '$B$2', 'EDATE($B$2,1)'), monthCountQuery_('販促_ラグビー割', 'EDATE($B$2,-1)', '$B$2')],
-    ['6ヶ月継続', monthCountQuery_('販促_6ヶ月継続', '$B$2', 'EDATE($B$2,1)'), monthCountQuery_('販促_6ヶ月継続', 'EDATE($B$2,-1)', '$B$2')]
+    ['口コミ', monthCountQuery_('口コミ_経堂', '$Z$5', 'EDATE($Z$5,1)'), monthCountQuery_('口コミ_経堂', 'EDATE($Z$5,-1)', '$Z$5')],
+    ['マシンレクチャー', monthCountQuery_('マシンレクチャー申込', '$Z$5', 'EDATE($Z$5,1)'), monthCountQuery_('マシンレクチャー申込', 'EDATE($Z$5,-1)', '$Z$5')],
+    ['入会者', monthCountQuery_('入会者一覧＋自動メール管理', '$Z$5', 'EDATE($Z$5,1)'), monthCountQuery_('入会者一覧＋自動メール管理', 'EDATE($Z$5,-1)', '$Z$5')],
+    ['乗り換え', monthCountQuery_('販促_乗り換え', '$Z$5', 'EDATE($Z$5,1)'), monthCountQuery_('販促_乗り換え', 'EDATE($Z$5,-1)', '$Z$5')],
+    ['紹介・ペア', monthCountQuery_('販促_紹介・ペア入会', '$Z$5', 'EDATE($Z$5,1)'), monthCountQuery_('販促_紹介・ペア入会', 'EDATE($Z$5,-1)', '$Z$5')],
+    ['学校関係者', monthCountQuery_('販促_学校関係者', '$Z$5', 'EDATE($Z$5,1)'), monthCountQuery_('販促_学校関係者', 'EDATE($Z$5,-1)', '$Z$5')],
+    ['ラグビー割', monthCountQuery_('販促_ラグビー割', '$Z$5', 'EDATE($Z$5,1)'), monthCountQuery_('販促_ラグビー割', 'EDATE($Z$5,-1)', '$Z$5')],
+    ['6ヶ月継続', monthCountQuery_('販促_6ヶ月継続', '$Z$5', 'EDATE($Z$5,1)'), monthCountQuery_('販促_6ヶ月継続', 'EDATE($Z$5,-1)', '$Z$5')]
   ];
 
   var start = 4;
