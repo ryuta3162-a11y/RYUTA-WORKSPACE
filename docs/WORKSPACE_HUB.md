@@ -18,6 +18,8 @@
 | 追加販促（スタッフ入力） | JOYFIT24経堂追加販促 | `1w7ExndmZn7t2_z55CvxRDMZy4QAcuEyNhIuj-6sUy3E` | https://docs.google.com/spreadsheets/d/1w7ExndmZn7t2_z55CvxRDMZy4QAcuEyNhIuj-6sUy3E/edit |
 | EAST口コミ回答 | EAST口コミ回答者 | `13_E8m3vQa_61hcoMAPb7XZTyVDVtQ9O7rkVDNtHQvRM` | https://docs.google.com/spreadsheets/d/13_E8m3vQa_61hcoMAPb7XZTyVDVtQ9O7rkVDNtHQvRM/edit |
 | マシンレクチャー／自動メール | 20分マシンレクチャー・自動送信メール | `1wntzhyPGcz9hW4saswppYmVG-zHINbjAibu9VkCyEQ8` | https://docs.google.com/spreadsheets/d/1wntzhyPGcz9hW4saswppYmVG-zHINbjAibu9VkCyEQ8/edit |
+| 受付状況表 | 経堂　受付状況表 | `14hxiLBzvGTuIpfZcoVjiHpz8b419OzUrtQAr5788h3w` | https://docs.google.com/spreadsheets/d/14hxiLBzvGTuIpfZcoVjiHpz8b419OzUrtQAr5788h3w/edit |
+| 見学体験 | 経堂　見学・体験申し込みフォーム | `1RPUw0slNCit9ZwJgINGfv89oc2Hxw8zzAZyMt6g_QuY` | https://docs.google.com/spreadsheets/d/1RPUw0slNCit9ZwJgINGfv89oc2Hxw8zzAZyMt6g_QuY/edit |
 
 ## Workspace 内シート（ミラー／ハブ）
 
@@ -27,6 +29,10 @@
 | `口コミ_経堂` | `回答シート_JOYFIT` の `storeId=kyodo` | `QUERY(IMPORTRANGE(...))` |
 | `マシンレクチャー申込` | 同名 | `IMPORTRANGE` |
 | `入会者一覧＋自動メール管理` | 同名 | `IMPORTRANGE`（アンケート等はチェック風表示） |
+| `見学体験申請` | 見学・体験申し込み `見学体験申請` A:I | `IMPORTRANGE`（元ブック未変更） |
+| `経堂マスタ` | 直近5ヶ月・着地見込・計画・進捗・OP・今月販促/見学体験 | 日報C13/C15 + 隠しOP + 販促_* + 見学体験申請 |
+| `経堂_OP` / `経堂_OPログ` | 受付状況表 `OP集計` A1:E18 / I:N（日時・区分・集計用のみ） | 非表示。QUERY+IMPORTRANGE。元ブック未変更・氏名は取り込まない |
+| `【経堂】会員動向` | 年間会員動向のシート「経堂」A1:N115 | `IMPORTRANGE`（白黒） |
 | `URL一覧` | リンク索引（先頭に口コミ付与アプリ） | 値 |
 | `Tasks` / `WorkspaceSync` | 本 GAS 用 | 自動作成 |
 
@@ -54,6 +60,9 @@
 | `setupPromoImport` | 追加販促 → `販促_*` |
 | `setupReviewImport` | 口コミ経堂 → `口コミ_経堂` |
 | `setupMachineImport` | マシンレクチャー2シート |
+| `setupKengakuImport` | 見学体験申請 → Workspace（IMPORTRANGE） |
+| `setupAllData` | `経堂マスタ`（5ヶ月・着地見込・計画・右側リスト） |
+| `setupKyodoTrend` | `【経堂】会員動向` ← 年間会員動向「経堂」A1:N115 |
 | `listSheets` | Workspace シート一覧 |
 | `inspectBook&id=` | 任意ブックのシート／ヘッダー確認 |
 | `rebuildUrlIndex` | URL一覧再生成（deta がある場合） |
