@@ -957,22 +957,22 @@ function monthCountQuery_(sheetName, startExpr, endExpr) {
 }
 
 function irSum_(yyCell, a1) {
-  return '=IFERROR(SUM(IMPORTRANGE($Z$1,' + yyCell + '&"!' + a1 + '")),)';
+  return '=IFERROR(SUM(IMPORTRANGE($AB$1,' + yyCell + '&"!' + a1 + '")),)';
 }
 
 function irN_(yyCell, a1) {
-  return '=IFERROR(N(IMPORTRANGE($Z$1,' + yyCell + '&"!' + a1 + '")),)';
+  return '=IFERROR(N(IMPORTRANGE($AB$1,' + yyCell + '&"!' + a1 + '")),)';
 }
 
 function irNippoIfCurrent_(a1) {
   return (
-    '=IF(TEXT($Z$5,"yymm")=TEXT(TODAY(),"yymm"),IFERROR(N(IMPORTRANGE($Z$1,"日報!' + a1 + '")),),)'
+    '=IF(TEXT($AB$5,"yymm")=TEXT(TODAY(),"yymm"),IFERROR(N(IMPORTRANGE($AB$1,"日報!' + a1 + '")),),)'
   );
 }
 
 function irNippoSumIfCurrent_(a1) {
   return (
-    '=IF(TEXT($Z$5,"yymm")=TEXT(TODAY(),"yymm"),IFERROR(SUM(IMPORTRANGE($Z$1,"日報!' + a1 + '")),),)'
+    '=IF(TEXT($AB$5,"yymm")=TEXT(TODAY(),"yymm"),IFERROR(SUM(IMPORTRANGE($AB$1,"日報!' + a1 + '")),),)'
   );
 }
 
@@ -981,21 +981,21 @@ function trendAt_(label, monthOffset) {
   return (
     '=IFERROR(INDEX(' + sh + '!$C$2:$N$115,' +
     'MATCH("' + String(label).replace(/"/g, '""') + '",' + sh + '!$B$2:$B$115,0),' +
-    'MATCH(MONTH(EDATE($Z$5,' + monthOffset + ')),' + sh + '!$C$1:$N$1,0)),)'
+    'MATCH(MONTH(EDATE($AB$5,' + monthOffset + ')),' + sh + '!$C$1:$N$1,0)),)'
   );
 }
 
 function irSumOff_(monthOffset, a1) {
   return (
-    '=IFERROR(SUM(IMPORTRANGE($Z$1,TEXT(EDATE($Z$5,' + monthOffset + '),"yymm")&"!' + a1 + '")),)'
+    '=IFERROR(SUM(IMPORTRANGE($AB$1,TEXT(EDATE($AB$5,' + monthOffset + '),"yymm")&"!' + a1 + '")),)'
   );
 }
 
 function monthCountOff_(sheetName, monthOffset) {
   return monthCountQuery_(
     sheetName,
-    'EDATE($Z$5,' + monthOffset + ')',
-    'EDATE($Z$5,' + (monthOffset + 1) + ')'
+    'EDATE($AB$5,' + monthOffset + ')',
+    'EDATE($AB$5,' + (monthOffset + 1) + ')'
   );
 }
 
@@ -1003,7 +1003,7 @@ function nippoOrTrend_(nippoA1, label, monthOffset) {
   if (monthOffset !== 0) return trendAt_(label, monthOffset);
   var trend = trendAt_(label, 0).replace(/^=/, '');
   return (
-    '=IF(TEXT($Z$5,"yymm")=TEXT(TODAY(),"yymm"),IFERROR(N(IMPORTRANGE($Z$1,"日報!' +
+    '=IF(TEXT($AB$5,"yymm")=TEXT(TODAY(),"yymm"),IFERROR(N(IMPORTRANGE($AB$1,"日報!' +
     nippoA1 +
     '")),),' +
     trend +
@@ -1013,9 +1013,9 @@ function nippoOrTrend_(nippoA1, label, monthOffset) {
 
 function paceFrom_(actualA1) {
   return (
-    '=IF(TEXT($Z$5,"yymm")<>TEXT(TODAY(),"yymm"),,' +
+    '=IF(TEXT($AB$5,"yymm")<>TEXT(TODAY(),"yymm"),,' +
     'IF(AND(ISNUMBER(' + actualA1 + '),' + actualA1 + '<>"",DAY(TODAY())>0),' +
-    'ROUND(' + actualA1 + '/DAY(TODAY())*DAY(EOMONTH($Z$5,0)),0),))'
+    'ROUND(' + actualA1 + '/DAY(TODAY())*DAY(EOMONTH($AB$5,0)),0),))'
   );
 }
 
@@ -1052,15 +1052,15 @@ function opStartAt_(optionName, monthOffset) {
   var log = "'" + OP_LOG_HELPER_SHEET_ + "'";
   var name = String(optionName).replace(/"/g, '""');
   var counted =
-    'COUNTIFS(' + log + '!$A:$A,">="&EDATE($Z$5,' + monthOffset + '),' +
-    log + '!$A:$A,"<"&EDATE($Z$5,' + (monthOffset + 1) + '),' +
+    'COUNTIFS(' + log + '!$A:$A,">="&EDATE($AB$5,' + monthOffset + '),' +
+    log + '!$A:$A,"<"&EDATE($AB$5,' + (monthOffset + 1) + '),' +
     log + '!$C:$C,"' + name + '",' +
     log + '!$B:$B,"*利用開始*")';
   if (monthOffset !== 0) return '=' + counted;
   var live =
     'IFERROR(INDEX(\'' + OP_HELPER_SHEET_ + '\'!$D$3:$D$18,MATCH("' + name +
     '",\'' + OP_HELPER_SHEET_ + '\'!$A$3:$A$18,0)),' + counted + ')';
-  return '=IF(TEXT($Z$5,"yymm")=TEXT(TODAY(),"yymm"),' + live + ',' + counted + ')';
+  return '=IF(TEXT($AB$5,"yymm")=TEXT(TODAY(),"yymm"),' + live + ',' + counted + ')';
 }
 
 function styleAllDataSheet_(sheet) {
@@ -1083,15 +1083,19 @@ function styleAllDataSheet_(sheet) {
     monthList.push(jpYm(new Date(now.getFullYear(), now.getMonth() - i, 1)));
   }
 
-  sheet.getRange('Z1').setValue(UKETSUKE_SOURCE_ID_);
-  sheet.getRange('Z5').setFormula('=DATE(VALUE(LEFT($B$2,4)),VALUE(REGEXEXTRACT($B$2,"年(\\d+)月")),1)');
-  sheet.getRange('Z2').setFormula('=TEXT($Z$5,"yymm")');
-  sheet.getRange('Z3').setFormula('=TEXT(EDATE($Z$5,-1),"yymm")');
-  sheet.getRange('Z4').setFormula('=IMPORTRANGE($Z$1,"日報!B1")');
-  sheet.getRange('Z6').setFormula(
+  var needCols = 28;
+  if (sheet.getMaxColumns() < needCols) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), needCols - sheet.getMaxColumns());
+  }
+  sheet.getRange('AB1').setValue(UKETSUKE_SOURCE_ID_);
+  sheet.getRange('AB5').setFormula('=DATE(VALUE(LEFT($B$2,4)),VALUE(REGEXEXTRACT($B$2,"年(\\d+)月")),1)');
+  sheet.getRange('AB2').setFormula('=TEXT($AB$5,"yymm")');
+  sheet.getRange('AB3').setFormula('=TEXT(EDATE($AB$5,-1),"yymm")');
+  sheet.getRange('AB4').setFormula('=IMPORTRANGE($AB$1,"日報!B1")');
+  sheet.getRange('AB6').setFormula(
     '=IMPORTRANGE("' + KENGAKU_SOURCE_ID_ + '","' + KENGAKU_SOURCE_SHEET_ + '!A1")'
   );
-  sheet.hideColumns(26, 1);
+  sheet.hideColumns(28, 1);
 
   sheet.getRange('A1').setValue('経堂マスタ');
   sheet.getRange('A1:J1').merge();
@@ -1107,11 +1111,11 @@ function styleAllDataSheet_(sheet) {
   );
 
   sheet.getRange('A3').setValue('項目');
-  sheet.getRange('B3').setFormula('=TEXT(EDATE($Z$5,-4),"yyyy年m月")');
-  sheet.getRange('C3').setFormula('=TEXT(EDATE($Z$5,-3),"yyyy年m月")');
-  sheet.getRange('D3').setFormula('=TEXT(EDATE($Z$5,-2),"yyyy年m月")');
-  sheet.getRange('E3').setFormula('=TEXT(EDATE($Z$5,-1),"yyyy年m月")');
-  sheet.getRange('F3').setFormula('=TEXT($Z$5,"yyyy年m月")');
+  sheet.getRange('B3').setFormula('=TEXT(EDATE($AB$5,-4),"yyyy年m月")');
+  sheet.getRange('C3').setFormula('=TEXT(EDATE($AB$5,-3),"yyyy年m月")');
+  sheet.getRange('D3').setFormula('=TEXT(EDATE($AB$5,-2),"yyyy年m月")');
+  sheet.getRange('E3').setFormula('=TEXT(EDATE($AB$5,-1),"yyyy年m月")');
+  sheet.getRange('F3').setFormula('=TEXT($AB$5,"yyyy年m月")');
   sheet.getRange('G3').setValue('着地見込');
   sheet.getRange('H3').setValue('計画');
   sheet.getRange('I3').setValue('進捗');
@@ -1175,7 +1179,7 @@ function styleAllDataSheet_(sheet) {
     }
     if (spec.paceMonthEnd) {
       pace =
-        '=IF(TEXT($Z$5,"yymm")<>TEXT(TODAY(),"yymm"),,' +
+        '=IF(TEXT($AB$5,"yymm")<>TEXT(TODAY(),"yymm"),,' +
         'IF(AND(ISNUMBER(F' + beginRow + '),ISNUMBER(G' + enrollRow + '),ISNUMBER(G' + cancelRow + ')),' +
         'F' + beginRow + '+G' + enrollRow + '-G' + cancelRow + ',))';
     }
@@ -1337,12 +1341,28 @@ function applyKyodoMasterFormats_(sheet, start, last) {
       .setRanges([delta])
       .build()
   );
+  rules.push(
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenFormulaSatisfied('=$AA4=FALSE')
+      .setBackground('#E5E7EB')
+      .setFontColor('#4B5563')
+      .setRanges([sheet.getRange('AA4:AA40')])
+      .build()
+  );
+  rules.push(
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenFormulaSatisfied('=$AA4=TRUE')
+      .setBackground('#D6E4F0')
+      .setFontColor('#1B2838')
+      .setRanges([sheet.getRange('AA4:AA40')])
+      .build()
+  );
   sheet.setConditionalFormatRules(rules);
 }
 
 function addKyodoMasterSideLists_(sheet) {
   var monthFilter =
-    ' >= date \'"&TEXT($Z$5,"yyyy-mm-dd")&"\' and Col1 < date \'"&TEXT(EDATE($Z$5,1),"yyyy-mm-dd")&"\'';
+    ' >= date \'"&TEXT($AB$5,"yyyy-mm-dd")&"\' and Col1 < date \'"&TEXT(EDATE($AB$5,1),"yyyy-mm-dd")&"\'';
   var kengaku = sheet.getParent().getSheetByName(KENGAKU_DEST_SHEET_);
   var kengakuLink = kengaku
     ? (sheet.getParent().getUrl() + '#gid=' + kengaku.getSheetId())
@@ -1410,6 +1430,34 @@ function addKyodoMasterSideLists_(sheet) {
   sheet.getRange('V4:V40').setNumberFormat('hh:mm');
   sheet.getRange('R3:V40').setFontFamily('Meiryo').setFontSize(9).setVerticalAlignment('middle');
 
+  sheet.getRange('X1:AA1').merge();
+  sheet.getRange('X1').setValue('今月の口コミ');
+  sheet.getRange('X1:AA2')
+    .setFontFamily('Meiryo')
+    .setFontWeight('bold')
+    .setHorizontalAlignment('center')
+    .setVerticalAlignment('middle');
+  sheet.getRange('X1:AA1').setBackground('#0F1419').setFontColor('#FFFFFF').setFontSize(11);
+  sheet.getRange('X2:AA2').merge();
+  sheet.getRange('X2').setFormula(
+    '=HYPERLINK("' + REVIEW_GRANT_APP_URL_ + '","口コミ付与アプリ")'
+  );
+  sheet.getRange('X2:AA2').setBackground('#E8EEF2').setFontColor('#1B2838').setFontSize(9);
+  sheet.getRange('X3:AA3').setValues([['日時', '氏名', '会員番号', '付与']]);
+  sheet.getRange('X3:AA3')
+    .setBackground('#1B2838')
+    .setFontColor('#FFFFFF')
+    .setFontFamily('Meiryo')
+    .setFontSize(9)
+    .setFontWeight('bold');
+  sheet.getRange('X4').setFormula(
+    '=IFERROR(QUERY(\'口コミ_経堂\'!A2:W,"select Col1,Col5,Col6,Col22 where Col1' +
+    monthFilter +
+    ' order by Col22, Col1 desc",0),"")'
+  );
+  sheet.getRange('X4:X40').setNumberFormat('yyyy/mm/dd');
+  sheet.getRange('X3:AA40').setFontFamily('Meiryo').setFontSize(9).setVerticalAlignment('middle');
+
   sheet.setColumnWidth(12, 128);
   sheet.setColumnWidth(13, 96);
   sheet.setColumnWidth(14, 110);
@@ -1421,6 +1469,11 @@ function addKyodoMasterSideLists_(sheet) {
   sheet.setColumnWidth(20, 110);
   sheet.setColumnWidth(21, 88);
   sheet.setColumnWidth(22, 52);
+  sheet.setColumnWidth(23, 16);
+  sheet.setColumnWidth(24, 96);
+  sheet.setColumnWidth(25, 110);
+  sheet.setColumnWidth(26, 110);
+  sheet.setColumnWidth(27, 52);
 }
 
 var KYODO_TREND_SOURCE_ID_ = '1LOOUG97wuiKbhzl0BjJstXgLaaSCZAKNFdD8P3I5x_o';
