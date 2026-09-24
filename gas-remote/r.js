@@ -976,7 +976,7 @@ function setupOpHelperSheets_(ss) {
   if (!log) log = ss.insertSheet(OP_LOG_HELPER_SHEET_);
   log.clear();
   log.getRange(1, 1).setFormula(
-    '=IMPORTRANGE("' + UKETSUKE_SOURCE_ID_ + '","OP集計!I:N")'
+    '=QUERY(IMPORTRANGE("' + UKETSUKE_SOURCE_ID_ + '","OP集計!I:N"),"select Col1, Col3, Col5",1)'
   );
   try { log.hideSheet(); } catch (e1) {}
 }
@@ -987,8 +987,8 @@ function opStartAt_(optionName, monthOffset) {
   var counted =
     'COUNTIFS(' + log + '!$A:$A,">="&EDATE($Z$5,' + monthOffset + '),' +
     log + '!$A:$A,"<"&EDATE($Z$5,' + (monthOffset + 1) + '),' +
-    log + '!$E:$E,"' + name + '",' +
-    log + '!$C:$C,"*利用開始*")';
+    log + '!$C:$C,"' + name + '",' +
+    log + '!$B:$B,"*利用開始*")';
   if (monthOffset !== 0) return '=' + counted;
   var live =
     'IFERROR(INDEX(\'' + OP_HELPER_SHEET_ + '\'!$D$3:$D$18,MATCH("' + name +
