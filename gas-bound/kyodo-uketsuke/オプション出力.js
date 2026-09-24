@@ -4,12 +4,8 @@
  * スプレッドシート:
  * https://docs.google.com/spreadsheets/d/14hxiLBzvGTuIpfZcoVjiHpz8b419OzUrtQAr5788h3w/
  *
- * 【自動】平日21:00 / 土日祝20:00 → 更新→日報送信
- * 【手動】メニュー「更新」→ runSimpleDailyUpdate
- *   ①直近7日: 入会/退会/OP追加停止ラベル + 既読
- *   ②OP数値: 入会メール内訳 + 追加(利用開始) / 解約(利用停止)
- *   ③入会退会・日報反映
- * ※オプションメール/入会時 ラベルは使わない
+ * 【自動】平日21:00 / 土日祝20:00 → OP数値更新 → 日報送信（jf-kyoudou）
+ * カスタムメニューは出さない。数値はトリガーが書く。
  */
 
 const OPTION_SPREADSHEET_ID = "14hxiLBzvGTuIpfZcoVjiHpz8b419OzUrtQAr5788h3w";
