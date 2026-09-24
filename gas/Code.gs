@@ -285,7 +285,7 @@ function setupPromoImport_() {
       var existing = dest.getSheetByName(destName);
       if (existing) dest.deleteSheet(existing);
       var mirror = dest.insertSheet(destName);
-      styleImportMirrorSheet_(mirror, source.getId(), sh.getName(), meta.usedCols, meta.headers);
+      styleImportMirrorSheet_(mirror, source.getId(), sh.getName(), meta.usedCols, meta.headers, sh);
       imported.push({ name: destName, source: sh.getName(), cols: meta.usedCols, rows: meta.usedRows });
     }
 
@@ -405,17 +405,14 @@ function stylePromoSheetKeepValues_(sheet) {
   };
 }
 
-function styleImportMirrorSheet_(sheet, sourceId, sourceSheetName, usedCols, headers) {
+function styleImportMirrorSheet_(sheet, sourceId, sourceSheetName, usedCols, headers, sourceSheet) {
   sheet.clear();
   try { sheet.clearConditionalFormatRules(); } catch (eClr) {}
   try { sheet.getDataRange().clearDataValidations(); } catch (eVal) {}
-  sheet.setHiddenGridlines(true);
-  sheet.setTabColor('#222222');
-  sheet.setFrozenRows(1);
 
   var cols = Math.max(Number(usedCols) || 1, 1);
   var endCol = columnLetter_(cols);
-  // 余計な見出しなし。元シートと同じ範囲をそのまま表示
+  // 値は片方向。見た目は原本からコピー（黒テーマで上書きしない）
   var formula =
     '=IMPORTRANGE("' +
     sourceId +
@@ -426,72 +423,131 @@ function styleImportMirrorSheet_(sheet, sourceId, sourceSheetName, usedCols, hea
     '")';
   sheet.getRange(1, 1).setFormula(formula);
 
+  if (sourceSheet) {
+    copySourceLookToMirror_(sheet, sourceSheet, cols, headers || []);
+    return;
+  }
+
+  applyFallbackMirrorLook_(sheet, cols, headers || []);
+}
+
+/** 原本の列幅・固定・ヘッダー書式・チェック列をハブへ写す（値は触らない） */
+function copySourceLookToMirror_(mirror, source, cols, headers) {
+  try {
+    if (typeof source.hasHiddenGridlines === 'function') {
+      mirror.setHiddenGridlines(!!source.hasHiddenGridlines());
+    } else {
+      mirror.setHiddenGridlines(false);
+    }
+  } catch (eG) {
+    try { mirror.setHiddenGridlines(false); } catch (eG2) {}
+  }
+
+  try {
+    var tab = source.getTabColor();
+    if (tab) mirror.setTabColor(tab);
+  } catch (eT) {}
+
+  try { mirror.setFrozenRows(source.getFrozenRows() || 1); } catch (eF) {
+    try { mirror.setFrozenRows(1); } catch (eF2) {}
+  }
+  try { mirror.setFrozenColumns(source.getFrozenColumns() || 0); } catch (eC) {}
+
+  var lastRow = Math.max(source.getLastRow(), 1);
+  var bodyEnd = Math.min(Math.max(lastRow + 20, 2), 500);
+
+  for (var c = 1; c <= cols; c++) {
+    try { mirror.setColumnWidth(c, source.getColumnWidth(c)); } catch (eW) {}
+  }
+
+  try {
+    source.getRange(1, 1, 1, cols).copyTo(
+      mirror.getRange(1, 1, 1, cols),
+      SpreadsheetApp.CopyPasteType.PASTE_FORMAT,
+      false
+    );
+    mirror.setRowHeight(1, source.getRowHeight(1));
+  } catch (eH) {}
+
+  if (bodyEnd >= 2) {
+    try {
+      source.getRange(2, 1, 1, cols).copyTo(
+        mirror.getRange(2, 1, bodyEnd - 1, cols),
+        SpreadsheetApp.CopyPasteType.PASTE_FORMAT,
+        false
+      );
+    } catch (eB) {}
+    var heightRows = Math.min(lastRow, 40);
+    for (var r = 2; r <= heightRows; r++) {
+      try { mirror.setRowHeight(r, source.getRowHeight(r)); } catch (eR) {}
+    }
+  }
+
+  applyMirrorCheckboxes_(mirror, source, cols, headers, bodyEnd);
+}
+
+function applyMirrorCheckboxes_(mirror, source, cols, headers, bodyEnd) {
+  if (bodyEnd < 2) return;
+  var checkCols = [];
+  var sourceVals = null;
+  try {
+    sourceVals = source.getRange(2, 1, 1, cols).getDataValidations()[0];
+  } catch (eV) {}
+
+  for (var i = 0; i < cols; i++) {
+    var fromSource = false;
+    if (sourceVals && sourceVals[i]) {
+      try {
+        fromSource = sourceVals[i].getCriteriaType() === SpreadsheetApp.DataValidationCriteria.CHECKBOX;
+      } catch (eC) {}
+    }
+    var title = headers && headers[i] ? String(headers[i]) : '';
+    if (fromSource || isCheckboxHeader_(title)) checkCols.push(i + 1);
+  }
+
+  if (!checkCols.length) return;
+  try {
+    for (var k = 0; k < checkCols.length; k++) {
+      var col = checkCols[k];
+      mirror.getRange(2, col, bodyEnd - 1, 1).setDataValidation(
+        SpreadsheetApp.newDataValidation().requireCheckbox().setAllowInvalid(true).build()
+      );
+    }
+  } catch (eCheck) {}
+}
+
+function applyFallbackMirrorLook_(sheet, cols, headers) {
+  try { sheet.setHiddenGridlines(false); } catch (eG) {}
+  try { sheet.setFrozenRows(1); } catch (eF) {}
+  var lastBody = Math.min(sheet.getMaxRows(), 80);
   for (var c = 1; c <= cols; c++) {
     sheet.setColumnWidth(c, c === 1 ? 160 : 140);
   }
-
-  var hdrs = headers || [];
   var checkCols = [];
-  var lastBody = Math.min(sheet.getMaxRows(), 1000);
-  for (var h = 0; h < hdrs.length; h++) {
-    var title = String(hdrs[h] || '');
+  for (var h = 0; h < headers.length; h++) {
+    var title = String(headers[h] || '');
     if (/リンク|URL|画像|写真/i.test(title)) sheet.setColumnWidth(h + 1, 260);
     if (/日時|申請|入会日|タイムスタンプ/.test(title)) {
       sheet.setColumnWidth(h + 1, 160);
       try {
-        sheet.getRange(2, h + 1, lastBody - 1, 1).setNumberFormat('yyyy/mm/dd HH:mm');
+        if (lastBody >= 2) sheet.getRange(2, h + 1, lastBody - 1, 1).setNumberFormat('yyyy/mm/dd HH:mm');
       } catch (eFmt) {}
     }
     if (/メールアドレス|mail/i.test(title) && !/レクチャー|アンケート|付与/.test(title)) {
       sheet.setColumnWidth(h + 1, 220);
     }
-    // 口コミのポイント列と同様：チェック用途の列
     if (isCheckboxHeader_(title)) {
       checkCols.push(h + 1);
       sheet.setColumnWidth(h + 1, 120);
     }
   }
-
-  // 見た目だけ整える（値は IMPORTRANGE）
-  try {
-    sheet.getRange(1, 1, 1, cols)
-      .setBackground('#111111')
-      .setFontColor('#FFFFFF')
-      .setFontFamily('Roboto Mono')
-      .setFontSize(10)
-      .setFontWeight('bold')
-      .setVerticalAlignment('middle');
-    sheet.setRowHeight(1, 32);
-    if (lastBody >= 2) {
-      sheet.getRange(2, 1, lastBody - 1, cols)
-        .setBackground('#FAFAFA')
-        .setFontColor('#111111')
-        .setFontFamily('Roboto Mono')
-        .setFontSize(10)
-        .setVerticalAlignment('middle');
-    }
-  } catch (eStyle) {}
-
-  // TRUE/FALSE をチェックボックス表示＋付与済みは緑（口コミと同じ考え方）
   if (checkCols.length && lastBody >= 2) {
     try {
-      var rules = sheet.getConditionalFormatRules() || [];
       for (var i = 0; i < checkCols.length; i++) {
-        var col = checkCols[i];
-        var colLetter = columnLetter_(col);
-        var range = sheet.getRange(2, col, lastBody - 1, 1);
-        range.setDataValidation(
+        sheet.getRange(2, checkCols[i], lastBody - 1, 1).setDataValidation(
           SpreadsheetApp.newDataValidation().requireCheckbox().setAllowInvalid(true).build()
         );
-        rules.push(
-          SpreadsheetApp.newConditionalFormatRule()
-            .whenFormulaSatisfied('=$' + colLetter + '2=TRUE')
-            .setBackground('#E8F5E9')
-            .setRanges([range])
-            .build()
-        );
       }
-      sheet.setConditionalFormatRules(rules);
     } catch (eCheck) {}
   }
 }
@@ -500,7 +556,7 @@ function isCheckboxHeader_(title) {
   var t = String(title || '');
   if (!t) return false;
   if (/メールアドレス|email/i.test(t) && !/レクチャー|アンケート|付与/.test(t)) return false;
-  return /アンケート|付与済|ポイント付与|レクチャーメール|送信済|済フラグ/.test(t);
+  return /アンケート|付与済|ポイント付与|レクチャー|送信済|済フラグ/.test(t);
 }
 
 function stylePromoHubSheet_(sheet, imported) {
@@ -786,6 +842,160 @@ function syncReviewKyodo_() {
 
 /** マシンレクチャー／入会者一覧 → Workspace（同名シート・内容そのまま・IMPORTRANGE） */
 var MACHINE_SOURCE_ID_ = '1wntzhyPGcz9hW4saswppYmVG-zHINbjAibu9VkCyEQ8';
+var MACHINE_LOOK_ = {
+  headerBg: '#d9ead3',
+  headerFg: '#000000',
+  bodyBg: '#ffffff',
+  bodyFg: '#000000',
+  font: 'Arial',
+  fontSize: 10,
+  tabColor: '#6aa84f',
+  headerHeight: 28,
+  bodyHeight: 21
+};
+
+function machineSheetSpec_(name, headers, lastRow) {
+  var isJoin = name === '入会者一覧＋自動メール管理';
+  var used = 0;
+  for (var c = 0; c < (headers || []).length; c++) {
+    if (String(headers[c] || '').trim() !== '') used = c + 1;
+  }
+  if (isJoin) used = Math.min(used || 5, 5);
+  if (used < 1) used = 1;
+  var spec = {
+    name: name,
+    isJoin: isJoin,
+    cols: used,
+    headers: (headers || []).slice(0, used),
+    rows: Math.max(Number(lastRow) || 0, 1),
+    checkCols: isJoin ? [4, 5] : [],
+    widths: isJoin
+      ? [148, 92, 230, 168, 176]
+      : [150, 92, 52, 210, 248, 104, 84],
+    dateCols: isJoin ? [1] : [1, 6],
+    timeCols: isJoin ? [] : [7]
+  };
+  return spec;
+}
+
+function applyMachineCanonicalLook_(sheet, spec) {
+  var cols = spec.cols;
+  try { sheet.setHiddenGridlines(false); } catch (eG) {}
+  try { sheet.setTabColor(MACHINE_LOOK_.tabColor); } catch (eT) {}
+  try { sheet.setFrozenRows(1); } catch (eF) {}
+  try { sheet.setFrozenColumns(0); } catch (eC) {}
+
+  var maxCols = sheet.getMaxColumns();
+  if (maxCols < cols) sheet.insertColumnsAfter(maxCols, cols - maxCols);
+  for (var c = 1; c <= cols; c++) {
+    try { sheet.showColumns(c); } catch (eShow) {}
+    sheet.setColumnWidth(c, spec.widths[c - 1] || 120);
+  }
+  maxCols = sheet.getMaxColumns();
+  if (maxCols > cols) {
+    try { sheet.hideColumns(cols + 1, maxCols - cols); } catch (eHide) {}
+  }
+
+  var dataEnd = Math.max(spec.rows, sheet.getLastRow(), 2);
+  var bodyEnd = Math.min(Math.max(dataEnd + 12, 16), 120);
+
+  sheet.getRange(1, 1, 1, cols)
+    .setBackground(MACHINE_LOOK_.headerBg)
+    .setFontColor(MACHINE_LOOK_.headerFg)
+    .setFontFamily(MACHINE_LOOK_.font)
+    .setFontSize(MACHINE_LOOK_.fontSize)
+    .setFontWeight('bold')
+    .setHorizontalAlignment('center')
+    .setVerticalAlignment('middle')
+    .setWrap(true);
+  sheet.setRowHeight(1, MACHINE_LOOK_.headerHeight);
+
+  sheet.getRange(2, 1, bodyEnd - 1, cols)
+    .setBackground(MACHINE_LOOK_.bodyBg)
+    .setFontColor(MACHINE_LOOK_.bodyFg)
+    .setFontFamily(MACHINE_LOOK_.font)
+    .setFontSize(MACHINE_LOOK_.fontSize)
+    .setFontWeight('normal')
+    .setVerticalAlignment('middle')
+    .setHorizontalAlignment('left')
+    .setWrap(false);
+  for (var r = 2; r <= Math.min(bodyEnd, 40); r++) {
+    try { sheet.setRowHeight(r, MACHINE_LOOK_.bodyHeight); } catch (eH) {}
+  }
+
+  try { sheet.getRange(2, 1, Math.max(sheet.getMaxRows() - 1, 1), cols).clearDataValidations(); } catch (eVal) {}
+  try { sheet.clearConditionalFormatRules(); } catch (eCf) {}
+
+  for (var d = 0; d < spec.dateCols.length; d++) {
+    try { sheet.getRange(2, spec.dateCols[d], bodyEnd - 1, 1).setNumberFormat('yyyy/mm/dd HH:mm'); } catch (eDt) {}
+  }
+  for (var t = 0; t < spec.timeCols.length; t++) {
+    try { sheet.getRange(2, spec.timeCols[t], bodyEnd - 1, 1).setNumberFormat('HH:mm'); } catch (eTm) {}
+  }
+  if (spec.isJoin) {
+    try { sheet.getRange(2, 3, bodyEnd - 1, 1).setHorizontalAlignment('left'); } catch (eM) {}
+  }
+
+  var checkEnd = Math.min(Math.max(dataEnd, 4), 40);
+  for (var k = 0; k < spec.checkCols.length; k++) {
+    try {
+      sheet.getRange(2, spec.checkCols[k], checkEnd - 1, 1)
+        .setHorizontalAlignment('center')
+        .setDataValidation(
+          SpreadsheetApp.newDataValidation().requireCheckbox().setAllowInvalid(true).build()
+        );
+    } catch (eChk) {}
+  }
+
+  try {
+    var filter = sheet.getFilter();
+    if (filter) filter.remove();
+    sheet.getRange(1, 1, Math.max(dataEnd, 2), cols).createFilter();
+  } catch (eFlt) {}
+}
+
+function styleMachineHubSheet_(sheet, sourceId, spec) {
+  try { if (sheet.getFilter()) sheet.getFilter().remove(); } catch (eF0) {}
+  sheet.clear();
+  try { sheet.clearConditionalFormatRules(); } catch (eClr) {}
+  try { sheet.getDataRange().clearDataValidations(); } catch (eVal) {}
+  var endCol = columnLetter_(spec.cols);
+  sheet.getRange(1, 1).setFormula(
+    '=IMPORTRANGE("' +
+      sourceId +
+      '","' +
+      spec.name.replace(/"/g, '""') +
+      '!A:' +
+      endCol +
+      '")'
+  );
+  applyMachineCanonicalLook_(sheet, spec);
+}
+
+function removeEmptyDefaultSheets_(ss) {
+  var leftovers = ss.getSheets();
+  for (var j = leftovers.length - 1; j >= 0; j--) {
+    var nm = leftovers[j].getName();
+    if (/^シート\d+$/.test(nm) && leftovers[j].getLastRow() === 0) {
+      try {
+        if (ss.getSheets().length > 1) ss.deleteSheet(leftovers[j]);
+      } catch (eDel) {}
+    }
+  }
+}
+
+function ensureMachineImportTrigger_() {
+  try {
+    var triggers = ScriptApp.getProjectTriggers();
+    for (var i = 0; i < triggers.length; i++) {
+      if (triggers[i].getHandlerFunction() === 'setupMachineImport_') return { ok: true, existed: true };
+    }
+    ScriptApp.newTrigger('setupMachineImport_').timeBased().everyHours(6).create();
+    return { ok: true, existed: false };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
 
 function setupMachineImport_() {
   try {
@@ -799,28 +1009,16 @@ function setupMachineImport_() {
       var name = String(sh.getName());
       var lastCol = Math.max(sh.getLastColumn(), 1);
       var headers = sh.getRange(1, 1, 1, lastCol).getDisplayValues()[0];
-      var usedCols = 0;
-      for (var c = 0; c < headers.length; c++) {
-        if (String(headers[c] || '').trim() !== '') usedCols = c + 1;
-      }
-      if (usedCols < 1) usedCols = lastCol;
-
-      var existing = dest.getSheetByName(name);
-      if (existing) dest.deleteSheet(existing);
-      var mirror = dest.insertSheet(name);
-      styleImportMirrorSheet_(mirror, source.getId(), name, usedCols, headers.slice(0, usedCols));
-      imported.push({ name: name, cols: usedCols, rows: Math.max(sh.getLastRow(), 0) });
+      var spec = machineSheetSpec_(name, headers, Math.max(sh.getLastRow(), 0));
+      applyMachineCanonicalLook_(sh, spec);
+      var mirror = dest.getSheetByName(name);
+      if (!mirror) mirror = dest.insertSheet(name);
+      styleMachineHubSheet_(mirror, source.getId(), spec);
+      imported.push({ name: name, cols: spec.cols, rows: spec.rows, checkCols: spec.checkCols });
     }
 
-    var leftovers = dest.getSheets();
-    for (var j = leftovers.length - 1; j >= 0; j--) {
-      var nm = leftovers[j].getName();
-      if (/^シート\d+$/.test(nm) && leftovers[j].getLastRow() === 0) {
-        try {
-          if (dest.getSheets().length > 1) dest.deleteSheet(leftovers[j]);
-        } catch (eDel) {}
-      }
-    }
+    removeEmptyDefaultSheets_(dest);
+    removeEmptyDefaultSheets_(source);
 
     return {
       ok: true,
@@ -829,7 +1027,8 @@ function setupMachineImport_() {
       sourceUrl: source.getUrl(),
       imported: imported,
       workspaceUrl: dest.getUrl(),
-      note: 'シート名そのまま / 内容は IMPORTRANGE。初回はアクセス許可が必要な場合あり。元ブック未変更。'
+      trigger: ensureMachineImportTrigger_(),
+      note: '原本とハブを同一デザインに整える。値は片方向 IMPORTRANGE で自動追従。入会者は A:E のみ表示（F/G は原本に残して非表示）。'
     };
   } catch (err) {
     return { ok: false, message: String(err && err.message ? err.message : err) };
