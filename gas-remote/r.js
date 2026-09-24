@@ -936,6 +936,7 @@ function setupAllData_() {
     setupKengakuImport_(dest);
     var sh = dest.insertSheet(ALLDATA_SHEET_NAME_, 0);
     styleAllDataSheet_(sh);
+    ensureKyodoMasterEditTrigger_(dest);
     return {
       ok: true,
       sheet: ALLDATA_SHEET_NAME_,
@@ -1083,7 +1084,7 @@ function styleAllDataSheet_(sheet) {
     monthList.push(jpYm(new Date(now.getFullYear(), now.getMonth() - i, 1)));
   }
 
-  var needCols = 28;
+  var needCols = 30;
   if (sheet.getMaxColumns() < needCols) {
     sheet.insertColumnsAfter(sheet.getMaxColumns(), needCols - sheet.getMaxColumns());
   }
@@ -1095,7 +1096,7 @@ function styleAllDataSheet_(sheet) {
   sheet.getRange('AB6').setFormula(
     '=IMPORTRANGE("' + KENGAKU_SOURCE_ID_ + '","' + KENGAKU_SOURCE_SHEET_ + '!A1")'
   );
-  sheet.hideColumns(28, 1);
+  try { sheet.hideColumns(28, 3); } catch (eHide) {}
 
   sheet.getRange('A1').setValue('経堂マスタ');
   sheet.getRange('A1:J1').merge();
@@ -1450,11 +1451,7 @@ function addKyodoMasterSideLists_(sheet) {
     .setFontFamily('Meiryo')
     .setFontSize(9)
     .setFontWeight('bold');
-  sheet.getRange('X4').setFormula(
-    '=IFERROR(QUERY(\'口コミ_経堂\'!A2:W,"select Col1,Col5,Col6,Col22 where Col1' +
-    monthFilter +
-    ' order by Col22, Col1 desc",0),"")'
-  );
+  fillKyodoMasterReviews_(sheet);
   sheet.getRange('X4:X40').setNumberFormat('yyyy/mm/dd');
   sheet.getRange('X3:AA40').setFontFamily('Meiryo').setFontSize(9).setVerticalAlignment('middle');
 
@@ -1474,6 +1471,125 @@ function addKyodoMasterSideLists_(sheet) {
   sheet.setColumnWidth(25, 110);
   sheet.setColumnWidth(26, 110);
   sheet.setColumnWidth(27, 52);
+}
+
+function parseMasterMonthStart_(sheet) {
+  var raw = String(sheet.getRange('B2').getDisplayValue() || sheet.getRange('B2').getValue() || '');
+  var m = raw.match(/(\d{4})年(\d{1,2})月/);
+  if (!m) {
+    var now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  }
+  return new Date(Number(m[1]), Number(m[2]) - 1, 1);
+}
+
+function fillKyodoMasterReviews_(sheet) {
+  var start = parseMasterMonthStart_(sheet);
+  var end = new Date(start.getFullYear(), start.getMonth() + 1, 1);
+  var src = SpreadsheetApp.openById(REVIEW_SOURCE_ID_).getSheetByName(REVIEW_JOYFIT_SHEET_);
+  if (!src) return;
+  var last = Math.max(src.getLastRow(), 1);
+  var vals = src.getRange(1, 1, last, 23).getValues();
+  var rows = [];
+  for (var i = 1; i < vals.length; i++) {
+    var row = vals[i];
+    if (String(row[1] || '') !== 'kyodo') continue;
+    var ts = row[0];
+    var t = ts instanceof Date ? ts : new Date(ts);
+    if (!(t instanceof Date) || isNaN(t.getTime())) continue;
+    if (t < start || t >= end) continue;
+    var granted = row[21] === true || String(row[21]).toUpperCase() === 'TRUE';
+    rows.push({
+      ts: t,
+      name: row[4] || '',
+      code: row[5] || '',
+      granted: granted,
+      submissionId: String(row[15] || ''),
+      eastRow: i + 1
+    });
+  }
+  rows.sort(function (a, b) {
+    if (a.granted !== b.granted) return a.granted ? 1 : -1;
+    return b.ts.getTime() - a.ts.getTime();
+  });
+  var maxList = 37;
+  if (rows.length > maxList) rows = rows.slice(0, maxList);
+  var bodyEnd = 40;
+  sheet.getRange(4, 24, bodyEnd - 3, 4).clearContent();
+  sheet.getRange(4, 29, bodyEnd - 3, 2).clearContent();
+  try { sheet.getRange(4, 27, bodyEnd - 3, 1).clearDataValidations(); } catch (e0) {}
+  if (!rows.length) return;
+  var display = [];
+  var meta = [];
+  for (var r = 0; r < rows.length; r++) {
+    display.push([rows[r].ts, rows[r].name, rows[r].code, rows[r].granted]);
+    meta.push([rows[r].submissionId, rows[r].eastRow]);
+  }
+  sheet.getRange(4, 24, display.length, 4).setValues(display);
+  sheet.getRange(4, 29, meta.length, 2).setValues(meta);
+  var aa = sheet.getRange(4, 27, display.length, 1);
+  aa.setDataValidation(
+    SpreadsheetApp.newDataValidation().requireCheckbox().setAllowInvalid(true).build()
+  );
+}
+
+function ensureKyodoMasterEditTrigger_(ss) {
+  try {
+    var dest = ss || openWorkspaceSpreadsheet_();
+    var fn = 'onKyodoMasterEdit_';
+    var triggers = ScriptApp.getProjectTriggers();
+    var found = false;
+    for (var i = 0; i < triggers.length; i++) {
+      if (triggers[i].getHandlerFunction() === fn) found = true;
+    }
+    if (!found) {
+      ScriptApp.newTrigger(fn).forSpreadsheet(dest.getId()).onEdit().create();
+    }
+  } catch (err) {}
+}
+
+function onKyodoMasterEdit_(e) {
+  try {
+    if (!e || !e.range) return;
+    var sheet = e.range.getSheet();
+    if (sheet.getName() !== ALLDATA_SHEET_NAME_) return;
+    var row = e.range.getRow();
+    var col = e.range.getColumn();
+    if (row === 2 && (col === 2 || col === 3)) {
+      fillKyodoMasterReviews_(sheet);
+      return;
+    }
+    if (col !== 27 || row < 4) return;
+    var granted = e.range.getValue() === true;
+    var eastRow = Number(sheet.getRange(row, 30).getValue());
+    var submissionId = String(sheet.getRange(row, 29).getValue() || '');
+    var code = String(sheet.getRange(row, 26).getValue() || '');
+    var src = SpreadsheetApp.openById(REVIEW_SOURCE_ID_).getSheetByName(REVIEW_JOYFIT_SHEET_);
+    if (!src) return;
+    if (!eastRow || eastRow < 2) {
+      eastRow = findEastReviewRow_(src, submissionId, code);
+    }
+    if (!eastRow) return;
+    src.getRange(eastRow, 22).setValue(granted);
+    src.getRange(eastRow, 23).setValue(granted ? new Date() : '');
+  } catch (err) {}
+}
+
+function findEastReviewRow_(src, submissionId, code) {
+  var last = Math.max(src.getLastRow(), 1);
+  var vals = src.getRange(1, 1, last, 16).getValues();
+  var sid = String(submissionId || '');
+  var member = String(code || '');
+  for (var i = 1; i < vals.length; i++) {
+    if (String(vals[i][1] || '') !== 'kyodo') continue;
+    if (sid && String(vals[i][15] || '') === sid) return i + 1;
+  }
+  if (!member) return 0;
+  for (var j = 1; j < vals.length; j++) {
+    if (String(vals[j][1] || '') !== 'kyodo') continue;
+    if (String(vals[j][5] || '') === member) return j + 1;
+  }
+  return 0;
 }
 
 var KYODO_TREND_SOURCE_ID_ = '1LOOUG97wuiKbhzl0BjJstXgLaaSCZAKNFdD8P3I5x_o';
