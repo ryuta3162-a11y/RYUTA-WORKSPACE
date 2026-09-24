@@ -87,7 +87,7 @@
       "url": "https://docs.google.com/spreadsheets/d/14hxiLBzvGTuIpfZcoVjiHpz8b419OzUrtQAr5788h3w/edit",
       "role": "store_ops_read_only_from_workspace",
       "sourceSheets": ["日報", "OP集計"],
-      "workspaceSheet": "ALLDATA",
+      "workspaceSheet": "経堂マスタ",
       "sync": "IMPORTRANGE of KPI cells + 日報 B8:F36 + OP集計 A1:E18",
       "setupApi": "setupAllData",
       "notes": "Do not import OP log / membership PII into ALLDATA. Person lists stay on 入会者一覧＋自動メール管理."

@@ -860,13 +860,15 @@ function setupMachineImport_() {
  * 名簿・OP明細の全行は載せない。元ブックは読み取りのみ。
  */
 var UKETSUKE_SOURCE_ID_ = '14hxiLBzvGTuIpfZcoVjiHpz8b419OzUrtQAr5788h3w';
-var ALLDATA_SHEET_NAME_ = 'ALLDATA';
+var ALLDATA_SHEET_NAME_ = '経堂マスタ';
 
 function setupAllData_() {
   try {
     var dest = openWorkspaceSpreadsheet_();
-    var existing = dest.getSheetByName(ALLDATA_SHEET_NAME_);
-    if (existing) dest.deleteSheet(existing);
+    ['ALLDATA', ALLDATA_SHEET_NAME_].forEach(function (name) {
+      var existing = dest.getSheetByName(name);
+      if (existing) dest.deleteSheet(existing);
+    });
     var sh = dest.insertSheet(ALLDATA_SHEET_NAME_, 0);
     styleAllDataSheet_(sh);
     return {
@@ -932,6 +934,26 @@ function monthCountOff_(sheetName, monthOffset) {
   );
 }
 
+function nippoOrTrend_(nippoA1, label, monthOffset) {
+  if (monthOffset !== 0) return trendAt_(label, monthOffset);
+  var trend = trendAt_(label, 0).replace(/^=/, '');
+  return (
+    '=IF(TEXT($Z$5,"yymm")=TEXT(TODAY(),"yymm"),IFERROR(N(IMPORTRANGE($Z$1,"日報!' +
+    nippoA1 +
+    '")),),' +
+    trend +
+    ')'
+  );
+}
+
+function paceFrom_(actualA1) {
+  return (
+    '=IF(TEXT($Z$5,"yymm")<>TEXT(TODAY(),"yymm"),,' +
+    'IF(AND(ISNUMBER(' + actualA1 + '),' + actualA1 + '<>"",DAY(TODAY())>0),' +
+    'ROUND(' + actualA1 + '/DAY(TODAY())*DAY(EOMONTH($Z$5,0)),0),))'
+  );
+}
+
 function styleAllDataSheet_(sheet) {
   var ss = sheet.getParent();
   var maxR = sheet.getMaxRows();
@@ -959,8 +981,8 @@ function styleAllDataSheet_(sheet) {
   sheet.getRange('Z4').setFormula('=IMPORTRANGE($Z$1,"日報!B1")');
   sheet.hideColumns(26, 1);
 
-  sheet.getRange('A1').setValue('ALLDATA');
-  sheet.getRange('A1:I1').merge();
+  sheet.getRange('A1').setValue('経堂マスタ');
+  sheet.getRange('A1:J1').merge();
   sheet.getRange('A2').setValue('年月');
   sheet.getRange('B2').setNumberFormat('@');
   sheet.getRange('B2').setValue(jpYm(new Date(now.getFullYear(), now.getMonth(), 1)));
@@ -977,32 +999,27 @@ function styleAllDataSheet_(sheet) {
   sheet.getRange('D3').setFormula('=TEXT(EDATE($Z$5,-2),"yyyy年m月")');
   sheet.getRange('E3').setFormula('=TEXT(EDATE($Z$5,-1),"yyyy年m月")');
   sheet.getRange('F3').setFormula('=TEXT($Z$5,"yyyy年m月")');
-  sheet.getRange('G3').setValue('計画');
-  sheet.getRange('H3').setValue('進捗');
-  sheet.getRange('I3').setValue('対前月');
+  sheet.getRange('G3').setValue('着地見込');
+  sheet.getRange('H3').setValue('計画');
+  sheet.getRange('I3').setValue('進捗');
+  sheet.getRange('J3').setValue('対前月');
 
   var mOff = [-4, -3, -2, -1, 0];
   var five = function (builder) {
     return mOff.map(function (off) { return builder(off); });
   };
-  var planProgress = function (row) {
-    return [
-      '=IF(AND(ISNUMBER(F' + row + '),ISNUMBER(G' + row + '),G' + row + '<>0),F' + row + '/G' + row + ',)',
-      '=IF(AND(ISNUMBER(F' + row + '),ISNUMBER(E' + row + ')),F' + row + '-E' + row + ',)'
-    ];
-  };
 
   var start = 4;
   var specs = [
     { name: '入会計画', vals: five(function (o) { return trendAt_('入会計画', o); }) },
-    { name: '入会実績', vals: five(function (o) { return trendAt_('入 会  | 実績/見込', o); }), plan: '入会計画', pct: true },
+    { name: '入会実績', vals: five(function (o) { return nippoOrTrend_('C13', '入 会  | 実績/見込', o); }), plan: '入会計画', pace: true },
     { name: '解除計画', vals: five(function (o) { return trendAt_('解除計画', o); }) },
-    { name: '解除実績', vals: five(function (o) { return trendAt_('解 除  | 実績/見込', o); }), plan: '解除計画', pct: true },
+    { name: '解除実績', vals: five(function (o) { return nippoOrTrend_('C15', '解 除  | 実績/見込', o); }), plan: '解除計画', pace: true },
     { name: '月初計画', vals: five(function (o) { return trendAt_('月初計画', o); }) },
-    { name: '月初実績', vals: five(function (o) { return trendAt_('月初会員数 | 実績/見込', o); }), plan: '月初計画', pct: true },
+    { name: '月初実績', vals: five(function (o) { return trendAt_('月初会員数 | 実績/見込', o); }), plan: '月初計画' },
     { name: '月末計画', vals: five(function (o) { return trendAt_('月末計画', o); }) },
-    { name: '月末実績', vals: five(function (o) { return trendAt_('月末会員数 | 実績/見込', o); }), plan: '月末計画', pct: true },
-    { name: '純増', vals: five(function (o) { return trendAt_('純増', o); }) },
+    { name: '月末実績', vals: five(function (o) { return trendAt_('月末会員数 | 実績/見込', o); }), plan: '月末計画' },
+    { name: '純増', vals: five(function (o) { return trendAt_('純増', o); }), paceNet: true },
     { name: '休会', vals: five(function (o) { return trendAt_('休会', o); }) },
     { name: '紹介', vals: five(function (o) { return trendAt_('紹介', o); }) },
     { name: 'OP契約', vals: five(function (o) { return irSumOff_(o, 'C21:C36'); }) },
@@ -1015,26 +1032,31 @@ function styleAllDataSheet_(sheet) {
     { name: '6ヶ月継続', vals: five(function (o) { return monthCountOff_('販促_6ヶ月継続', o); }) }
   ];
 
-  var pctRows = [];
+  var enrollRow = start + 1;
+  var cancelRow = start + 3;
   var body = specs.map(function (spec, idx) {
     var r = start + idx;
+    var pace = '';
+    if (spec.pace) pace = paceFrom_('F' + r);
+    if (spec.paceNet) pace = '=IF(AND(ISNUMBER(G' + enrollRow + '),ISNUMBER(G' + cancelRow + ')),G' + enrollRow + '-G' + cancelRow + ',)';
     var planCell = spec.plan ? trendAt_(spec.plan, 0) : '';
-    var tail = spec.plan ? planProgress(r) : ['', spec.name === '純増' || spec.name === '休会' || spec.name === '紹介' || spec.name.indexOf('販促') === 0 || spec.name === '口コミ' || spec.name === 'レクチャー' || spec.name === '学校関係者' || spec.name === 'ラグビー割' || spec.name === '6ヶ月継続' || spec.name === 'OP契約'
-      ? '=IF(AND(ISNUMBER(F' + r + '),ISNUMBER(E' + r + ')),F' + r + '-E' + r + ',)'
-      : ''];
-    if (spec.pct) pctRows.push(r);
-    return [spec.name].concat(spec.vals).concat([planCell, tail[0], tail[1]]);
+    var progress = spec.plan
+      ? ('=IF(AND(ISNUMBER(G' + r + '),ISNUMBER(H' + r + '),H' + r + '<>0),G' + r + '/H' + r +
+        ',IF(AND(ISNUMBER(F' + r + '),ISNUMBER(H' + r + '),H' + r + '<>0),F' + r + '/H' + r + ',))')
+      : '';
+    var delta = '=IF(AND(ISNUMBER(F' + r + '),ISNUMBER(E' + r + ')),F' + r + '-E' + r + ',)';
+    return [spec.name].concat(spec.vals).concat([pace, planCell, progress, delta]);
   });
-  sheet.getRange(start, 1, body.length, 9).setValues(body);
+  sheet.getRange(start, 1, body.length, 10).setValues(body);
 
   var last = start + body.length - 1;
-  var table = sheet.getRange(1, 1, last, 9);
+  var table = sheet.getRange(1, 1, last, 10);
   table
     .setFontFamily('Meiryo')
     .setFontColor('#111111')
     .setVerticalAlignment('middle');
 
-  sheet.getRange('A1:I1')
+  sheet.getRange('A1:J1')
     .setBackground('#111111')
     .setFontColor('#FFFFFF')
     .setFontSize(16)
@@ -1042,7 +1064,7 @@ function styleAllDataSheet_(sheet) {
     .setHorizontalAlignment('left');
   sheet.setRowHeight(1, 36);
 
-  sheet.getRange('A2:I2').setBackground('#FFFFFF').setFontSize(11);
+  sheet.getRange('A2:J2').setBackground('#FFFFFF').setFontSize(11);
   sheet.getRange('A2').setFontWeight('bold').setFontColor('#616161');
   sheet.getRange('B2')
     .setFontWeight('bold')
@@ -1051,7 +1073,7 @@ function styleAllDataSheet_(sheet) {
     .setBackground('#F5F5F5');
   sheet.setRowHeight(2, 32);
 
-  sheet.getRange('A3:I3')
+  sheet.getRange('A3:J3')
     .setBackground('#111111')
     .setFontColor('#FFFFFF')
     .setFontSize(10)
@@ -1059,46 +1081,48 @@ function styleAllDataSheet_(sheet) {
     .setHorizontalAlignment('center');
   sheet.setRowHeight(3, 28);
 
-  sheet.getRange(start, 1, body.length, 9)
+  sheet.getRange(start, 1, body.length, 10)
     .setBackground('#FFFFFF')
     .setFontSize(11);
   sheet.getRange(start, 1, body.length, 1)
     .setFontWeight('bold')
     .setHorizontalAlignment('left');
-  sheet.getRange(start, 2, body.length, 8)
+  sheet.getRange(start, 2, body.length, 9)
     .setHorizontalAlignment('right')
     .setFontWeight('bold');
-  sheet.getRange(start, 2, body.length, 6).setNumberFormat('#,##0');
-  sheet.getRange(start, 9, body.length, 1).setNumberFormat('#,##0');
-  sheet.getRange(start, 8, body.length, 1).setNumberFormat('0.0%');
+  sheet.getRange(start, 2, body.length, 7).setNumberFormat('#,##0');
+  sheet.getRange(start, 10, body.length, 1).setNumberFormat('#,##0');
+  sheet.getRange(start, 9, body.length, 1).setNumberFormat('0.0%');
   sheet.getRange(start, 6, body.length, 1).setBackground('#EEEEEE');
+  sheet.getRange(start, 7, body.length, 1).setBackground('#F5F5F5');
 
   for (var r = 0; r < body.length; r++) {
     if (r % 2 === 1) {
-      sheet.getRange(start + r, 1, 1, 9).setBackground('#F5F5F5');
+      sheet.getRange(start + r, 1, 1, 10).setBackground('#F5F5F5');
       sheet.getRange(start + r, 6).setBackground('#E8E8E8');
     }
     sheet.setRowHeight(start + r, 28);
   }
 
-  sheet.getRange(1, 1, last, 9).setBorder(
+  sheet.getRange(1, 1, last, 10).setBorder(
     true, true, true, true, true, true,
     '#BDBDBD', SpreadsheetApp.BorderStyle.SOLID
   );
-  sheet.getRange('A1:I1').setBorder(
+  sheet.getRange('A1:J1').setBorder(
     true, true, true, true, false, false,
     '#111111', SpreadsheetApp.BorderStyle.SOLID
   );
-  sheet.getRange('A3:I3').setBorder(
+  sheet.getRange('A3:J3').setBorder(
     true, true, true, true, false, false,
     '#111111', SpreadsheetApp.BorderStyle.SOLID
   );
 
   sheet.setColumnWidth(1, 112);
   for (var c = 2; c <= 6; c++) sheet.setColumnWidth(c, 92);
-  sheet.setColumnWidth(7, 80);
+  sheet.setColumnWidth(7, 88);
   sheet.setColumnWidth(8, 72);
-  sheet.setColumnWidth(9, 80);
+  sheet.setColumnWidth(9, 72);
+  sheet.setColumnWidth(10, 80);
 
   var leftover = ss.getSheets();
   for (var j = leftover.length - 1; j >= 0; j--) {
