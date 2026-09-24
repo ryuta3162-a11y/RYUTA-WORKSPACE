@@ -1381,6 +1381,8 @@ function addKyodoMasterSideLists_(sheet) {
     .setFontColor('#FFFFFF')
     .setFontWeight('bold');
 
+  sheet.getRange('L4:L40').setNumberFormat('yyyy/mm/dd');
+  sheet.getRange('Q4:Q40').setNumberFormat('yyyy/mm/dd HH:mm');
   sheet.setColumnWidth(12, 140);
   sheet.setColumnWidth(13, 120);
   sheet.setColumnWidth(14, 110);
