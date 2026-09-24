@@ -19,6 +19,7 @@
 | EAST口コミ回答 | EAST口コミ回答者 | `13_E8m3vQa_61hcoMAPb7XZTyVDVtQ9O7rkVDNtHQvRM` | https://docs.google.com/spreadsheets/d/13_E8m3vQa_61hcoMAPb7XZTyVDVtQ9O7rkVDNtHQvRM/edit |
 | マシンレクチャー／自動メール | 20分マシンレクチャー・自動送信メール | `1wntzhyPGcz9hW4saswppYmVG-zHINbjAibu9VkCyEQ8` | https://docs.google.com/spreadsheets/d/1wntzhyPGcz9hW4saswppYmVG-zHINbjAibu9VkCyEQ8/edit |
 | 受付状況表 | 経堂　受付状況表 | `14hxiLBzvGTuIpfZcoVjiHpz8b419OzUrtQAr5788h3w` | https://docs.google.com/spreadsheets/d/14hxiLBzvGTuIpfZcoVjiHpz8b419OzUrtQAr5788h3w/edit |
+| 会員動向 | 年間会員動向【2026年度】 | `1LOOUG97wuiKbhzl0BjJstXgLaaSCZAKNFdD8P3I5x_o` | https://docs.google.com/spreadsheets/d/1LOOUG97wuiKbhzl0BjJstXgLaaSCZAKNFdD8P3I5x_o/edit |
 
 ## Workspace 内シート（ミラー／ハブ）
 
@@ -29,6 +30,7 @@
 | `マシンレクチャー申込` | 同名 | `IMPORTRANGE` |
 | `入会者一覧＋自動メール管理` | 同名 | `IMPORTRANGE`（アンケート等はチェック風表示） |
 | `ALLDATA` | 日報KPI・OP集計・各ミラーの件数 | `IMPORTRANGE` + ハブ内 `QUERY`（名簿・OP全件は持ってこない） |
+| `【経堂】会員動向` | 年間会員動向のシート「経堂」A1:N115 | `IMPORTRANGE`（白黒） |
 | `URL一覧` | リンク索引（先頭に口コミ付与アプリ） | 値 |
 | `Tasks` / `WorkspaceSync` | 本 GAS 用 | 自動作成 |
 
@@ -57,6 +59,7 @@
 | `setupReviewImport` | 口コミ経堂 → `口コミ_経堂` |
 | `setupMachineImport` | マシンレクチャー2シート |
 | `setupAllData` | 司令塔シート `ALLDATA`（日報KPI・件数。名簿は載せない） |
+| `setupKyodoTrend` | `【経堂】会員動向` ← 年間会員動向「経堂」A1:N115 |
 | `listSheets` | Workspace シート一覧 |
 | `inspectBook&id=` | 任意ブックのシート／ヘッダー確認 |
 | `rebuildUrlIndex` | URL一覧再生成（deta がある場合） |

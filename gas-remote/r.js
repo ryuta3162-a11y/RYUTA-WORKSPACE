@@ -1041,6 +1041,85 @@ function styleAllDataSheet_(sheet) {
   }
 }
 
+}
+
+var KYODO_TREND_SOURCE_ID_ = '1LOOUG97wuiKbhzl0BjJstXgLaaSCZAKNFdD8P3I5x_o';
+var KYODO_TREND_SOURCE_SHEET_ = '経堂';
+var KYODO_TREND_DEST_SHEET_ = '【経堂】会員動向';
+
+function setupKyodoTrend_() {
+  try {
+    var dest = openWorkspaceSpreadsheet_();
+    var existing = dest.getSheetByName(KYODO_TREND_DEST_SHEET_);
+    if (existing) dest.deleteSheet(existing);
+    var afterAllData = dest.getSheetByName(ALLDATA_SHEET_NAME_) ? 1 : 0;
+    var sh = dest.insertSheet(KYODO_TREND_DEST_SHEET_, afterAllData);
+    styleKyodoTrendSheet_(sh);
+    return {
+      ok: true,
+      sheet: KYODO_TREND_DEST_SHEET_,
+      sourceSheet: KYODO_TREND_SOURCE_SHEET_,
+      range: 'A1:N115',
+      workspaceUrl: dest.getUrl() + '#gid=' + sh.getSheetId()
+    };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
+function styleKyodoTrendSheet_(sheet) {
+  sheet.clear();
+  try { sheet.clearConditionalFormatRules(); } catch (e0) {}
+  sheet.setHiddenGridlines(true);
+  sheet.setTabColor('#111111');
+  sheet.setFrozenRows(1);
+  sheet.setFrozenColumns(2);
+
+  sheet.getRange(1, 1).setFormula(
+    '=IMPORTRANGE("' + KYODO_TREND_SOURCE_ID_ + '","' + KYODO_TREND_SOURCE_SHEET_ + '!A1:N115")'
+  );
+
+  var rows = 115;
+  var cols = 14;
+  var area = sheet.getRange(1, 1, rows, cols);
+  area
+    .setFontFamily('Meiryo')
+    .setFontSize(10)
+    .setFontColor('#111111')
+    .setVerticalAlignment('middle')
+    .setBackground('#FFFFFF');
+
+  sheet.getRange(1, 1, 1, cols)
+    .setBackground('#111111')
+    .setFontColor('#FFFFFF')
+    .setFontWeight('bold')
+    .setHorizontalAlignment('center');
+  sheet.setRowHeight(1, 28);
+
+  for (var r = 2; r <= rows; r++) {
+    sheet.setRowHeight(r, 22);
+    if (r % 2 === 0) {
+      sheet.getRange(r, 1, 1, cols).setBackground('#F5F5F5');
+    }
+  }
+
+  sheet.getRange(1, 1, rows, 2).setFontWeight('bold').setHorizontalAlignment('left');
+  sheet.getRange(2, 3, rows - 1, cols - 2).setHorizontalAlignment('right');
+
+  area.setBorder(
+    true, true, true, true, true, true,
+    '#BDBDBD', SpreadsheetApp.BorderStyle.SOLID
+  );
+  sheet.getRange(1, 1, 1, cols).setBorder(
+    true, true, true, true, false, false,
+    '#111111', SpreadsheetApp.BorderStyle.SOLID
+  );
+
+  sheet.setColumnWidth(1, 88);
+  sheet.setColumnWidth(2, 168);
+  for (var c = 3; c <= cols; c++) sheet.setColumnWidth(c, 72);
+}
+
 function removeReviewSyncTriggers_() {
   try {
     var handlers = { syncReviewKyodoTriggered_: 1, syncReviewKyodo_: 1 };
@@ -1288,6 +1367,9 @@ function handleApiGet_(e) {
     }
     if (api === 'setupAllData') {
       return jsonOutput_(setupAllData_());
+    }
+    if (api === 'setupKyodoTrend') {
+      return jsonOutput_(setupKyodoTrend_());
     }
     if (api === 'dayContext') {
       if (!isApiAuthorized_(e, null)) return unauthorized_();

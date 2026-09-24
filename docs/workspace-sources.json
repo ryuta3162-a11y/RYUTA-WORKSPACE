@@ -17,6 +17,7 @@
       "setupReviewImport",
       "setupMachineImport",
       "setupAllData",
+      "setupKyodoTrend",
       "listSheets",
       "inspectBook",
       "rebuildUrlIndex"
@@ -90,6 +91,17 @@
       "sync": "IMPORTRANGE of KPI cells + 日報 B8:F36 + OP集計 A1:E18",
       "setupApi": "setupAllData",
       "notes": "Do not import OP log / membership PII into ALLDATA. Person lists stay on 入会者一覧＋自動メール管理."
+    },
+    {
+      "key": "kyodo_trend",
+      "name": "年間会員動向【2026年度】",
+      "spreadsheetId": "1LOOUG97wuiKbhzl0BjJstXgLaaSCZAKNFdD8P3I5x_o",
+      "url": "https://docs.google.com/spreadsheets/d/1LOOUG97wuiKbhzl0BjJstXgLaaSCZAKNFdD8P3I5x_o/edit",
+      "role": "store_ops_read_only_from_workspace",
+      "sourceSheet": "経堂",
+      "workspaceSheet": "【経堂】会員動向",
+      "sync": "IMPORTRANGE 経堂!A1:N115",
+      "setupApi": "setupKyodoTrend"
     }
   ],
   "workspaceNativeSheets": [
