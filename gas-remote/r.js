@@ -861,6 +861,14 @@ function setupMachineImport_() {
  */
 var UKETSUKE_SOURCE_ID_ = '14hxiLBzvGTuIpfZcoVjiHpz8b419OzUrtQAr5788h3w';
 var ALLDATA_SHEET_NAME_ = '経堂マスタ';
+var OP_HELPER_SHEET_ = '経堂_OP';
+var OP_LOG_HELPER_SHEET_ = '経堂_OPログ';
+var OP_NAMES_ = [
+  '安心サポート', '安心サポートVIP', '水素水', 'オンラインレッスン',
+  '体組成計', '契約ロッカー1,500', 'レンタルマット', 'プロテイン12杯',
+  'プロテイン無制限', 'プロテイン＋水素水', 'レンタルタオル', 'タンニング',
+  'セルフエステ', 'ホットスタジオ', 'ヨガロッカー', 'ピラティスリフォーマー'
+];
 
 function setupAllData_() {
   try {
@@ -869,6 +877,7 @@ function setupAllData_() {
       var existing = dest.getSheetByName(name);
       if (existing) dest.deleteSheet(existing);
     });
+    setupOpHelperSheets_(dest);
     var sh = dest.insertSheet(ALLDATA_SHEET_NAME_, 0);
     styleAllDataSheet_(sh);
     return {
@@ -954,6 +963,39 @@ function paceFrom_(actualA1) {
   );
 }
 
+function setupOpHelperSheets_(ss) {
+  var op = ss.getSheetByName(OP_HELPER_SHEET_);
+  if (!op) op = ss.insertSheet(OP_HELPER_SHEET_);
+  op.clear();
+  op.getRange(1, 1).setFormula(
+    '=IMPORTRANGE("' + UKETSUKE_SOURCE_ID_ + '","OP集計!A1:E18")'
+  );
+  try { op.hideSheet(); } catch (e0) {}
+
+  var log = ss.getSheetByName(OP_LOG_HELPER_SHEET_);
+  if (!log) log = ss.insertSheet(OP_LOG_HELPER_SHEET_);
+  log.clear();
+  log.getRange(1, 1).setFormula(
+    '=IMPORTRANGE("' + UKETSUKE_SOURCE_ID_ + '","OP集計!I:N")'
+  );
+  try { log.hideSheet(); } catch (e1) {}
+}
+
+function opStartAt_(optionName, monthOffset) {
+  var log = "'" + OP_LOG_HELPER_SHEET_ + "'";
+  var name = String(optionName).replace(/"/g, '""');
+  var counted =
+    'COUNTIFS(' + log + '!$A:$A,">="&EDATE($Z$5,' + monthOffset + '),' +
+    log + '!$A:$A,"<"&EDATE($Z$5,' + (monthOffset + 1) + '),' +
+    log + '!$E:$E,"' + name + '",' +
+    log + '!$C:$C,"*利用開始*")';
+  if (monthOffset !== 0) return '=' + counted;
+  var live =
+    'IFERROR(INDEX(\'' + OP_HELPER_SHEET_ + '\'!$D$3:$D$18,MATCH("' + name +
+    '",\'' + OP_HELPER_SHEET_ + '\'!$A$3:$A$18,0)),' + counted + ')';
+  return '=IF(TEXT($Z$5,"yymm")=TEXT(TODAY(),"yymm"),' + live + ',' + counted + ')';
+}
+
 function styleAllDataSheet_(sheet) {
   var ss = sheet.getParent();
   var maxR = sheet.getMaxRows();
@@ -986,6 +1028,7 @@ function styleAllDataSheet_(sheet) {
   sheet.getRange('A2').setValue('年月');
   sheet.getRange('B2').setNumberFormat('@');
   sheet.getRange('B2').setValue(jpYm(new Date(now.getFullYear(), now.getMonth(), 1)));
+  sheet.getRange('B2:C2').merge();
   sheet.getRange('B2').setDataValidation(
     SpreadsheetApp.newDataValidation()
       .requireValueInList(monthList, true)
@@ -1021,8 +1064,23 @@ function styleAllDataSheet_(sheet) {
     { name: '月末実績', vals: five(function (o) { return trendAt_('月末会員数 | 実績/見込', o); }), plan: '月末計画' },
     { name: '純増', vals: five(function (o) { return trendAt_('純増', o); }), paceNet: true },
     { name: '休会', vals: five(function (o) { return trendAt_('休会', o); }) },
-    { name: '紹介', vals: five(function (o) { return trendAt_('紹介', o); }) },
-    { name: 'OP契約', vals: five(function (o) { return irSumOff_(o, 'C21:C36'); }) },
+    { name: '紹介', vals: five(function (o) { return trendAt_('紹介', o); }) }
+  ];
+  var opFirst = specs.length;
+  OP_NAMES_.forEach(function (opName) {
+    specs.push({
+      name: opName,
+      op: true,
+      vals: five(function (o) { return opStartAt_(opName, o); })
+    });
+  });
+  var opLast = specs.length - 1;
+  var opSumVals = five(function (o) {
+    var col = String.fromCharCode(70 + o);
+    return '=IFERROR(SUM(' + col + (start + opFirst) + ':' + col + (start + opLast) + '),)';
+  });
+  specs.push({ name: 'OP合計', vals: opSumVals, pace: true, opTotal: true });
+  specs = specs.concat([
     { name: '口コミ', vals: five(function (o) { return monthCountOff_('口コミ_経堂', o); }) },
     { name: 'レクチャー', vals: five(function (o) { return monthCountOff_('マシンレクチャー申込', o); }) },
     { name: '販促乗換', vals: five(function (o) { return monthCountOff_('販促_乗り換え', o); }) },
@@ -1030,7 +1088,7 @@ function styleAllDataSheet_(sheet) {
     { name: '学校関係者', vals: five(function (o) { return monthCountOff_('販促_学校関係者', o); }) },
     { name: 'ラグビー割', vals: five(function (o) { return monthCountOff_('販促_ラグビー割', o); }) },
     { name: '6ヶ月継続', vals: five(function (o) { return monthCountOff_('販促_6ヶ月継続', o); }) }
-  ];
+  ]);
 
   var enrollRow = start + 1;
   var cancelRow = start + 3;
@@ -1061,12 +1119,12 @@ function styleAllDataSheet_(sheet) {
     .setFontColor('#FFFFFF')
     .setFontSize(16)
     .setFontWeight('bold')
-    .setHorizontalAlignment('left');
+    .setHorizontalAlignment('center');
   sheet.setRowHeight(1, 36);
 
   sheet.getRange('A2:J2').setBackground('#FFFFFF').setFontSize(11);
-  sheet.getRange('A2').setFontWeight('bold').setFontColor('#616161');
-  sheet.getRange('B2')
+  sheet.getRange('A2').setFontWeight('bold').setFontColor('#616161').setHorizontalAlignment('center');
+  sheet.getRange('B2:C2')
     .setFontWeight('bold')
     .setFontSize(14)
     .setHorizontalAlignment('center')
@@ -1117,7 +1175,13 @@ function styleAllDataSheet_(sheet) {
     '#111111', SpreadsheetApp.BorderStyle.SOLID
   );
 
-  sheet.setColumnWidth(1, 112);
+  var opTotalRow = start + opLast + 1;
+  sheet.getRange(opTotalRow, 1, 1, 10)
+    .setBackground('#E0E0E0')
+    .setFontWeight('bold');
+  sheet.getRange(start + opFirst, 1, OP_NAMES_.length, 1).setFontSize(10);
+
+  sheet.setColumnWidth(1, 168);
   for (var c = 2; c <= 6; c++) sheet.setColumnWidth(c, 92);
   sheet.setColumnWidth(7, 88);
   sheet.setColumnWidth(8, 72);

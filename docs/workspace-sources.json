@@ -88,9 +88,9 @@
       "role": "store_ops_read_only_from_workspace",
       "sourceSheets": ["日報", "OP集計"],
       "workspaceSheet": "経堂マスタ",
-      "sync": "IMPORTRANGE of KPI cells + 日報 B8:F36 + OP集計 A1:E18",
+      "sync": "日報C13/C15 + hidden IMPORTRANGE OP集計!A1:E18 and OP集計!I:N (利用開始合計)",
       "setupApi": "setupAllData",
-      "notes": "Do not import OP log / membership PII into ALLDATA. Person lists stay on 入会者一覧＋自動メール管理."
+      "notes": "受付状況表は変更しない。経堂マスタは司令塔のみ。OPは16種+合計。名簿・OP明細の全行は載せない。"
     },
     {
       "key": "kyodo_trend",
@@ -105,7 +105,9 @@
     }
   ],
   "workspaceNativeSheets": [
-    "ALLDATA",
+    "経堂マスタ",
+    "経堂_OP",
+    "経堂_OPログ",
     "URL一覧",
     "Tasks",
     "WorkspaceSync"

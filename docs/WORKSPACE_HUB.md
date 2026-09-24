@@ -29,7 +29,8 @@
 | `口コミ_経堂` | `回答シート_JOYFIT` の `storeId=kyodo` | `QUERY(IMPORTRANGE(...))` |
 | `マシンレクチャー申込` | 同名 | `IMPORTRANGE` |
 | `入会者一覧＋自動メール管理` | 同名 | `IMPORTRANGE`（アンケート等はチェック風表示） |
-| `ALLDATA` | 日報KPI・OP集計・各ミラーの件数 | `IMPORTRANGE` + ハブ内 `QUERY`（名簿・OP全件は持ってこない） |
+| `経堂マスタ` | 直近5ヶ月・着地見込・計画・進捗・OP16種 | 日報C13/C15 + 隠し `経堂_OP` / `経堂_OPログ`（OP集計の利用開始合計） |
+| `経堂_OP` / `経堂_OPログ` | 受付状況表 `OP集計` A1:E18 / I:N | 非表示の IMPORTRANGE。元ブック未変更 |
 | `【経堂】会員動向` | 年間会員動向のシート「経堂」A1:N115 | `IMPORTRANGE`（白黒） |
 | `URL一覧` | リンク索引（先頭に口コミ付与アプリ） | 値 |
 | `Tasks` / `WorkspaceSync` | 本 GAS 用 | 自動作成 |
@@ -58,7 +59,7 @@
 | `setupPromoImport` | 追加販促 → `販促_*` |
 | `setupReviewImport` | 口コミ経堂 → `口コミ_経堂` |
 | `setupMachineImport` | マシンレクチャー2シート |
-| `setupAllData` | 司令塔シート `ALLDATA`（日報KPI・件数。名簿は載せない） |
+| `setupAllData` | `経堂マスタ`（5ヶ月・着地見込・計画） |
 | `setupKyodoTrend` | `【経堂】会員動向` ← 年間会員動向「経堂」A1:N115 |
 | `listSheets` | Workspace シート一覧 |
 | `inspectBook&id=` | 任意ブックのシート／ヘッダー確認 |
