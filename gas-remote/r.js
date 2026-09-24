@@ -854,122 +854,191 @@ function setupAllData_() {
       ok: true,
       sheet: ALLDATA_SHEET_NAME_,
       workspaceUrl: dest.getUrl() + '#gid=' + sh.getSheetId(),
-      uketsukeId: UKETSUKE_SOURCE_ID_,
-      note: '初回は ALLDATA 上の IMPORTRANGE で「アクセスを許可」。氏名メールは入会者一覧シート側。'
+      uketsukeId: UKETSUKE_SOURCE_ID_
     };
   } catch (err) {
     return { ok: false, message: String(err && err.message ? err.message : err) };
   }
 }
 
-function importrangeCell_(id, a1) {
-  return '=IFERROR(IMPORTRANGE("' + id + '","' + String(a1).replace(/"/g, '""') + '"),"許可")';
+function monthCountQuery_(sheetName, startExpr, endExpr) {
+  var ref = "'" + String(sheetName).replace(/'/g, "''") + "'!A:A";
+  return (
+    '=IFERROR(COUNTA(QUERY(' + ref +
+    ',"select A where A >= date \'"&TEXT(' + startExpr + ',"yyyy-mm-dd")&"\' and A < date \'"&TEXT(' +
+    endExpr + ',"yyyy-mm-dd")&"\'",0)),0)'
+  );
 }
 
-function hubCountA_(sheetName) {
-  var q = "'" + String(sheetName).replace(/'/g, "''") + "'!A2:A";
-  return '=IFERROR(COUNTA(QUERY(' + q + ',"select A where A is not null",0)),0)';
+function irSum_(yyCell, a1) {
+  return '=IFERROR(SUM(IMPORTRANGE($Z$1,' + yyCell + '&"!' + a1 + '")),)';
+}
+
+function irN_(yyCell, a1) {
+  return '=IFERROR(N(IMPORTRANGE($Z$1,' + yyCell + '&"!' + a1 + '")),)';
+}
+
+function irNippoIfCurrent_(a1) {
+  return (
+    '=IF(TEXT($B$2,"yymm")=TEXT(TODAY(),"yymm"),IFERROR(N(IMPORTRANGE($Z$1,"日報!' + a1 + '")),),)'
+  );
+}
+
+function irNippoSumIfCurrent_(a1) {
+  return (
+    '=IF(TEXT($B$2,"yymm")=TEXT(TODAY(),"yymm"),IFERROR(SUM(IMPORTRANGE($Z$1,"日報!' + a1 + '")),),)'
+  );
 }
 
 function styleAllDataSheet_(sheet) {
+  var ss = sheet.getParent();
+  var maxR = sheet.getMaxRows();
+  var maxC = sheet.getMaxColumns();
   sheet.clear();
-  try { sheet.clearConditionalFormatRules(); } catch (e1) {}
+  try { sheet.clearConditionalFormatRules(); } catch (e0) {}
+  try { sheet.getRange(1, 1, maxR, maxC).breakApart(); } catch (e1) {}
   sheet.setHiddenGridlines(true);
-  sheet.setTabColor('#C21632');
+  sheet.setTabColor('#111111');
   sheet.setFrozenRows(3);
 
-  var uid = UKETSUKE_SOURCE_ID_;
-  var rows = [
-    ['ALLDATA　経堂・数字の司令塔', '', '', '', '', ''],
-    [
-      '人名簿は「入会者一覧＋自動メール管理」。ここは件数と日報数値だけ。元ブックは触らない。会員動向は後から3列（年月/指標/値）を足す。',
-      '', '', '', '', ''
-    ],
-    ['区分', '指標', '値', '単位', '元', '取り方'],
-    ['会員', '対象月', importrangeCell_(uid, '日報!B1'), '', '受付状況表', '日報 B1'],
-    ['会員', '当日入会', importrangeCell_(uid, '日報!C9'), '名', '受付状況表', '日報 C9'],
-    ['会員', '当日退会', importrangeCell_(uid, '日報!C11'), '名', '受付状況表', '日報 C11'],
-    ['会員', '月初会員数', importrangeCell_(uid, '日報!C12'), '名', '受付状況表', '日報 C12'],
-    ['会員', '当月入会', importrangeCell_(uid, '日報!C13'), '名', '受付状況表', '日報 C13'],
-    ['会員', '当月末退会', importrangeCell_(uid, '日報!C15'), '名', '受付状況表', '日報 C15'],
-    ['会員', '月末安定会員数', importrangeCell_(uid, '日報!C16'), '名', '受付状況表', '日報 C16'],
-    ['会員', '翌月月初会員数', importrangeCell_(uid, '日報!C17'), '名', '受付状況表', '日報 C17'],
-    ['会員', '当月休会', importrangeCell_(uid, '日報!C18'), '名', '受付状況表', '日報 C18'],
-    ['口コミ', '経堂件数', hubCountA_('口コミ_経堂'), '件', 'EAST口コミ', 'QUERY 口コミ_経堂'],
-    ['マシンレクチャー', '申込件数', hubCountA_('マシンレクチャー申込'), '件', 'マシンレクチャー', 'QUERY マシンレクチャー申込'],
-    ['入会者', '一覧件数', hubCountA_('入会者一覧＋自動メール管理'), '件', 'マシンレクチャー', 'QUERY 入会者一覧'],
-    ['販促', '乗り換え', hubCountA_('販促_乗り換え'), '件', '追加販促', 'QUERY 販促_乗り換え'],
-    ['販促', '紹介・ペア入会', hubCountA_('販促_紹介・ペア入会'), '件', '追加販促', 'QUERY 販促_紹介・ペア入会'],
-    ['販促', '学校関係者', hubCountA_('販促_学校関係者'), '件', '追加販促', 'QUERY 販促_学校関係者'],
-    ['販促', 'ラグビー割', hubCountA_('販促_ラグビー割'), '件', '追加販促', 'QUERY 販促_ラグビー割'],
-    ['販促', '6ヶ月継続', hubCountA_('販促_6ヶ月継続'), '件', '追加販促', 'QUERY 販促_6ヶ月継続'],
-    ['会員動向', '（未接続）', '', '', '予定', '年月・指標・値の3列を IMPORTRANGE']
+  var now = new Date();
+  var thisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  var monthList = [];
+  for (var i = 0; i < 18; i++) {
+    monthList.push(new Date(now.getFullYear(), now.getMonth() - i, 1));
+  }
+
+  sheet.getRange('Z1').setValue(UKETSUKE_SOURCE_ID_);
+  sheet.getRange('Z2').setFormula('=TEXT($B$2,"yymm")');
+  sheet.getRange('Z3').setFormula('=TEXT(EDATE($B$2,-1),"yymm")');
+  sheet.getRange('Z4').setFormula('=IMPORTRANGE($Z$1,"日報!B1")');
+  sheet.hideColumns(26, 1);
+
+  sheet.getRange('A1').setValue('ALLDATA');
+  sheet.getRange('A1:D1').merge();
+  sheet.getRange('A2').setValue('年月');
+  sheet.getRange('B2').setValue(thisMonth);
+  sheet.getRange('B2').setNumberFormat('yyyy"年"m"月"');
+  sheet.getRange('B2').setDataValidation(
+    SpreadsheetApp.newDataValidation()
+      .requireValueInList(monthList, true)
+      .setAllowInvalid(false)
+      .build()
+  );
+
+  sheet.getRange('A3').setValue('項目');
+  sheet.getRange('B3').setFormula('=TEXT($B$2,"yyyy年m月")');
+  sheet.getRange('C3').setFormula('=TEXT(EDATE($B$2,-1),"yyyy年m月")');
+  sheet.getRange('D3').setValue('差');
+
+  var items = [
+    ['入会', irSum_('$Z$2', 'D5:D35'), irSum_('$Z$3', 'D5:D35')],
+    ['退会', irN_('$Z$2', 'D72'), irN_('$Z$3', 'D72')],
+    ['月初', irNippoIfCurrent_('C12'), ''],
+    ['安定', irNippoIfCurrent_('C16'), ''],
+    ['翌月月初', irNippoIfCurrent_('C17'), ''],
+    ['休会', irNippoIfCurrent_('C18'), ''],
+    ['OP契約', irSum_('$Z$2', 'C21:C36'), irSum_('$Z$3', 'C21:C36')],
+    ['OP解約', irNippoSumIfCurrent_('E21:E36'), ''],
+    ['口コミ', monthCountQuery_('口コミ_経堂', '$B$2', 'EDATE($B$2,1)'), monthCountQuery_('口コミ_経堂', 'EDATE($B$2,-1)', '$B$2')],
+    ['マシンレクチャー', monthCountQuery_('マシンレクチャー申込', '$B$2', 'EDATE($B$2,1)'), monthCountQuery_('マシンレクチャー申込', 'EDATE($B$2,-1)', '$B$2')],
+    ['入会者', monthCountQuery_('入会者一覧＋自動メール管理', '$B$2', 'EDATE($B$2,1)'), monthCountQuery_('入会者一覧＋自動メール管理', 'EDATE($B$2,-1)', '$B$2')],
+    ['乗り換え', monthCountQuery_('販促_乗り換え', '$B$2', 'EDATE($B$2,1)'), monthCountQuery_('販促_乗り換え', 'EDATE($B$2,-1)', '$B$2')],
+    ['紹介・ペア', monthCountQuery_('販促_紹介・ペア入会', '$B$2', 'EDATE($B$2,1)'), monthCountQuery_('販促_紹介・ペア入会', 'EDATE($B$2,-1)', '$B$2')],
+    ['学校関係者', monthCountQuery_('販促_学校関係者', '$B$2', 'EDATE($B$2,1)'), monthCountQuery_('販促_学校関係者', 'EDATE($B$2,-1)', '$B$2')],
+    ['ラグビー割', monthCountQuery_('販促_ラグビー割', '$B$2', 'EDATE($B$2,1)'), monthCountQuery_('販促_ラグビー割', 'EDATE($B$2,-1)', '$B$2')],
+    ['6ヶ月継続', monthCountQuery_('販促_6ヶ月継続', '$B$2', 'EDATE($B$2,1)'), monthCountQuery_('販促_6ヶ月継続', 'EDATE($B$2,-1)', '$B$2')]
   ];
 
-  sheet.getRange(1, 1, rows.length, 6).setValues(rows);
+  var start = 4;
+  var body = items.map(function (row, idx) {
+    var r = start + idx;
+    return [
+      row[0],
+      row[1],
+      row[2],
+      '=IF(AND(ISNUMBER(B' + r + '),ISNUMBER(C' + r + ')),B' + r + '-C' + r + ',)'
+    ];
+  });
+  sheet.getRange(start, 1, body.length, 4).setValues(body);
 
-  sheet.getRange(1, 1, 1, 6)
-    .merge()
-    .setBackground('#111111')
-    .setFontColor('#FFFFFF')
+  var last = start + body.length - 1;
+  var table = sheet.getRange(1, 1, last, 4);
+  table
     .setFontFamily('Meiryo')
-    .setFontSize(18)
-    .setFontWeight('bold')
-    .setVerticalAlignment('middle');
-  sheet.setRowHeight(1, 40);
-
-  sheet.getRange(2, 1, 1, 6)
-    .merge()
-    .setBackground('#F2F2F2')
-    .setFontColor('#5f6368')
-    .setFontFamily('Meiryo')
-    .setFontSize(10)
-    .setWrap(true);
-  sheet.setRowHeight(2, 48);
-
-  sheet.getRange(3, 1, 1, 6)
-    .setBackground('#C21632')
-    .setFontColor('#FFFFFF')
-    .setFontFamily('Meiryo')
-    .setFontSize(10)
-    .setFontWeight('bold');
-
-  var bodyLast = rows.length;
-  sheet.getRange(4, 1, bodyLast - 3, 6)
-    .setBackground('#FAFAFA')
     .setFontColor('#111111')
-    .setFontFamily('Meiryo')
-    .setFontSize(11)
     .setVerticalAlignment('middle');
-  sheet.getRange(4, 3, bodyLast - 3, 1).setHorizontalAlignment('right').setFontWeight('bold');
 
-  sheet.getRange(1, 8).setValue('日報（受付状況表）');
-  sheet.getRange(1, 8, 1, 5)
-    .merge()
+  sheet.getRange('A1:D1')
     .setBackground('#111111')
     .setFontColor('#FFFFFF')
-    .setFontFamily('Meiryo')
-    .setFontSize(12)
-    .setFontWeight('bold');
-  sheet.getRange(2, 8).setFormula(importrangeCell_(uid, '日報!B8:F36'));
+    .setFontSize(16)
+    .setFontWeight('bold')
+    .setHorizontalAlignment('left');
+  sheet.setRowHeight(1, 36);
 
-  sheet.getRange(1, 14).setValue('OP集計 B〜E');
-  sheet.getRange(1, 14, 1, 5)
-    .merge()
+  sheet.getRange('A2:D2')
+    .setBackground('#FFFFFF')
+    .setFontSize(11);
+  sheet.getRange('A2').setFontWeight('bold').setFontColor('#616161');
+  sheet.getRange('B2')
+    .setFontWeight('bold')
+    .setFontSize(14)
+    .setHorizontalAlignment('center')
+    .setBackground('#F5F5F5');
+  sheet.setRowHeight(2, 32);
+
+  sheet.getRange('A3:D3')
     .setBackground('#111111')
     .setFontColor('#FFFFFF')
-    .setFontFamily('Meiryo')
-    .setFontSize(12)
-    .setFontWeight('bold');
-  sheet.getRange(2, 14).setFormula(importrangeCell_(uid, 'OP集計!A1:E18'));
+    .setFontSize(10)
+    .setFontWeight('bold')
+    .setHorizontalAlignment('center');
+  sheet.setRowHeight(3, 28);
 
-  sheet.setColumnWidth(1, 140);
-  sheet.setColumnWidth(2, 160);
-  sheet.setColumnWidth(3, 120);
-  sheet.setColumnWidth(4, 56);
-  sheet.setColumnWidth(5, 140);
-  sheet.setColumnWidth(6, 220);
-  for (var c = 8; c <= 18; c++) sheet.setColumnWidth(c, 110);
+  sheet.getRange(start, 1, body.length, 4)
+    .setBackground('#FFFFFF')
+    .setFontSize(11);
+  sheet.getRange(start, 1, body.length, 1)
+    .setFontWeight('bold')
+    .setHorizontalAlignment('left');
+  sheet.getRange(start, 2, body.length, 3)
+    .setHorizontalAlignment('right')
+    .setNumberFormat('#,##0')
+    .setFontWeight('bold');
+
+  for (var r = 0; r < body.length; r++) {
+    if (r % 2 === 1) {
+      sheet.getRange(start + r, 1, 1, 4).setBackground('#F5F5F5');
+    }
+    sheet.setRowHeight(start + r, 28);
+  }
+
+  sheet.getRange(1, 1, last, 4).setBorder(
+    true, true, true, true, true, true,
+    '#BDBDBD', SpreadsheetApp.BorderStyle.SOLID
+  );
+  sheet.getRange('A1:D1').setBorder(
+    true, true, true, true, false, false,
+    '#111111', SpreadsheetApp.BorderStyle.SOLID
+  );
+  sheet.getRange('A3:D3').setBorder(
+    true, true, true, true, false, false,
+    '#111111', SpreadsheetApp.BorderStyle.SOLID
+  );
+
+  sheet.setColumnWidth(1, 128);
+  sheet.setColumnWidth(2, 112);
+  sheet.setColumnWidth(3, 112);
+  sheet.setColumnWidth(4, 88);
+
+  var leftover = ss.getSheets();
+  for (var j = leftover.length - 1; j >= 0; j--) {
+    var nm = leftover[j].getName();
+    if (/^シート\d+$/.test(nm) && leftover[j].getLastRow() === 0 && ss.getSheets().length > 1) {
+      try { ss.deleteSheet(leftover[j]); } catch (eDel) {}
+    }
+  }
 }
 
 function removeReviewSyncTriggers_() {
