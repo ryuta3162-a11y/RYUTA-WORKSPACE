@@ -59,23 +59,21 @@ const OPTION_LIST = [
 
 // ── メニュー・イベント ──
 
-function onOpen() {
-  installSimpleUpdateMenu_();
-  installJoyfitMenu_();
-  if (typeof installOpEventTempMenu_ === "function") {
-    installOpEventTempMenu_();
-  }
-  // 旧T列→I列の移行（必要なときだけ1回）
+function getBoundSpreadsheet_() {
   try {
-    const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME_OP);
+    const active = SpreadsheetApp.getActiveSpreadsheet();
+    if (active) return active;
+  } catch (e) { /* clasp / 時間トリガー */ }
+  return SpreadsheetApp.openById(OPTION_SPREADSHEET_ID);
+}
+
+function onOpen() {
+  // カスタムメニューは出さない。数値は毎日の自動更新が書く。
+  try {
+    const sh = getBoundSpreadsheet_().getSheetByName(SHEET_NAME_OP);
     if (sh) migrateOpLogTtoI_(sh);
   } catch (e) {
     Logger.log("OP明細配置: " + e);
-  }
-  try {
-    removeCompetitorTriggers_();
-  } catch (e) {
-    Logger.log("競合トリガー削除: " + e);
   }
 }
 
@@ -381,8 +379,7 @@ function runSimpleDailyUpdate() {
 /** 自動トリガーからも使える本体（ダイアログなし） */
 function runSimpleDailyUpdateCore_(silent) {
   // setupSpreadsheet() は重いので数値更新では呼ばない（タイムアウト原因）
-  try { removeCompetitorTriggers_(); } catch (e) { /* ignore */ }
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getBoundSpreadsheet_();
   const nippoYm = resolveNippoTargetYearMonth_(ss);
   ensureSummaryMonthB1_(ss, nippoYm.year, nippoYm.month);
 
@@ -618,55 +615,87 @@ function saveCurrentManualOpening() {
 
 // ── トリガー（初回のみ installOptionDailyTrigger を実行）──
 
-function installOptionDailyTrigger() {
-  removeOptionDailyTriggers_();
+// ── トリガー（毎日：数値更新してから日報送信。それ以外は置かない）──
 
-  // Apps Script は「平日だけ21時」を1本では作れないので、20時・21時の2本＋中で曜日判定
+function installOptionDailyTrigger() {
+  const result = resetAllTriggersInstallDaily_();
+  try {
+    SpreadsheetApp.getUi().alert(
+      "トリガー設定",
+      "既存トリガーは全部消して、日報用だけ入れ直しました。\n\n" +
+        "平日 21:00 … 数値更新 → 日報メール送信\n" +
+        "土日祝 20:00 … 数値更新 → 日報メール送信\n" +
+        "送信元は jf-kyoudou のままです。",
+      SpreadsheetApp.getUi().ButtonSet.OK
+    );
+  } catch (e) {
+    Logger.log("installOptionDailyTrigger: " + JSON.stringify(result));
+  }
+  return result;
+}
+
+/** 全トリガー削除 → 日報前の数値更新＋送信だけ残す */
+function resetAllTriggersInstallDaily_() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    ScriptApp.deleteTrigger(t);
+  });
   ScriptApp.newTrigger("runDailyUpdateAndSendAt20_")
     .timeBased()
     .everyDays(1)
     .atHour(20)
     .nearMinute(0)
     .create();
-
   ScriptApp.newTrigger("runDailyUpdateAndSendAt21_")
     .timeBased()
     .everyDays(1)
     .atHour(21)
     .nearMinute(0)
     .create();
-
-  SpreadsheetApp.getUi().alert(
-    "トリガー設定",
-    "毎日の自動処理を設定しました。\n\n" +
-      "平日 21:00 … 数値更新 → 日報メール送信\n" +
-      "土日祝 20:00 … 数値更新 → 日報メール送信\n" +
-      "（更新と送信は連続。同日の二重送信は防止済み）\n\n" +
-      "月初作業 … メニューからは省き、手動で行います\n" +
-      "※メニュー「更新」は数値だけの手動再取込（送信なし）\n" +
-      "※6ヶ月割管理はサイドバーの「更新」で手動更新します。",
-    SpreadsheetApp.getUi().ButtonSet.OK
-  );
+  return ScriptApp.getProjectTriggers().map(function (t) {
+    return {
+      fn: t.getHandlerFunction(),
+      source: String(t.getTriggerSource()),
+      event: String(t.getEventType())
+    };
+  });
 }
 
 function removeOptionDailyTriggers_() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
-    const fn = t.getHandlerFunction();
-    // 新: 曜日別一体型 / 旧: 19:30更新・毎日21時一体型・毎時6ヶ月割 など
-    if (fn === "runDailyUpdateAndSendSilent_" ||
-        fn === "runDailyUpdateAndSendAt20_" ||
-        fn === "runDailyUpdateAndSendAt21_" ||
-        fn === "smartUpdateDataSilent" || fn === "smartUpdateData" ||
-        fn === "sendDailyReportAt20_" || fn === "sendDailyReportAt21_" ||
-        fn === "refreshNippoCurrentMonthFromLog" ||
-        fn === "kyodoRefreshTenureListHourly_" ||
-        fn === "kyodoRefreshTenureListSilent_") {
-      ScriptApp.deleteTrigger(t);
+    ScriptApp.deleteTrigger(t);
+  });
+}
+
+function deleteCompetitorSheets_() {
+  const ss = getBoundSpreadsheet_();
+  const deleted = [];
+  ss.getSheets().slice().forEach(function (sh) {
+    if (ss.getSheets().length <= 1) return;
+    const name = sh.getName();
+    if (name === "競合分析" || name.indexOf("競合_") === 0) {
+      ss.deleteSheet(sh);
+      deleted.push(name);
     }
   });
-  if (typeof removeDailyReportSendTriggers_ === "function") {
-    removeDailyReportSendTriggers_();
-  }
+  return deleted;
+}
+
+/**
+ * clasp から実行: 不要トリガー全削除・日報用再設定・競合タブ削除・当月の数値更新
+ * （日報メールは送らない）
+ */
+function bootstrapDailyOpAuto_() {
+  const triggers = resetAllTriggersInstallDaily_();
+  const competitorSheets = deleteCompetitorSheets_();
+  const update = runSimpleDailyUpdateCore_(true);
+  return {
+    triggers: triggers,
+    competitorSheets: competitorSheets,
+    updateMessage: update && update.message,
+    year: update && update.year,
+    month: update && update.month,
+    label: update && update.label
+  };
 }
 
 /**
@@ -1054,9 +1083,8 @@ function executeFetchMonthForYm_(ss, logSheet, targetYear, targetMonth, silent, 
   const afterStr = prev.getFullYear() + "/" + String(prev.getMonth() + 1).padStart(2, "0") + "/01";
   const beforeStr = afterNext.getFullYear() + "/" + String(afterNext.getMonth() + 1).padStart(2, "0") + "/01";
 
-  // 高速パス: 追加・停止メールのみ検索（入会時OPは入会ID補完で取る＝二重オープンしない）
-  const gmailQuery = (light ? OPTION_CHANGE_SEARCH_QUERY : SEARCH_QUERY) +
-    " after:" + afterStr + " before:" + beforeStr;
+  // 入会メール + 追加停止メール（light も同じ検索。件数だけ上限）
+  const gmailQuery = SEARCH_QUERY + " after:" + afterStr + " before:" + beforeStr;
   const threads = light
     ? searchGmailRecentThreadsSafe_(gmailQuery, 200)
     : searchGmailAllThreads_(gmailQuery);

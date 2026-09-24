@@ -262,13 +262,5 @@ function installDailyReportSendTriggers_() {
 }
 
 function removeDailyReportSendTriggers_() {
-  ScriptApp.getProjectTriggers().forEach(function (t) {
-    const fn = t.getHandlerFunction();
-    if (fn === "sendDailyReportAt20_" || fn === "sendDailyReportAt21_" ||
-        fn === "runDailyUpdateAndSendSilent_" ||
-        fn === "runDailyUpdateAndSendAt20_" ||
-        fn === "runDailyUpdateAndSendAt21_") {
-      ScriptApp.deleteTrigger(t);
-    }
-  });
+  // 日報送信は runDailyUpdateAndSendAt20_/21_ に一本化。誤って消さない。
 }
