@@ -16,6 +16,7 @@
       "setupPromoImport",
       "setupReviewImport",
       "setupMachineImport",
+      "setupKengakuImport",
       "setupAllData",
       "setupKyodoTrend",
       "listSheets",
@@ -81,6 +82,18 @@
       "notes": "Same sheet names. Checkbox-style display on survey/lecture flag columns."
     },
     {
+      "key": "kengaku",
+      "name": "経堂　見学・体験申し込みフォーム",
+      "spreadsheetId": "1RPUw0slNCit9ZwJgINGfv89oc2Hxw8zzAZyMt6g_QuY",
+      "url": "https://docs.google.com/spreadsheets/d/1RPUw0slNCit9ZwJgINGfv89oc2Hxw8zzAZyMt6g_QuY/edit",
+      "role": "store_ops_read_only_from_workspace",
+      "sourceSheet": "見学体験申請",
+      "workspaceSheet": "見学体験申請",
+      "sync": "IMPORTRANGE A:I",
+      "setupApi": "setupKengakuImport",
+      "notes": "Do not edit the source book. 経堂マスタ R列に今月分を QUERY。"
+    },
+    {
       "key": "uketsuke",
       "name": "経堂　受付状況表",
       "spreadsheetId": "14hxiLBzvGTuIpfZcoVjiHpz8b419OzUrtQAr5788h3w",
@@ -108,6 +121,7 @@
     "経堂マスタ",
     "経堂_OP",
     "経堂_OPログ",
+    "見学体験申請",
     "URL一覧",
     "Tasks",
     "WorkspaceSync"
