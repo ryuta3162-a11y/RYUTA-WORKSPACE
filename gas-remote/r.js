@@ -1081,8 +1081,6 @@ function styleAllDataSheet_(sheet) {
     sheet.setRowHeight(start + r, 28);
   }
 
-  sheet.setFrozenColumns(1);
-
   sheet.getRange(1, 1, last, 9).setBorder(
     true, true, true, true, true, true,
     '#BDBDBD', SpreadsheetApp.BorderStyle.SOLID
