@@ -692,6 +692,38 @@ function removeOptionDailyTriggers_() {
   });
 }
 
+function listInstalledTriggers_() {
+  return ScriptApp.getProjectTriggers().map(function (t) {
+    return {
+      fn: t.getHandlerFunction(),
+      source: String(t.getTriggerSource()),
+      event: String(t.getEventType())
+    };
+  });
+}
+
+/** 日報用 20時/21時が無ければ入れ、それ以外の時間トリガーは外す */
+function ensureDailyTriggersOnly_() {
+  const keep = {};
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    const fn = t.getHandlerFunction();
+    if ((fn === "runDailyUpdateAndSendAt20_" || fn === "runDailyUpdateAndSendAt21_") && !keep[fn]) {
+      keep[fn] = true;
+      return;
+    }
+    ScriptApp.deleteTrigger(t);
+  });
+  if (!keep.runDailyUpdateAndSendAt20_) {
+    ScriptApp.newTrigger("runDailyUpdateAndSendAt20_")
+      .timeBased().everyDays(1).atHour(20).nearMinute(0).create();
+  }
+  if (!keep.runDailyUpdateAndSendAt21_) {
+    ScriptApp.newTrigger("runDailyUpdateAndSendAt21_")
+      .timeBased().everyDays(1).atHour(21).nearMinute(0).create();
+  }
+  return listInstalledTriggers_();
+}
+
 function deleteCompetitorSheets_() {
   const ss = getBoundSpreadsheet_();
   const deleted = [];
@@ -761,7 +793,11 @@ function runDailyUpdateAndSendSilent_() {
   try {
     // 夜間自動: ラベル軽整備（直近）→ 当月数値 → 送信
     try { prepareRecentMailHygiene_(DAILY_MAIL_HYGIENE_DAYS); } catch (e) { Logger.log(e); }
-    runSimpleDailyUpdateCore_(true);
+    try {
+      runSimpleDailyUpdateCore_(true);
+    } catch (updateErr) {
+      Logger.log("数値更新エラー（日報は送る）: " + (updateErr && updateErr.message ? updateErr.message : updateErr));
+    }
     if (typeof sendShopDailyReportSilent_ === "function") {
       sendShopDailyReportSilent_();
     } else {
@@ -1082,7 +1118,7 @@ function executeFetchMonthForYm_(ss, logSheet, targetYear, targetMonth, silent, 
   // 入会データの新着だけ軽く追記（ラベル付与は①に任せる）
   try {
     if (typeof fetchMembershipEmailsIncremental_ === "function") {
-      fetchMembershipEmailsIncremental_(ss, light ? 10 : 14, { skipLabels: true });
+      fetchMembershipEmailsIncremental_(ss, 14, { skipLabels: true });
     } else if (!light) {
       fetchMembershipEmailsSilent();
     }
@@ -1112,7 +1148,7 @@ function executeFetchMonthForYm_(ss, logSheet, targetYear, targetMonth, silent, 
   // 入会メール + 追加停止メール（light も同じ検索。件数だけ上限）
   const gmailQuery = SEARCH_QUERY + " after:" + afterStr + " before:" + beforeStr;
   const threads = light
-    ? searchGmailRecentThreadsSafe_(gmailQuery, 200)
+    ? searchGmailRecentThreadsSafe_(gmailQuery, 400)
     : searchGmailAllThreads_(gmailQuery);
   if (!light) applyOptionMailLabelsToThreads_(threads);
   const fetched = extractDataFromThreads(threads, targetYear, targetMonth);
@@ -1134,8 +1170,13 @@ function executeFetchMonthForYm_(ss, logSheet, targetYear, targetMonth, silent, 
     }
   }
   absorb_(fetched);
-  const fromStored = extractOpFromStoredEnrollments_(ss, targetYear, targetMonth, seen);
-  absorb_(fromStored);
+  let fromStored = [];
+  try {
+    fromStored = extractOpFromStoredEnrollments_(ss, targetYear, targetMonth, seen);
+    absorb_(fromStored);
+  } catch (storedErr) {
+    Logger.log("入会ID補完エラー: " + storedErr);
+  }
   Logger.log(
     "OP取込 " + targetYear + "/" + (targetMonth + 1) +
       (light ? " [light]" : "") +
