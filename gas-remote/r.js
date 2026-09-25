@@ -2881,6 +2881,7 @@ function refreshKyodoAiBrief_() {
     var ss = openWorkspaceSpreadsheet_();
     sheet = ss.getSheetByName(ALLDATA_SHEET_NAME_);
     if (!sheet) return { ok: false, message: '経堂マスタ not found' };
+    var triggerInfo = ensureKyodoAiBriefTrigger_();
     SpreadsheetApp.flush();
     var snap = collectKyodoKpiSnapshot_(sheet);
     var enroll = findKyodoKpi_(snap.items, '入会実績');
@@ -2904,7 +2905,8 @@ function refreshKyodoAiBrief_() {
       headline: brief.headline,
       ticker: brief.ticker,
       geminiError: (attempted && attempted.error) || '',
-      aiAuthUrl: kyodoAiAuthUrl_()
+      aiAuthUrl: kyodoAiAuthUrl_(),
+      aiTrigger: triggerInfo
     };
   } catch (err) {
     return { ok: false, message: String(err && err.message ? err.message : err) };
