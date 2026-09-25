@@ -101,7 +101,7 @@
       "role": "store_ops_read_only_from_workspace",
       "sourceSheets": ["日報", "OP集計"],
       "workspaceSheet": "経堂マスタ",
-      "sync": "日報C13/C15 + hidden IMPORTRANGE OP集計!A1:E18 and QUERY(OP集計!I:N Col1/Col3/Col5)",
+      "sync": "上部に今日の入会/退会。日報C9/C11/C13/C15/D14 + hidden 入会・退会_データ and OP集計",
       "setupApi": "setupAllData",
       "notes": "受付状況表は変更しない。経堂マスタは司令塔のみ。OPは16種+合計。名簿・OP明細の全行は載せない。"
     },
@@ -121,6 +121,8 @@
     "経堂マスタ",
     "経堂_OP",
     "経堂_OPログ",
+    "経堂_入会",
+    "経堂_退会",
     "見学体験申請",
     "URL一覧",
     "Tasks",
