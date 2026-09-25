@@ -558,7 +558,7 @@ function columnLetter_(n) {
 }
 
 /** 任意ブックのシート名・ヘッダーを覗く（集約設計用） */
-function inspectSheetRange_(id, sheetName, a1, wantFormulas) {
+function inspectSheetRange_(id, sheetName, a1, wantFormulas, wantFormat) {
   try {
     if (!id || !sheetName || !a1) return { ok: false, message: 'id, sheet, range required' };
     var ss = SpreadsheetApp.openById(id);
@@ -570,7 +570,9 @@ function inspectSheetRange_(id, sheetName, a1, wantFormulas) {
       sheet: sheetName,
       range: a1,
       values: rng.getDisplayValues(),
-      formulas: wantFormulas ? rng.getFormulas() : []
+      formulas: wantFormulas ? rng.getFormulas() : [],
+      fontSizes: wantFormat ? rng.getFontSizes() : [],
+      backgrounds: wantFormat ? rng.getBackgrounds() : []
     };
   } catch (err) {
     return { ok: false, message: String(err && err.message ? err.message : err) };
@@ -3176,7 +3178,8 @@ function handleApiGet_(e) {
         String((e.parameter && e.parameter.id) || ''),
         String((e.parameter && e.parameter.sheet) || ''),
         String((e.parameter && e.parameter.range) || ''),
-        String((e.parameter && e.parameter.formulas) || '') === '1'
+        String((e.parameter && e.parameter.formulas) || '') === '1',
+        String((e.parameter && e.parameter.format) || '') === '1'
       ));
     }
     if (api === 'compactUketsukeOpDuplicates') {
