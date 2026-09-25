@@ -1934,6 +1934,240 @@ function auditGmailThreadShape_() {
   }
 }
 
+function parseOptionContractHub_(date, body, msgId) {
+  var results = [];
+  var nameMatch = String(body || '').match(/([^\r\n]{1,40}?)\s*様/);
+  var name = nameMatch ? String(nameMatch[1]).replace(/^[>\s]+/, '').trim() : '';
+  var re = /[（(【\[](利用開始|利用停止)[）)】\]]\s*([^\r\n]+)/g;
+  var m;
+  while ((m = re.exec(String(body || ''))) !== null) {
+    var status = m[1] === '利用開始' ? '利用開始(OP追加)' : '利用停止';
+    var raw = String(m[2]).trim();
+    if (!raw || /について|場合でも|^合計|^小計|^の場合|^円/.test(raw)) continue;
+    var norm = normalizeOptionNameHub_(raw);
+    if (!norm) continue;
+    results.push([date, name, status, raw, norm, msgId]);
+  }
+  return results;
+}
+
+function countGmailLabelThreadsHub_(labelName) {
+  var label = GmailApp.getUserLabelByName(labelName);
+  if (!label) return { name: labelName, exists: false, threads: 0 };
+  var n = 0;
+  var start = 0;
+  while (n < 3000) {
+    var batch = label.getThreads(start, 100);
+    if (!batch || !batch.length) break;
+    n += batch.length;
+    if (batch.length < 100) break;
+    start += batch.length;
+  }
+  return { name: labelName, exists: true, threads: n };
+}
+
+function rebuildFromUnbundledMail_(dryRun) {
+  try {
+    var ss = SpreadsheetApp.openById(UKETSUKE_SOURCE_ID_);
+    var data = ss.getSheetByName('入会・退会_データ');
+    var op = ss.getSheetByName('OP集計');
+    if (!data || !op) return { ok: false, message: 'sheet missing' };
+    var monthText = String(op.getRange('B1').getDisplayValue() || '2026年9月').trim();
+    var packCore = [
+      '安心サポートVIP', 'オンラインレッスン', '体組成計', 'レンタルマット',
+      'プロテイン＋水素水', 'レンタルタオル', 'ホットスタジオ'
+    ];
+
+    var lastData = Math.max(data.getLastRow(), 1);
+    var enrollRows = data.getRange(2, 1, lastData, 5).getValues();
+    var sheetByKey = {};
+    var sheetSept = [];
+    var i;
+    for (i = 0; i < enrollRows.length; i++) {
+      var sName = String(enrollRows[i][1] || '').trim();
+      if (!sName) continue;
+      var sYm = ymLabelOf_(enrollRows[i][2]);
+      var sKey = nameKeyHub_(sName) + '|' + sYm;
+      sheetByKey[sKey] = {
+        name: sName,
+        ym: sYm,
+        cat: String(enrollRows[i][3] || '')
+      };
+      if (sYm === monthText) sheetSept.push(sheetByKey[sKey]);
+    }
+
+    var enrollQ = 'from:info@joyfit-service.jp subject:ご入会ありがとうございます after:2026/08/30 before:2026/10/01';
+    var changeQ = 'from:info@joyfit-service.jp subject:オプションご契約につきまして after:2026/08/30 before:2026/10/01';
+    var enrollThreads = searchGmailPagedHub_(enrollQ, 400);
+    var changeThreads = searchGmailPagedHub_(changeQ, 400);
+
+    var gmailPeople = [];
+    var seenG = {};
+    var enrollMessages = 0;
+    var t;
+    for (t = 0; t < enrollThreads.length; t++) {
+      var messages = enrollThreads[t].getMessages() || [];
+      var mi;
+      for (mi = 0; mi < messages.length; mi++) {
+        var msg = messages[mi];
+        var subject = String(msg.getSubject() || '');
+        if (subject.indexOf('ご入会') === -1) continue;
+        enrollMessages++;
+        var body = String(msg.getPlainBody() || '');
+        if (body.length < 80) body = String(msg.getBody() || '').replace(/<[^>]+>/g, ' ');
+        var personName = extractNyukaiNameHub_(body);
+        if (!personName) continue;
+        var date = msg.getDate();
+        var ym = calcNyukaiYmHub_(body, date);
+        var cat = detectNyukaiCatHub_(subject, body);
+        var gKey = nameKeyHub_(personName) + '|' + ym;
+        if (seenG[gKey]) continue;
+        seenG[gKey] = true;
+        var ops = parseOpNamesFromBodyHub_(body);
+        gmailPeople.push({
+          name: personName,
+          ym: ym,
+          cat: cat,
+          six: cat.indexOf('法人') === -1,
+          date: date,
+          msgId: msg.getId(),
+          ops: ops,
+          opCount: ops.length,
+          inSheet: !!sheetByKey[gKey]
+        });
+      }
+    }
+
+    var septPeople = gmailPeople.filter(function (p) { return p.ym === monthText; });
+    var six = septPeople.filter(function (p) { return p.six; });
+    var corp = septPeople.filter(function (p) { return !p.six; });
+    var missing = septPeople.filter(function (p) { return !p.inSheet; });
+    var packShort = [];
+    var packOk = 0;
+    for (i = 0; i < six.length; i++) {
+      var uniq = {};
+      for (t = 0; t < six[i].ops.length; t++) uniq[six[i].ops[t]] = true;
+      var miss = [];
+      for (t = 0; t < packCore.length; t++) {
+        if (!uniq[packCore[t]]) miss.push(packCore[t]);
+      }
+      if (!uniq['タンニング'] && !uniq['セルフエステ']) miss.push('タンニングまたはセルフエステ');
+      if (miss.length) packShort.push({ name: six[i].name, opCount: six[i].opCount, missing: miss, inSheet: six[i].inSheet });
+      else packOk++;
+    }
+
+    var changeRows = [];
+    var changeMessages = 0;
+    for (t = 0; t < changeThreads.length; t++) {
+      var cmsgs = changeThreads[t].getMessages() || [];
+      for (i = 0; i < cmsgs.length; i++) {
+        var csub = String(cmsgs[i].getSubject() || '');
+        if (csub.indexOf('オプションご契約') === -1) continue;
+        changeMessages++;
+        var cbody = String(cmsgs[i].getPlainBody() || '');
+        if (cbody.length < 80) cbody = String(cmsgs[i].getBody() || '').replace(/<[^>]+>/g, ' ');
+        changeRows = changeRows.concat(parseOptionContractHub_(cmsgs[i].getDate(), cbody, cmsgs[i].getId()));
+      }
+    }
+
+    var labels = [
+      countGmailLabelThreadsHub_('入会メール/一般会員'),
+      countGmailLabelThreadsHub_('入会メール/法人会員'),
+      countGmailLabelThreadsHub_('退会メール/一般会員'),
+      countGmailLabelThreadsHub_('退会メール/法人会員'),
+      countGmailLabelThreadsHub_('オプションメール/追加・停止')
+    ];
+
+    var written = { enrollAdded: 0, opAdded: 0, compact: null };
+    if (!dryRun) {
+      var addEnroll = missing.map(function (p) {
+        return [p.date, p.name, p.ym, p.cat, p.msgId];
+      });
+      if (addEnroll.length) {
+        var start = lastData + 1;
+        data.getRange(start, 3, addEnroll.length, 1).setNumberFormat('@');
+        data.getRange(start, 1, addEnroll.length, 5).setValues(addEnroll);
+        data.getRange(start, 1, addEnroll.length, 1).setNumberFormat('yyyy/mm/dd hh:mm');
+        written.enrollAdded = addEnroll.length;
+      }
+
+      var lastOp = Math.max(op.getLastRow(), 1);
+      var log = op.getRange(1, 9, lastOp, 6).getValues();
+      var seenOp = {};
+      for (i = 1; i < log.length; i++) {
+        var k = uketsukeOpDedupeKey_(log[i]);
+        if (k) seenOp[k] = true;
+      }
+      var newOp = [];
+      for (i = 0; i < six.length; i++) {
+        for (t = 0; t < six[i].ops.length; t++) {
+          var row = [six[i].date, six[i].name, '利用開始(新規入会)', six[i].ops[t], six[i].ops[t], six[i].msgId];
+          var dk = uketsukeOpDedupeKey_(row);
+          if (seenOp[dk]) continue;
+          seenOp[dk] = true;
+          newOp.push(row);
+        }
+      }
+      for (i = 0; i < changeRows.length; i++) {
+        var ck = uketsukeOpDedupeKey_(changeRows[i]);
+        if (!ck || seenOp[ck]) continue;
+        seenOp[ck] = true;
+        newOp.push(changeRows[i]);
+      }
+      if (newOp.length) {
+        op.getRange(lastOp + 1, 9, newOp.length, 6).setValues(newOp);
+        written.opAdded = newOp.length;
+      }
+      written.compact = compactUketsukeOpDuplicates_();
+      var mm = monthText.match(/^(\d{4})年(\d{1,2})月$/);
+      if (mm) {
+        syncMonthlyEnrollCountsSafe_(ss, parseInt(mm[1], 10), parseInt(mm[2], 10) - 1, monthText);
+      }
+    }
+
+    return {
+      ok: true,
+      dryRun: !!dryRun,
+      meaning: {
+        previous74: '入会・退会_データの2026年9月ユニーク人数（6ヶ月割69+法人5）。法人以外がキャンペーン一般会員',
+        gmail82: '受信日8/30-10/1の入会メール通数。入会月は本文の利用開始日',
+        pack: '一般会員（6ヶ月割）にはテンプレ約7〜8種。法人は原則セットなし'
+      },
+      labels: labels,
+      gmail: {
+        enrollThreads: enrollThreads.length,
+        enrollMessages: enrollMessages,
+        uniqueNameMonth: gmailPeople.length,
+        septUnique: septPeople.length,
+        septSixMonth: six.length,
+        septCorporate: corp.length,
+        optionThreads: changeThreads.length,
+        optionMessages: changeMessages,
+        optionParsedRows: changeRows.length
+      },
+      sheetSept: {
+        total: sheetSept.length,
+        sixMonth: sheetSept.filter(function (p) { return String(p.cat).indexOf('法人') === -1; }).length,
+        corporate: sheetSept.filter(function (p) { return String(p.cat).indexOf('法人') !== -1; }).length
+      },
+      missingFromSheet: missing.map(function (p) {
+        return { name: p.name, ym: p.ym, cat: p.cat, opCount: p.opCount, ops: p.ops };
+      }),
+      packFromMail: {
+        complete: packOk,
+        short: packShort.length,
+        shortPeople: packShort
+      },
+      otherYmInWindow: gmailPeople.filter(function (p) { return p.ym !== monthText; }).map(function (p) {
+        return { name: p.name, ym: p.ym, cat: p.cat };
+      }),
+      written: written
+    };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
 function opStartAt_(optionName, monthOffset) {
   var log = "'" + OP_LOG_HELPER_SHEET_ + "'";
   var name = String(optionName).replace(/"/g, '""');
@@ -2980,6 +3214,12 @@ function handleApiGet_(e) {
     }
     if (api === 'auditGmailThreadShape') {
       return jsonOutput_(auditGmailThreadShape_());
+    }
+    if (api === 'auditUnbundledEnroll') {
+      return jsonOutput_(rebuildFromUnbundledMail_(true));
+    }
+    if (api === 'rebuildFromUnbundledMail') {
+      return jsonOutput_(rebuildFromUnbundledMail_(String((e.parameter && e.parameter.dry) || '') === '1'));
     }
     if (api === 'setupReviewImport') {
       return jsonOutput_(setupReviewImport_());
