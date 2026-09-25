@@ -516,12 +516,21 @@ function setupDisplaySheet_(ss) {
   sheet.getRange("H:H").setNumberFormat("@");
 }
 
-function refreshMembershipDisplay_(ss) {
+function refreshMembershipDisplay_(ss, ymOpt) {
   setupDisplaySheet_(ss);
   const displaySheet = ss.getSheetByName(SHEET_NAME_MEMBERS);
   const dataSheet = ss.getSheetByName(SHEET_NAME_DATA);
+  try {
+    if (displaySheet && displaySheet.isSheetHidden()) displaySheet.showSheet();
+  } catch (e) { /* ignore */ }
   const allEnroll = readEnrollData_(dataSheet);
   const allWithdraw = readWithdrawData_(dataSheet);
+
+  if (ymOpt && ymOpt.year != null && ymOpt.month != null) {
+    const label = ymOpt.year + "年" + (ymOpt.month + 1) + "月";
+    setMonthTextCell_(displaySheet.getRange("B1"), label);
+    setMonthTextCell_(displaySheet.getRange("G1"), label);
+  }
 
   setupMonthSelectorCell_(displaySheet.getRange("B1"), extractMonthListFromRows_(allEnroll), true);
   setupMonthSelectorCell_(displaySheet.getRange("G1"), extractMonthListFromRows_(allWithdraw), true);

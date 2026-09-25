@@ -358,6 +358,48 @@ function runSimpleDailyUpdate() {
   }
 }
 
+/**
+ * Gmailを再検索せず、当月OPログの同一人物×同一オプション重複だけ畳む。
+ * clasp run / 手動修復用。
+ */
+function repairCurrentMonthOpDuplicates_() {
+  const ss = getBoundSpreadsheet_();
+  const ym = resolveNippoTargetYearMonth_(ss);
+  ensureSummaryMonthB1_(ss, ym.year, ym.month);
+  const opSheet = getOpSheet_(ss);
+  const logData = readOpLogValues_(opSheet);
+  const header = logData.length ? logData[0] : OP_LOG_HEADERS.slice();
+  const keptOther = [];
+  const keptThis = [];
+  logData.slice(1).forEach(function (row) {
+    const d = parseOpLogDate_(row[0]);
+    if (d && d.getFullYear() === ym.year && d.getMonth() === ym.month) {
+      keptThis.push(row);
+    } else {
+      keptOther.push(row);
+    }
+  });
+  const uniqueThis = compactOpLogRows_(keptThis);
+  writeOpLogValues_(opSheet, [header].concat(keptOther).concat(uniqueThis));
+  syncSummarySheetFromOpData_(ss, ym.year, ym.month, opSheet);
+  updateNippoSheetForMonth(ss, ym.year, ym.month, opSheet);
+  try {
+    if (typeof refreshMembershipDisplay_ === "function") refreshMembershipDisplay_(ss, ym);
+  } catch (e) {
+    Logger.log("入会・退会表示: " + e);
+  }
+  Logger.log(
+    "OP重複修復 " + ym.label +
+      " 当月 " + keptThis.length + " → " + uniqueThis.length
+  );
+  return {
+    ok: true,
+    label: ym.label,
+    before: keptThis.length,
+    after: uniqueThis.length
+  };
+}
+
 /** 自動トリガーからも使える本体（ダイアログなし） */
 function runSimpleDailyUpdateCore_(silent) {
   // setupSpreadsheet() は重いので数値更新では呼ばない（タイムアウト原因）
@@ -388,7 +430,9 @@ function runSimpleDailyUpdateCore_(silent) {
 
   // 表示シートの全面再描画は重いので、失敗しても数値更新は成功扱いにする
   try {
-    if (typeof refreshMembershipDisplay_ === "function") refreshMembershipDisplay_(ss);
+    if (typeof refreshMembershipDisplay_ === "function") {
+      refreshMembershipDisplay_(ss, nippoYm);
+    }
   } catch (e) {
     Logger.log("入会・退会表示: " + e);
   }
@@ -1074,8 +1118,10 @@ function executeFetchMonthForYm_(ss, logSheet, targetYear, targetMonth, silent, 
   const fetched = extractDataFromThreads(threads, targetYear, targetMonth);
 
   // 当月ログは消さずマージ（light の不完全検索で B/C/D が消えるのを防ぐ）
+  // ただし同一人物×同一OP×開始/停止はメールIDが違っても1件（二重配信・入会ID補完の積み増し防止）
+  const uniqueThisMonth = compactOpLogRows_(keptThisMonth);
   const seen = {};
-  keptThisMonth.forEach(function (row) {
+  uniqueThisMonth.forEach(function (row) {
     seen[opLogDedupeKey_(row)] = true;
   });
   const added = [];
@@ -1093,13 +1139,14 @@ function executeFetchMonthForYm_(ss, logSheet, targetYear, targetMonth, silent, 
   Logger.log(
     "OP取込 " + targetYear + "/" + (targetMonth + 1) +
       (light ? " [light]" : "") +
-      " 当月既存=" + keptThisMonth.length +
+      " 当月既存=" + uniqueThisMonth.length +
+      "（重複畳み前=" + keptThisMonth.length + "）" +
       " Gmail新規=" + fetched.length +
       " 入会ID補完=+" + fromStored.length +
       " 追記=" + added.length
   );
 
-  writeOpLogValues_(opSheet, [header].concat(keptOtherMonths).concat(keptThisMonth).concat(added));
+  writeOpLogValues_(opSheet, [header].concat(keptOtherMonths).concat(uniqueThisMonth).concat(added));
   syncSummarySheetFromOpData_(ss, targetYear, targetMonth, opSheet);
   updateNippoSheetForMonth(ss, targetYear, targetMonth, opSheet);
 
@@ -1118,11 +1165,11 @@ function executeFetchMonthForYm_(ss, logSheet, targetYear, targetMonth, silent, 
   }
 
   if (!silent) {
-    const signupStats = countSignupOpStats_(keptThisMonth.concat(added));
+    const signupStats = countSignupOpStats_(uniqueThisMonth.concat(added));
     SpreadsheetApp.getUi().alert(
       "OP更新",
       (targetMonth + 1) + "月分を取り込みました。\n\n" +
-        "・当月既存 " + keptThisMonth.length + " 行\n" +
+        "・当月既存 " + uniqueThisMonth.length + " 行\n" +
         "・Gmail新規 " + fetched.length + " 行\n" +
         "・入会メールID補完 +" + fromStored.length + " 行\n" +
         "・追記 " + added.length + " 行\n" +
@@ -1133,8 +1180,39 @@ function executeFetchMonthForYm_(ss, logSheet, targetYear, targetMonth, silent, 
   }
 }
 
+function opLogKindBucket_(cat) {
+  return String(cat || "").indexOf("利用停止") !== -1 ? "stop" : "start";
+}
+
+function opLogMonthStamp_(row) {
+  const d = parseOpLogDate_(row && row[0]);
+  if (!d) return "";
+  return d.getFullYear() + "-" + String(d.getMonth() + 1);
+}
+
+/**
+ * 同一契約の重複キー。メールIDは使わない。
+ * （入会メールが2通＋入会ID補完で、6ヶ月割0円パックが2〜4倍になるため）
+ */
 function opLogDedupeKey_(row) {
-  return String((row && row[5]) || "") + "|" + String((row && row[2]) || "") + "|" + String((row && row[4]) || "");
+  const name = String((row && row[1]) || "").replace(/\s+/g, "");
+  const opt = String((row && row[4]) || "").trim();
+  const bucket = opLogKindBucket_(row && row[2]);
+  const ym = opLogMonthStamp_(row);
+  const fallback = name ? "" : String((row && row[5]) || "");
+  return ym + "|" + name + "|" + fallback + "|" + bucket + "|" + opt;
+}
+
+function compactOpLogRows_(rows) {
+  const seen = {};
+  const out = [];
+  for (let i = 0; i < (rows || []).length; i++) {
+    const key = opLogDedupeKey_(rows[i]);
+    if (!key || seen[key]) continue;
+    seen[key] = true;
+    out.push(rows[i]);
+  }
+  return out;
 }
 
 /** light用: 件数上限つきGmail検索（全件ページングしない） */
@@ -1172,7 +1250,7 @@ function extractOpFromStoredEnrollments_(ss, targetYear, targetMonth, seen) {
   const out = [];
   seen = seen || {};
   LAST_ENROLL_OP_DIAG_ = {
-    opened: 0, withOp: 0, withoutOp: 0, noMsgId: 0, enroll: 0, missingNames: []
+    opened: 0, withOp: 0, withoutOp: 0, noMsgId: 0, enroll: 0, targets: 0, missingNames: []
   };
   if (typeof readEnrollData_ !== "function") return out;
 
@@ -1224,7 +1302,7 @@ function extractOpFromStoredEnrollments_(ss, targetYear, targetMonth, seen) {
           row[0] = new Date(targetYear, targetMonth, 1);
           d = row[0];
         }
-        const key = String(row[5] || "") + "|" + String(row[2] || "") + "|" + String(row[4] || "");
+        const key = opLogDedupeKey_(row);
         if (!OPTION_LIST.includes(String(row[4] || ""))) continue;
         opts.push(String(row[4] || ""));
         if (seen[key]) continue;
@@ -1472,7 +1550,7 @@ function extractDataFromThreads(threads, targetYear, targetMonth) {
           if (targetYear !== null && targetMonth !== null) {
             if (!d || d.getFullYear() !== targetYear || d.getMonth() !== targetMonth) continue;
           }
-          const key = row[5] + "|" + row[2] + "|" + row[4];
+          const key = opLogDedupeKey_(row);
           if (seen[key]) continue;
           seen[key] = true;
           newData.push(row);
@@ -1917,9 +1995,13 @@ function countOpDataForMonth_(logSheet, targetYear, targetMonth) {
   const idxByOpt = {};
   for (let o = 0; o < OPTION_LIST.length; o++) idxByOpt[OPTION_LIST[o]] = o;
 
+  const seen = {};
   for (let i = 1; i < data.length; i++) {
     const d = parseOpLogDate_(data[i][0]);
     if (!d || d.getFullYear() !== targetYear || d.getMonth() !== targetMonth) continue;
+    const key = opLogDedupeKey_(data[i]);
+    if (seen[key]) continue;
+    seen[key] = true;
     const cat = String(data[i][2] || "").trim();
     const opt = String(data[i][4] || "").trim();
     const idx = idxByOpt[opt];
