@@ -558,6 +558,27 @@ function columnLetter_(n) {
 }
 
 /** 任意ブックのシート名・ヘッダーを覗く（集約設計用） */
+function inspectSheetRange_(id, sheetName, a1, wantFormulas, wantFormat) {
+  try {
+    if (!id || !sheetName || !a1) return { ok: false, message: 'id, sheet, range required' };
+    var ss = SpreadsheetApp.openById(id);
+    var sh = ss.getSheetByName(sheetName);
+    if (!sh) return { ok: false, message: 'sheet not found' };
+    var rng = sh.getRange(a1);
+    return {
+      ok: true,
+      sheet: sheetName,
+      range: a1,
+      values: rng.getDisplayValues(),
+      formulas: wantFormulas ? rng.getFormulas() : [],
+      fontSizes: wantFormat ? rng.getFontSizes() : [],
+      backgrounds: wantFormat ? rng.getBackgrounds() : []
+    };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
 function inspectSpreadsheetBook_(id) {
   try {
     if (!id) return { ok: false, message: 'id required' };
@@ -836,6 +857,2464 @@ function setupMachineImport_() {
   }
 }
 
+var KENGAKU_SOURCE_ID_ = '1RPUw0slNCit9ZwJgINGfv89oc2Hxw8zzAZyMt6g_QuY';
+var KENGAKU_SOURCE_SHEET_ = '見学体験申請';
+var KENGAKU_DEST_SHEET_ = '見学体験申請';
+
+function setupKengakuImport_(ss) {
+  try {
+    var dest = ss || openWorkspaceSpreadsheet_();
+    var existing = dest.getSheetByName(KENGAKU_DEST_SHEET_);
+    if (existing) dest.deleteSheet(existing);
+    var sh = dest.insertSheet(KENGAKU_DEST_SHEET_);
+    sh.setHiddenGridlines(true);
+    sh.setTabColor('#1B2838');
+    sh.setFrozenRows(1);
+    sh.getRange(1, 1, 1, 9).setValues([[
+      'タイムスタンプ', '区分', '名前', 'メール', '電話', '性別', '年代', '希望日', '時刻'
+    ]]);
+    var src = SpreadsheetApp.openById(KENGAKU_SOURCE_ID_).getSheetByName(KENGAKU_SOURCE_SHEET_);
+    if (!src) return { ok: false, message: 'source sheet not found' };
+    var lastRow = Math.max(src.getLastRow(), 1);
+    var copied = src.getRange(1, 1, lastRow, 9).getDisplayValues();
+    sh.getRange(2, 1, copied.length, 9).setValues(copied);
+    sh.getRange(1, 1, 1, 9)
+      .setBackground('#0F1419')
+      .setFontColor('#FFFFFF')
+      .setFontFamily('Meiryo')
+      .setFontSize(10)
+      .setFontWeight('bold')
+      .setVerticalAlignment('middle');
+    sh.setRowHeight(1, 24);
+    var lastBody = Math.min(sh.getMaxRows(), 400);
+    sh.getRange(2, 1, lastBody - 1, 9)
+      .setBackground('#FFFFFF')
+      .setFontColor('#0F1419')
+      .setFontFamily('Meiryo')
+      .setFontSize(10)
+      .setVerticalAlignment('middle');
+    sh.getRange(2, 1, lastBody - 1, 1).setNumberFormat('yyyy/mm/dd HH:mm');
+    sh.getRange(2, 8, lastBody - 1, 1).setNumberFormat('yyyy/mm/dd');
+    sh.getRange(2, 9, lastBody - 1, 1).setNumberFormat('hh:mm');
+    var widths = [150, 56, 110, 200, 110, 48, 64, 96, 56];
+    for (var c = 0; c < widths.length; c++) sh.setColumnWidth(c + 1, widths[c]);
+    for (var r = 2; r <= Math.min(lastBody, 220); r++) sh.setRowHeight(r, 20);
+    return {
+      ok: true,
+      sheet: KENGAKU_DEST_SHEET_,
+      sourceId: KENGAKU_SOURCE_ID_,
+      sourceSheet: KENGAKU_SOURCE_SHEET_,
+      workspaceUrl: dest.getUrl() + '#gid=' + sh.getSheetId(),
+      note: '元ブック未変更。値は setup 時にコピー。経堂マスタ Z6 に IMPORTRANGE あり。'
+    };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
+/**
+ * ALLDATA … 数字の司令塔（1枚）
+ * 名簿・OP明細の全行は載せない。元ブックは読み取りのみ。
+ */
+var UKETSUKE_SOURCE_ID_ = '14hxiLBzvGTuIpfZcoVjiHpz8b419OzUrtQAr5788h3w';
+var ALLDATA_SHEET_NAME_ = '経堂マスタ';
+var OP_HELPER_SHEET_ = '経堂_OP';
+var OP_LOG_HELPER_SHEET_ = '経堂_OPログ';
+var NYUKAI_HELPER_SHEET_ = '経堂_入会';
+var TAIKAI_HELPER_SHEET_ = '経堂_退会';
+var OP_NAMES_ = [
+  '安心サポート', '安心サポートVIP', '水素水', 'オンラインレッスン',
+  '体組成計', '契約ロッカー1,500', 'レンタルマット', 'プロテイン12杯',
+  'プロテイン無制限', 'プロテイン＋水素水', 'レンタルタオル', 'タンニング',
+  'セルフエステ', 'ホットスタジオ', 'ヨガロッカー', 'ピラティスリフォーマー'
+];
+
+function setupAllData_() {
+  try {
+    var dest = openWorkspaceSpreadsheet_();
+    ['ALLDATA', ALLDATA_SHEET_NAME_].forEach(function (name) {
+      var existing = dest.getSheetByName(name);
+      if (existing) dest.deleteSheet(existing);
+    });
+    setupOpHelperSheets_(dest);
+    setupNyukaiHelperSheets_(dest);
+    setupKengakuImport_(dest);
+    var sh = dest.insertSheet(ALLDATA_SHEET_NAME_, 0);
+    styleAllDataSheet_(sh);
+    ensureKyodoMasterEditTrigger_(dest);
+    var aiTrigger = ensureKyodoAiBriefTrigger_();
+    SpreadsheetApp.flush();
+    var brief = refreshKyodoAiBrief_();
+    return {
+      ok: true,
+      sheet: ALLDATA_SHEET_NAME_,
+      workspaceUrl: dest.getUrl() + '#gid=' + sh.getSheetId(),
+      uketsukeId: UKETSUKE_SOURCE_ID_,
+      aiBrief: brief,
+      aiTrigger: aiTrigger,
+      aiAuthUrl: kyodoAiAuthUrl_()
+    };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
+function monthCountQuery_(sheetName, startExpr, endExpr) {
+  var ref = "'" + String(sheetName).replace(/'/g, "''") + "'!A:A";
+  return (
+    '=IFERROR(COUNTA(QUERY(' + ref +
+    ',"select A where A >= date \'"&TEXT(' + startExpr + ',"yyyy-mm-dd")&"\' and A < date \'"&TEXT(' +
+    endExpr + ',"yyyy-mm-dd")&"\'",0)),0)'
+  );
+}
+
+function irSum_(yyCell, a1) {
+  return '=IFERROR(SUM(IMPORTRANGE($AB$1,' + yyCell + '&"!' + a1 + '")),)';
+}
+
+function irN_(yyCell, a1) {
+  return '=IFERROR(N(IMPORTRANGE($AB$1,' + yyCell + '&"!' + a1 + '")),)';
+}
+
+function irNippoIfCurrent_(a1) {
+  return (
+    '=IF(TEXT($AB$5,"yymm")=TEXT(TODAY(),"yymm"),IFERROR(N(IMPORTRANGE($AB$1,"日報!' + a1 + '")),),)'
+  );
+}
+
+function irNippoSumIfCurrent_(a1) {
+  return (
+    '=IF(TEXT($AB$5,"yymm")=TEXT(TODAY(),"yymm"),IFERROR(SUM(IMPORTRANGE($AB$1,"日報!' + a1 + '")),),)'
+  );
+}
+
+function trendAt_(label, monthOffset) {
+  var sh = "'" + String(KYODO_TREND_DEST_SHEET_).replace(/'/g, "''") + "'";
+  return (
+    '=IFERROR(INDEX(' + sh + '!$C$2:$N$115,' +
+    'MATCH("' + String(label).replace(/"/g, '""') + '",' + sh + '!$B$2:$B$115,0),' +
+    'MATCH(MONTH(EDATE($AB$5,' + monthOffset + ')),' + sh + '!$C$1:$N$1,0)),)'
+  );
+}
+
+function irSumOff_(monthOffset, a1) {
+  return (
+    '=IFERROR(SUM(IMPORTRANGE($AB$1,TEXT(EDATE($AB$5,' + monthOffset + '),"yymm")&"!' + a1 + '")),)'
+  );
+}
+
+function monthCountOff_(sheetName, monthOffset) {
+  return monthCountQuery_(
+    sheetName,
+    'EDATE($AB$5,' + monthOffset + ')',
+    'EDATE($AB$5,' + (monthOffset + 1) + ')'
+  );
+}
+
+function nippoOrTrend_(nippoA1, label, monthOffset) {
+  if (monthOffset !== 0) return trendAt_(label, monthOffset);
+  var trend = trendAt_(label, 0).replace(/^=/, '');
+  return (
+    '=IF(TEXT($AB$5,"yymm")=TEXT(TODAY(),"yymm"),IFERROR(N(IMPORTRANGE($AB$1,"日報!' +
+    nippoA1 +
+    '")),),' +
+    trend +
+    ')'
+  );
+}
+
+function paceFrom_(actualA1) {
+  return (
+    '=IF(TEXT($AB$5,"yymm")<>TEXT(TODAY(),"yymm"),,' +
+    'IF(AND(ISNUMBER(' + actualA1 + '),' + actualA1 + '<>"",DAY(TODAY())>0),' +
+    'ROUND(' + actualA1 + '/DAY(TODAY())*DAY(EOMONTH($AB$5,0)),0),))'
+  );
+}
+
+function progressFormula_(r) {
+  return (
+    '=IF(AND(ISNUMBER(G' + r + '),ISNUMBER(H' + r + '),H' + r + '<>0),G' + r + '/H' + r +
+    ',IF(AND(ISNUMBER(F' + r + '),ISNUMBER(H' + r + '),H' + r + '<>0),F' + r + '/H' + r + ',))'
+  );
+}
+
+function planFromPrev_(r) {
+  return '=IF(ISNUMBER(E' + r + '),E' + r + ',)';
+}
+
+function setupOpHelperSheets_(ss) {
+  var op = ss.getSheetByName(OP_HELPER_SHEET_);
+  if (!op) op = ss.insertSheet(OP_HELPER_SHEET_);
+  op.clear();
+  op.getRange(1, 1).setFormula(
+    '=IMPORTRANGE("' + UKETSUKE_SOURCE_ID_ + '","OP集計!A1:E18")'
+  );
+  try { op.hideSheet(); } catch (e0) {}
+
+  var log = ss.getSheetByName(OP_LOG_HELPER_SHEET_);
+  if (!log) log = ss.insertSheet(OP_LOG_HELPER_SHEET_);
+  log.clear();
+  log.getRange(1, 1).setFormula(
+    '=QUERY(IMPORTRANGE("' + UKETSUKE_SOURCE_ID_ + '","OP集計!I:N"),"select Col1, Col3, Col5",1)'
+  );
+  try { log.hideSheet(); } catch (e1) {}
+}
+
+function setupNyukaiHelperSheets_(ss) {
+  var enroll = ss.getSheetByName(NYUKAI_HELPER_SHEET_);
+  if (!enroll) enroll = ss.insertSheet(NYUKAI_HELPER_SHEET_);
+  enroll.clear();
+  enroll.getRange(1, 1).setFormula(
+    '=IMPORTRANGE("' + UKETSUKE_SOURCE_ID_ + '","入会・退会_データ!A1:E")'
+  );
+  try { enroll.hideSheet(); } catch (e0) {}
+
+  var withdraw = ss.getSheetByName(TAIKAI_HELPER_SHEET_);
+  if (!withdraw) withdraw = ss.insertSheet(TAIKAI_HELPER_SHEET_);
+  withdraw.clear();
+  withdraw.getRange(1, 1).setFormula(
+    '=IMPORTRANGE("' + UKETSUKE_SOURCE_ID_ + '","入会・退会_データ!G1:L")'
+  );
+  try { withdraw.hideSheet(); } catch (e1) {}
+}
+
+function parseUketsukeOpDate_(v) {
+  if (Object.prototype.toString.call(v) === '[object Date]' && !isNaN(v.getTime())) return v;
+  if (typeof v === 'number' && v > 30000) {
+    var base = new Date(1899, 11, 30);
+    var d0 = new Date(base.getTime() + Math.floor(v) * 86400000);
+    return isNaN(d0.getTime()) ? null : d0;
+  }
+  var s = String(v || '').trim();
+  var m = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+  if (m) return new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10));
+  return null;
+}
+
+function uketsukeOpDedupeKey_(row) {
+  var d = parseUketsukeOpDate_(row && row[0]);
+  var ym = d ? (d.getFullYear() + '-' + String(d.getMonth() + 1)) : '';
+  var name = String((row && row[1]) || '').replace(/\s+/g, '');
+  var opt = String((row && row[4]) || '').trim();
+  var bucket = String((row && row[2]) || '').indexOf('利用停止') !== -1 ? 'stop' : 'start';
+  var fallback = name ? '' : String((row && row[5]) || '');
+  return ym + '|' + name + '|' + fallback + '|' + bucket + '|' + opt;
+}
+
+function compactUketsukeOpDuplicates_() {
+  try {
+    var ss = SpreadsheetApp.openById(UKETSUKE_SOURCE_ID_);
+    var sh = ss.getSheetByName('OP集計');
+    if (!sh) return { ok: false, message: 'OP集計 not found' };
+    var monthText = String(sh.getRange('B1').getDisplayValue() || sh.getRange('B1').getValue() || '').trim();
+    var mm = monthText.match(/^(\d{4})年(\d{1,2})月$/);
+    if (!mm) return { ok: false, message: 'OP集計!B1 is not a year-month: ' + monthText };
+    var year = parseInt(mm[1], 10);
+    var month = parseInt(mm[2], 10) - 1;
+    var last = Math.max(sh.getLastRow(), 1);
+    var log = sh.getRange(1, 9, last, 6).getValues();
+    var header = log[0];
+    var other = [];
+    var thisMonth = [];
+    var i;
+    for (i = 1; i < log.length; i++) {
+      var row = log[i];
+      if (!row[0] && !row[1] && !row[5]) continue;
+      var d = parseUketsukeOpDate_(row[0]);
+      if (d && d.getFullYear() === year && d.getMonth() === month) thisMonth.push(row);
+      else other.push(row);
+    }
+    var seen = {};
+    var unique = [];
+    for (i = 0; i < thisMonth.length; i++) {
+      var key = uketsukeOpDedupeKey_(thisMonth[i]);
+      if (!key || seen[key]) continue;
+      seen[key] = true;
+      unique.push(thisMonth[i]);
+    }
+    var out = [header].concat(other).concat(unique);
+    out.sort(function (a, b) {
+      if (String(a[0]).indexOf('受信') !== -1) return -1;
+      if (String(b[0]).indexOf('受信') !== -1) return 1;
+      var da = parseUketsukeOpDate_(a[0]);
+      var db = parseUketsukeOpDate_(b[0]);
+      var ta = da ? da.getTime() : 0;
+      var tb = db ? db.getTime() : 0;
+      return tb - ta;
+    });
+    var prevLast = last;
+    sh.getRange(1, 9, prevLast, 6).clearContent();
+    sh.getRange(1, 9, out.length, 6).setValues(out);
+    if (out.length > 1) {
+      sh.getRange(2, 9, out.length - 1, 1).setNumberFormat('yyyy/mm/dd hh:mm');
+    }
+
+    var idxByOpt = {};
+    for (i = 0; i < OP_NAMES_.length; i++) idxByOpt[OP_NAMES_[i]] = i;
+    var counts = OP_NAMES_.map(function () { return { newSignup: 0, opAdd: 0, stop: 0 }; });
+    var counted = {};
+    for (i = 0; i < unique.length; i++) {
+      var k2 = uketsukeOpDedupeKey_(unique[i]);
+      if (counted[k2]) continue;
+      counted[k2] = true;
+      var cat = String(unique[i][2] || '');
+      var opt = String(unique[i][4] || '').trim();
+      var idx = idxByOpt[opt];
+      if (idx === undefined) continue;
+      if (cat.indexOf('利用停止') !== -1) counts[idx].stop++;
+      else if (cat.indexOf('新規入会') !== -1) counts[idx].newSignup++;
+      else if (cat.indexOf('利用開始') !== -1 || cat.indexOf('OP追加') !== -1) counts[idx].opAdd++;
+    }
+    var bCol = [];
+    var cCol = [];
+    var dCol = [];
+    var eCol = [];
+    var summary = [];
+    for (i = 0; i < OP_NAMES_.length; i++) {
+      var start = counts[i].newSignup + counts[i].opAdd;
+      bCol.push([counts[i].newSignup]);
+      cCol.push([counts[i].opAdd]);
+      dCol.push([start]);
+      eCol.push([counts[i].stop]);
+      summary.push({
+        name: OP_NAMES_[i],
+        newSignup: counts[i].newSignup,
+        opAdd: counts[i].opAdd,
+        start: start,
+        stop: counts[i].stop
+      });
+    }
+    sh.getRange(3, 2, OP_NAMES_.length, 1).setValues(bCol);
+    sh.getRange(3, 3, OP_NAMES_.length, 1).setValues(cCol);
+    sh.getRange(3, 4, OP_NAMES_.length, 1).setValues(dCol);
+    sh.getRange(3, 5, OP_NAMES_.length, 1).setValues(eCol);
+
+    var nippo = ss.getSheetByName('日報');
+    if (nippo) {
+      var labels = nippo.getRange(21, 2, OP_NAMES_.length, 1).getDisplayValues();
+      var currentCol = [];
+      var stopCol = [];
+      for (i = 0; i < OP_NAMES_.length; i++) {
+        var lab = String(labels[i][0] || '').trim();
+        var cidx = idxByOpt[lab];
+        if (cidx === undefined) cidx = i;
+        currentCol.push([counts[cidx].newSignup + counts[cidx].opAdd]);
+        stopCol.push([counts[cidx].stop]);
+      }
+      nippo.getRange(21, 4, OP_NAMES_.length, 1).setValues(currentCol);
+      nippo.getRange(21, 5, OP_NAMES_.length, 1).setValues(stopCol);
+    }
+
+    var membershipView = refreshUketsukeMembershipDisplay_(ss, monthText);
+    return {
+      ok: true,
+      month: monthText,
+      before: thisMonth.length,
+      after: unique.length,
+      enrollShown: membershipView.enroll,
+      withdrawShown: membershipView.withdraw,
+      options: summary
+    };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
+function ymLabelOf_(v) {
+  var s = String(v || '').trim();
+  var m = s.match(/(\d{4})\s*年\s*(\d{1,2})\s*月/);
+  if (m) return m[1] + '年' + parseInt(m[2], 10) + '月';
+  return s;
+}
+
+function refreshUketsukeMembershipDisplay_(ss, monthText) {
+  var mem = ss.getSheetByName('入会・退会');
+  var data = ss.getSheetByName('入会・退会_データ');
+  if (!mem || !data) return { enroll: 0, withdraw: 0 };
+  try { mem.showSheet(); } catch (e1) {}
+  mem.getRange('B1').setValue(monthText);
+  mem.getRange('G1').setValue(monthText);
+  var last = Math.max(data.getLastRow(), 1);
+  var enrollRaw = data.getRange(2, 1, last, 5).getValues();
+  var withdrawRaw = data.getRange(2, 7, last, 6).getValues();
+  var enroll = [];
+  var withdraw = [];
+  var i;
+  for (i = 0; i < enrollRaw.length; i++) {
+    if (!enrollRaw[i][1]) continue;
+    if (ymLabelOf_(enrollRaw[i][2]) === monthText) enroll.push(enrollRaw[i]);
+  }
+  for (i = 0; i < withdrawRaw.length; i++) {
+    if (!withdrawRaw[i][1]) continue;
+    if (ymLabelOf_(withdrawRaw[i][2]) === monthText) withdraw.push(withdrawRaw[i]);
+  }
+  enroll.sort(function (a, b) {
+    var ta = a[0] instanceof Date ? a[0].getTime() : 0;
+    var tb = b[0] instanceof Date ? b[0].getTime() : 0;
+    return tb - ta;
+  });
+  withdraw.sort(function (a, b) {
+    var ta = a[0] instanceof Date ? a[0].getTime() : 0;
+    var tb = b[0] instanceof Date ? b[0].getTime() : 0;
+    return tb - ta;
+  });
+  var n = Math.max(enroll.length, withdraw.length, 1);
+  var prev = Math.max(mem.getLastRow() - 2, n);
+  mem.getRange(3, 1, prev, 11).clearContent();
+  var rows = [];
+  for (i = 0; i < n; i++) {
+    var row = ['', '', '', '', '', '', '', '', '', '', ''];
+    if (i < enroll.length) {
+      row[0] = enroll[i][0];
+      row[1] = enroll[i][1];
+      row[2] = ymLabelOf_(enroll[i][2]);
+      row[3] = enroll[i][3];
+    }
+    if (i < withdraw.length) {
+      row[5] = withdraw[i][0];
+      row[6] = withdraw[i][1];
+      row[7] = ymLabelOf_(withdraw[i][2]);
+      row[8] = withdraw[i][3];
+      row[9] = withdraw[i][5];
+      row[10] = withdraw[i][4];
+    }
+    rows.push(row);
+  }
+  if (rows.length) mem.getRange(3, 1, rows.length, 11).setValues(rows);
+  return { enroll: enroll.length, withdraw: withdraw.length };
+}
+
+function extractNyukaiNameHub_(body) {
+  var text = String(body || '');
+  var m1 = text.match(/お名前\s*[:：]\s*(.+?)\s*様/);
+  if (m1) return String(m1[1]).replace(/^[>\s]+/, '').trim();
+  var lines = text.split(/\r?\n/);
+  var i;
+  for (i = 0; i < Math.min(lines.length, 20); i++) {
+    var line = String(lines[i] || '').trim();
+    if (!line || /JOYFIT|受付番号|この度は|お支払い|ご利用開始|ご入会内容|会員情報/.test(line)) continue;
+    var m2 = line.match(/^(.{1,30}?)\s*様\s*$/);
+    if (m2) return String(m2[1]).replace(/^[>\s]+/, '').trim();
+  }
+  return '';
+}
+
+function calcNyukaiYmHub_(body, emailDate) {
+  var startMatch = String(body || '').match(/ご利用開始日[の]?\s*(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+  if (startMatch) {
+    return parseInt(startMatch[1], 10) + '年' + parseInt(startMatch[2], 10) + '月';
+  }
+  return emailDate.getFullYear() + '年' + (emailDate.getMonth() + 1) + '月';
+}
+
+function detectNyukaiCatHub_(subject, body) {
+  var s = String(subject || '');
+  var b = String(body || '');
+  if (/法人個人月払|法人会員|法人.*月払/.test(b)) return '法人会員';
+  if (s.indexOf('【JOYFIT24経堂】') !== -1) return '6ヶ月割';
+  if (/ナショナル会員/.test(b)) return '6ヶ月割';
+  if (/ご入会ありがとうございます/.test(s) && s.indexOf('【JOYFIT24経堂】') === -1) return '法人会員';
+  return '6ヶ月割';
+}
+
+function auditNyukaiGmail_() {
+  try {
+    var q = 'from:info@joyfit-service.jp subject:(ご入会ありがとうございます) after:2026/08/30 before:2026/10/01';
+    var threads = GmailApp.search(q, 0, 200);
+    var people = [];
+    var seen = {};
+    var t;
+    for (t = 0; t < threads.length; t++) {
+      var messages = threads[t].getMessages();
+      var m;
+      for (m = messages.length - 1; m >= 0; m--) {
+        var msg = messages[m];
+        var subject = String(msg.getSubject() || '');
+        if (subject.indexOf('ご入会') === -1) continue;
+        var body = String(msg.getPlainBody() || '');
+        if (body.length < 80) body = String(msg.getBody() || '').replace(/<[^>]+>/g, ' ');
+        var name = extractNyukaiNameHub_(body);
+        var date = msg.getDate();
+        var ym = calcNyukaiYmHub_(body, date);
+        var cat = detectNyukaiCatHub_(subject, body);
+        var key = String(name).replace(/\s+/g, '') + '|' + ym;
+        if (!name || seen[key]) continue;
+        seen[key] = true;
+        people.push({
+          name: name,
+          ym: ym,
+          cat: cat,
+          date: Utilities.formatDate(date, 'Asia/Tokyo', 'yyyy/MM/dd HH:mm'),
+          msgId: msg.getId(),
+          subject: subject
+        });
+        break;
+      }
+    }
+    var sept = people.filter(function (p) { return p.ym === '2026年9月'; });
+    var other = people.filter(function (p) { return p.ym !== '2026年9月'; });
+    return {
+      ok: true,
+      threads: threads.length,
+      parsed: people.length,
+      sept: sept.length,
+      septPeople: sept,
+      otherYm: other
+    };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
+function backfillEnrollFromOpLog_() {
+  try {
+    var ss = SpreadsheetApp.openById(UKETSUKE_SOURCE_ID_);
+    var op = ss.getSheetByName('OP集計');
+    var data = ss.getSheetByName('入会・退会_データ');
+    if (!op || !data) return { ok: false, message: 'sheet missing' };
+    var monthText = String(op.getRange('B1').getDisplayValue() || '2026年9月').trim();
+    var lastOp = Math.max(op.getLastRow(), 1);
+    var log = op.getRange(1, 9, lastOp, 6).getValues();
+    var lastData = Math.max(data.getLastRow(), 1);
+    var enroll = data.getRange(2, 1, lastData, 5).getValues();
+    var have = {};
+    var i;
+    for (i = 0; i < enroll.length; i++) {
+      if (!enroll[i][1]) continue;
+      if (ymLabelOf_(enroll[i][2]) !== monthText) continue;
+      have[String(enroll[i][1]).replace(/\s+/g, '')] = true;
+    }
+    var added = [];
+    var seenNew = {};
+    for (i = 1; i < log.length; i++) {
+      var row = log[i];
+      var d = parseUketsukeOpDate_(row[0]);
+      var cat = String(row[2] || '');
+      if (cat.indexOf('新規入会') === -1) continue;
+      if (!d) continue;
+      var ym = d.getFullYear() + '年' + (d.getMonth() + 1) + '月';
+      if (ym !== monthText) continue;
+      var name = String(row[1] || '').trim();
+      var key = name.replace(/\s+/g, '');
+      if (!key || have[key] || seenNew[key]) continue;
+      seenNew[key] = true;
+      added.push([row[0], name, monthText, '6ヶ月割', String(row[5] || '')]);
+    }
+
+    var gmail = { ok: false, sept: 0 };
+    try { gmail = auditNyukaiGmail_(); } catch (e2) { gmail = { ok: false }; }
+    if (gmail && gmail.ok && gmail.septPeople) {
+      for (i = 0; i < gmail.septPeople.length; i++) {
+        var p = gmail.septPeople[i];
+        var nk = String(p.name || '').replace(/\s+/g, '');
+        if (!nk || have[nk] || seenNew[nk]) continue;
+        seenNew[nk] = true;
+        added.push([p.date, p.name, monthText, p.cat || '6ヶ月割', p.msgId || '']);
+      }
+    }
+
+    if (added.length) {
+      var start = lastData + 1;
+      data.getRange(start, 3, added.length, 1).setNumberFormat('@');
+      data.getRange(start, 1, added.length, 5).setValues(added);
+      data.getRange(start, 1, added.length, 1).setNumberFormat('yyyy/mm/dd hh:mm');
+    }
+    var view = refreshUketsukeMembershipDisplay_(ss, monthText);
+    var nippo = ss.getSheetByName('日報');
+    if (nippo) {
+      nippo.getRange('D10').setFormula('=IFERROR(N(INDEX(INDIRECT("\'"&$B$1&"\'!$I$5:$I$35"),DAY(TODAY())))+N(INDEX(INDIRECT("\'"&$B$1&"\'!$H$5:$H$35"),DAY(TODAY()))),0)');
+      nippo.getRange('F10').setFormula('=IFERROR(N(INDEX(INDIRECT("\'"&$B$1&"\'!$J$5:$J$35"),DAY(TODAY()))),0)');
+      nippo.getRange('H10').setFormula('=IFERROR(N(INDEX(INDIRECT("\'"&$B$1&"\'!$K$5:$K$35"),DAY(TODAY()))),0)');
+      nippo.getRange('D14').setFormula('=IFERROR(N(INDIRECT($B$1&"!H36"))+N(INDIRECT($B$1&"!I36")),0)');
+      nippo.getRange('F14').setFormula('=IFERROR(N(INDIRECT($B$1&"!J36")),0)');
+      nippo.getRange('H14').setFormula('=IFERROR(N(INDIRECT($B$1&"!K36")),0)');
+    }
+    var mm = monthText.match(/^(\d{4})年(\d{1,2})月$/);
+    var synced = null;
+    if (mm) {
+      synced = syncMonthlyEnrollCountsSafe_(
+        ss, parseInt(mm[1], 10), parseInt(mm[2], 10) - 1, monthText
+      );
+    }
+    return {
+      ok: true,
+      month: monthText,
+      added: added.length,
+      addedNames: added.map(function (r) { return r[1]; }),
+      enrollShown: view.enroll,
+      withdrawShown: view.withdraw,
+      daily: synced,
+      gmailSept: gmail && gmail.sept
+    };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
+function syncMonthlyEnrollCountsSafe_(ss, year, month, monthText) {
+  var sheetName = String(year % 100).padStart(2, '0') + String(month + 1).padStart(2, '0');
+  var sheet = ss.getSheetByName(sheetName);
+  var data = ss.getSheetByName('入会・退会_データ');
+  if (!sheet || !data) return { updated: false };
+  var last = Math.max(data.getLastRow(), 1);
+  var rows = data.getRange(2, 1, last, 5).getValues();
+  var gen = {};
+  var corp = {};
+  var d;
+  for (d = 1; d <= 31; d++) { gen[d] = 0; corp[d] = 0; }
+  var seen = {};
+  var i;
+  for (i = 0; i < rows.length; i++) {
+    if (ymLabelOf_(rows[i][2]) !== monthText) continue;
+    var name = String(rows[i][1] || '').replace(/\s+/g, '');
+    if (!name) continue;
+    var uniq = name + '|' + String(rows[i][3] || '');
+    if (seen[uniq]) continue;
+    seen[uniq] = true;
+    var ts = parseUketsukeOpDate_(rows[i][0]);
+    var day = 1;
+    if (ts && ts.getFullYear() === year && ts.getMonth() === month) day = ts.getDate();
+    var cat = String(rows[i][3] || '');
+    if (cat.indexOf('法人') !== -1) corp[day]++;
+    else gen[day]++;
+  }
+  var gVals = [];
+  var cVals = [];
+  for (d = 1; d <= 31; d++) {
+    gVals.push([gen[d] > 0 ? gen[d] : '']);
+    cVals.push([corp[d] > 0 ? corp[d] : '']);
+  }
+  sheet.getRange(5, 5, 31, 1).setValues(gVals);
+  sheet.getRange(5, 6, 31, 1).setValues(cVals);
+  var genTotal = 0;
+  var corpTotal = 0;
+  for (d = 1; d <= 31; d++) { genTotal += gen[d]; corpTotal += corp[d]; }
+  return {
+    updated: true,
+    sheet: sheetName,
+    general: genTotal,
+    corporate: corpTotal
+  };
+}
+
+function nameKeyHub_(s) {
+  return String(s || '').replace(/\s+/g, '');
+}
+
+function normalizeOptionNameHub_(rawName) {
+  var s = String(rawName || '');
+  if (s.indexOf('水素水') !== -1 && s.indexOf('プロテイン') !== -1) return 'プロテイン＋水素水';
+  if (s.indexOf('VIP') !== -1 && (s.indexOf('あんしん') !== -1 || s.indexOf('安心') !== -1)) return '安心サポートVIP';
+  if (s.indexOf('ボディプランナー') !== -1 || s.indexOf('ボディープランナー') !== -1 || s.indexOf('体組成') !== -1) {
+    return '体組成計';
+  }
+  if (s.indexOf('マットレンタル') !== -1 || s.indexOf('レンタルマット') !== -1) return 'レンタルマット';
+  if (s.indexOf('ピラティス') !== -1) return 'ピラティスリフォーマー';
+  if (s.indexOf('ロッカー') !== -1 && /(1[,，]?500|１[,，]?５００|1500)/.test(s)) return '契約ロッカー1,500';
+  if (s.indexOf('ヨガ') !== -1 && s.indexOf('ロッカー') !== -1) return 'ヨガロッカー';
+  if (s.indexOf('レンタルタオル') !== -1 || (s.indexOf('タオル') !== -1 && s.indexOf('レンタル') !== -1)) {
+    return 'レンタルタオル';
+  }
+  if (s.indexOf('ホットスタジオ') !== -1 || s.indexOf('HOTスタジオ') !== -1) return 'ホットスタジオ';
+  if (s.indexOf('オンラインレッスン') !== -1 || s.indexOf('オンライン・レッスン') !== -1) return 'オンラインレッスン';
+  if (s.indexOf('セルフエステ') !== -1) return 'セルフエステ';
+  if (s.indexOf('タンニング') !== -1) return 'タンニング';
+  if (s.indexOf('プロテイン') !== -1 && (s.indexOf('無制限') !== -1 || s.indexOf('制限なし') !== -1)) {
+    return 'プロテイン無制限';
+  }
+  if (s.indexOf('プロテイン') !== -1 && (s.indexOf('12') !== -1 || s.indexOf('１２') !== -1)) return 'プロテイン12杯';
+  if (s.indexOf('安心サポート') !== -1 || s.indexOf('あんしんサポート') !== -1) return '安心サポート';
+  if (s.indexOf('水素水') !== -1) return '水素水';
+  var byLen = OP_NAMES_.slice().sort(function (a, b) { return b.length - a.length; });
+  var i;
+  for (i = 0; i < byLen.length; i++) {
+    if (s.indexOf(byLen[i]) !== -1) return byLen[i];
+  }
+  return '';
+}
+
+function extractFeeSectionHub_(body) {
+  var text = String(body || '');
+  if (!text) return '';
+  var start = text.search(/月会費.*内訳|お支払い内容|ご契約中のオプション|お支払い内容は以下/);
+  if (start >= 0) {
+    var rest = text.substring(start);
+    var endRel = rest.search(/APP登録方法|お支払方法|注意事項|ご案内|ご利用規約|クレジットカード|JOYFIT App/);
+    return endRel > 0 ? rest.substring(0, endRel) : rest;
+  }
+  var m = text.search(/[（(]\s*\d{1,2}\s*月分\s*[）)]/);
+  if (m < 0) return text;
+  return text.substring(Math.max(0, m - 80), Math.min(text.length, m + 1400));
+}
+
+function parseOpNamesFromBodyHub_(body) {
+  var text = extractFeeSectionHub_(body);
+  var found = {};
+  var list = [];
+  var re = /([^\n\r]{2,40}?)[（(]\s*(\d{1,2})\s*月分\s*[）)][^\n\r]{0,80}?(\d[\d,]*)\s*円/g;
+  var m;
+  while ((m = re.exec(text)) !== null) {
+    var raw = String(m[1] || '').replace(/^[\s\-・･>]+/, '').trim();
+    if (!raw || /法人個人月払|法人会員|ナショナル会員|入会金|事務手数料|月会費|小計|合計/.test(raw)) continue;
+    var norm = normalizeOptionNameHub_(raw);
+    if (!norm || found[norm]) continue;
+    found[norm] = true;
+    list.push(norm);
+  }
+  if (list.length < 2) {
+    var i;
+    for (i = 0; i < OP_NAMES_.length; i++) {
+      var name = OP_NAMES_[i];
+      if (found[name]) continue;
+      if (text.indexOf(name) === -1) continue;
+      if (name === '安心サポート' && found['安心サポートVIP']) continue;
+      if (name === '水素水' && found['プロテイン＋水素水']) continue;
+      found[name] = true;
+      list.push(name);
+    }
+  }
+  return list;
+}
+
+function searchGmailPagedHub_(query, maxThreads) {
+  var out = [];
+  var start = 0;
+  var cap = Math.max(1, maxThreads || 400);
+  while (out.length < cap) {
+    var batch = GmailApp.search(query, start, 100);
+    if (!batch || !batch.length) break;
+    var i;
+    for (i = 0; i < batch.length && out.length < cap; i++) out.push(batch[i]);
+    if (batch.length < 100) break;
+    start += batch.length;
+  }
+  return out;
+}
+
+function gmailAccountHub_() {
+  try {
+    return Session.getActiveUser().getEmail() || Session.getEffectiveUser().getEmail() || '';
+  } catch (e0) {
+    try { return Session.getEffectiveUser().getEmail() || ''; } catch (e1) { return ''; }
+  }
+}
+
+function auditOpMailCoverage_() {
+  try {
+    var ss = SpreadsheetApp.openById(UKETSUKE_SOURCE_ID_);
+    var op = ss.getSheetByName('OP集計');
+    var data = ss.getSheetByName('入会・退会_データ');
+    if (!op || !data) return { ok: false, message: 'sheet missing' };
+    var monthText = String(op.getRange('B1').getDisplayValue() || '2026年9月').trim();
+    var mm = monthText.match(/^(\d{4})年(\d{1,2})月$/);
+    var year = mm ? parseInt(mm[1], 10) : 2026;
+    var month = mm ? parseInt(mm[2], 10) - 1 : 8;
+
+    var lastData = Math.max(data.getLastRow(), 1);
+    var enrollRows = data.getRange(2, 1, lastData, 5).getValues();
+    var enrollByKey = {};
+    var enrollList = [];
+    var i;
+    for (i = 0; i < enrollRows.length; i++) {
+      var name = String(enrollRows[i][1] || '').trim();
+      if (!name) continue;
+      if (ymLabelOf_(enrollRows[i][2]) !== monthText) continue;
+      var key = nameKeyHub_(name);
+      if (enrollByKey[key]) continue;
+      var cat = String(enrollRows[i][3] || '');
+      var rec = {
+        name: name,
+        cat: cat,
+        six: cat.indexOf('法人') === -1,
+        msgId: String(enrollRows[i][4] || ''),
+        startOps: [],
+        addOps: [],
+        stopOps: []
+      };
+      enrollByKey[key] = rec;
+      enrollList.push(rec);
+    }
+
+    var lastOp = Math.max(op.getLastRow(), 1);
+    var log = op.getRange(1, 9, lastOp, 6).getValues();
+    var startCounts = {};
+    var addCounts = {};
+    var stopCounts = {};
+    var uniqueStart = {};
+    var uniqueAdd = {};
+    var uniqueStop = {};
+    var startPeople = {};
+    var addPeople = {};
+    var orphanStarts = [];
+    var j;
+    for (j = 0; j < OP_NAMES_.length; j++) {
+      startCounts[OP_NAMES_[j]] = 0;
+      addCounts[OP_NAMES_[j]] = 0;
+      stopCounts[OP_NAMES_[j]] = 0;
+    }
+    for (i = 1; i < log.length; i++) {
+      var row = log[i];
+      var d = parseUketsukeOpDate_(row[0]);
+      if (!d || d.getFullYear() !== year || d.getMonth() !== month) continue;
+      var opt = String(row[4] || '').trim();
+      var cat2 = String(row[2] || '');
+      var person = String(row[1] || '').trim();
+      var pk = nameKeyHub_(person);
+      var ukey = uketsukeOpDedupeKey_(row);
+      if (cat2.indexOf('利用停止') !== -1) {
+        if (uniqueStop[ukey]) continue;
+        uniqueStop[ukey] = true;
+        if (stopCounts[opt] !== undefined) stopCounts[opt]++;
+        if (enrollByKey[pk]) enrollByKey[pk].stopOps.push(opt);
+      } else if (cat2.indexOf('新規入会') !== -1) {
+        if (uniqueStart[ukey]) continue;
+        uniqueStart[ukey] = true;
+        if (startCounts[opt] !== undefined) startCounts[opt]++;
+        if (!startPeople[pk]) startPeople[pk] = [];
+        startPeople[pk].push(opt);
+        if (enrollByKey[pk]) enrollByKey[pk].startOps.push(opt);
+        else orphanStarts.push({ name: person, opt: opt });
+      } else if (cat2.indexOf('利用開始') !== -1 || cat2.indexOf('OP追加') !== -1) {
+        if (uniqueAdd[ukey]) continue;
+        uniqueAdd[ukey] = true;
+        if (addCounts[opt] !== undefined) addCounts[opt]++;
+        if (!addPeople[pk]) addPeople[pk] = [];
+        addPeople[pk].push(opt);
+        if (enrollByKey[pk]) enrollByKey[pk].addOps.push(opt);
+      }
+    }
+
+    var packCore = [
+      '安心サポートVIP', 'オンラインレッスン', '体組成計', 'レンタルマット',
+      'プロテイン＋水素水', 'レンタルタオル', 'ホットスタジオ'
+    ];
+    var six = enrollList.filter(function (p) { return p.six; });
+    var corp = enrollList.filter(function (p) { return !p.six; });
+    var packOk = [];
+    var packShort = [];
+    var packZero = [];
+    for (i = 0; i < six.length; i++) {
+      var ops = six[i].startOps;
+      var uniqOps = {};
+      for (j = 0; j < ops.length; j++) uniqOps[ops[j]] = true;
+      var n = Object.keys(uniqOps).length;
+      var missing = [];
+      for (j = 0; j < packCore.length; j++) {
+        if (!uniqOps[packCore[j]]) missing.push(packCore[j]);
+      }
+      if (!uniqOps['タンニング'] && !uniqOps['セルフエステ']) missing.push('タンニングまたはセルフエステ');
+      var item = { name: six[i].name, opCount: n, ops: Object.keys(uniqOps), missing: missing };
+      if (n === 0) packZero.push(item);
+      else if (missing.length) packShort.push(item);
+      else packOk.push(item);
+    }
+
+    var corpWithOp = corp.filter(function (p) { return p.startOps.length; }).map(function (p) {
+      return { name: p.name, opCount: p.startOps.length, ops: p.startOps };
+    });
+    var signupNotSix = [];
+    for (i = 0; i < enrollList.length; i++) {
+      if (enrollList[i].six) continue;
+      if (enrollList[i].startOps.length) signupNotSix.push({
+        name: enrollList[i].name,
+        cat: enrollList[i].cat,
+        ops: enrollList[i].startOps
+      });
+    }
+    var startOnly = [];
+    var pk;
+    for (pk in startPeople) {
+      if (!startPeople.hasOwnProperty(pk)) continue;
+      if (!enrollByKey[pk]) startOnly.push({ name: pk, ops: startPeople[pk] });
+      else if (!enrollByKey[pk].six) startOnly.push({
+        name: enrollByKey[pk].name,
+        cat: enrollByKey[pk].cat,
+        ops: startPeople[pk]
+      });
+    }
+    var gmail = {
+      account: gmailAccountHub_(),
+      enrollThreads: 0,
+      enrollParsed: 0,
+      enrollSept: 0,
+      opChangeThreads: 0,
+      enrollPeople: [],
+      missingVsSheet: [],
+      extraVsSheet: []
+    };
+    try {
+      var enrollQ = 'from:info@joyfit-service.jp subject:ご入会ありがとうございます after:2026/08/30 before:2026/10/01';
+      var changeQ = 'from:info@joyfit-service.jp subject:オプションご契約につきまして after:2026/08/30 before:2026/10/01';
+      var enrollThreads = searchGmailPagedHub_(enrollQ, 400);
+      var changeThreads = searchGmailPagedHub_(changeQ, 400);
+      gmail.enrollThreads = enrollThreads.length;
+      gmail.opChangeThreads = changeThreads.length;
+      var seenG = {};
+      for (i = 0; i < enrollThreads.length; i++) {
+        var messages = enrollThreads[i].getMessages();
+        var midx;
+        for (midx = messages.length - 1; midx >= 0; midx--) {
+          var msg = messages[midx];
+          var subject = String(msg.getSubject() || '');
+          if (subject.indexOf('ご入会') === -1) continue;
+          var body = String(msg.getPlainBody() || '');
+          if (body.length < 80) body = String(msg.getBody() || '').replace(/<[^>]+>/g, ' ');
+          var personName = extractNyukaiNameHub_(body);
+          if (!personName) continue;
+          var date = msg.getDate();
+          var ym = calcNyukaiYmHub_(body, date);
+          gmail.enrollParsed++;
+          if (ym !== monthText) continue;
+          var gk = nameKeyHub_(personName);
+          if (seenG[gk]) continue;
+          seenG[gk] = true;
+          var opsG = parseOpNamesFromBodyHub_(body);
+          gmail.enrollSept++;
+          gmail.enrollPeople.push({
+            name: personName,
+            cat: detectNyukaiCatHub_(subject, body),
+            opCount: opsG.length,
+            ops: opsG
+          });
+          break;
+        }
+      }
+      for (i = 0; i < gmail.enrollPeople.length; i++) {
+        if (!enrollByKey[nameKeyHub_(gmail.enrollPeople[i].name)]) {
+          gmail.extraVsSheet.push(gmail.enrollPeople[i].name);
+        }
+      }
+      for (i = 0; i < six.length; i++) {
+        if (!seenG[nameKeyHub_(six[i].name)]) gmail.missingVsSheet.push(six[i].name);
+      }
+    } catch (gerr) {
+      gmail.error = String(gerr && gerr.message ? gerr.message : gerr);
+    }
+
+    var startTotals = {};
+    for (j = 0; j < OP_NAMES_.length; j++) {
+      startTotals[OP_NAMES_[j]] = {
+        newSignup: startCounts[OP_NAMES_[j]],
+        opAdd: addCounts[OP_NAMES_[j]],
+        start: startCounts[OP_NAMES_[j]] + addCounts[OP_NAMES_[j]],
+        stop: stopCounts[OP_NAMES_[j]]
+      };
+    }
+
+    return {
+      ok: true,
+      month: monthText,
+      gmailAccount: gmail.account,
+      enroll: {
+        total: enrollList.length,
+        sixMonth: six.length,
+        corporate: corp.length,
+        corporateWithSignupOp: corpWithOp,
+        signupOpNotSixMonth: startOnly
+      },
+      pack: {
+        expectedCore: packCore.length + 1,
+        complete: packOk.length,
+        short: packShort.length,
+        zero: packZero.length,
+        shortPeople: packShort,
+        zeroPeople: packZero
+      },
+      opLogPeople: {
+        newSignupPeople: Object.keys(startPeople).length,
+        opAddPeople: Object.keys(addPeople).length,
+        opAddNames: Object.keys(addPeople).map(function (k) {
+          return { name: (enrollByKey[k] && enrollByKey[k].name) || k, ops: addPeople[k] };
+        }),
+        orphanNewSignupRows: orphanStarts.length
+      },
+      optionStarts: startTotals,
+      gmailKusaka: {
+        account: gmail.account,
+        enrollThreads: gmail.enrollThreads,
+        enrollParsed: gmail.enrollParsed,
+        enrollSeptUnique: gmail.enrollSept,
+        opChangeThreads: gmail.opChangeThreads,
+        sixMonthMissingInThisGmail: gmail.missingVsSheet,
+        extraInThisGmail: gmail.extraVsSheet,
+        error: gmail.error || ''
+      },
+      note: '店舗Gmailの入会・退会_データ／OPログを正とし、この実行アカウントのGmailは照合用。6ヶ月割はテンプレ8種（コア7+タンニングかセルフエステ）。'
+    };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
+function inspectQueryThreadsHub_(query, openMessages, maxThreads) {
+  var threads = searchGmailPagedHub_(query, maxThreads || 800);
+  var uniqueNames = {};
+  var enrollMessages = 0;
+  var optionMessages = 0;
+  var allMessages = 0;
+  var bundled = [];
+  var i;
+  if (openMessages) {
+    for (i = 0; i < threads.length; i++) {
+      var messages = threads[i].getMessages() || [];
+      allMessages += messages.length;
+      var names = [];
+      var j;
+      for (j = 0; j < messages.length; j++) {
+        var subject = String(messages[j].getSubject() || '');
+        var body = '';
+        var name = '';
+        if (subject.indexOf('ご入会') !== -1) {
+          enrollMessages++;
+          body = String(messages[j].getPlainBody() || '');
+          if (body.length < 80) body = String(messages[j].getBody() || '').replace(/<[^>]+>/g, ' ');
+          name = extractNyukaiNameHub_(body);
+        } else if (subject.indexOf('オプションご契約') !== -1) {
+          optionMessages++;
+          if (!name) {
+            body = String(messages[j].getPlainBody() || '');
+            var m = body.match(/(.{1,20}?)様/);
+            if (m) name = String(m[1]).replace(/^[>\s]+/, '').trim();
+          }
+        }
+        if (name) {
+          uniqueNames[nameKeyHub_(name)] = name;
+          names.push(name);
+        }
+      }
+      if (messages.length > 1) {
+        bundled.push({
+          messages: messages.length,
+          names: names
+        });
+      }
+    }
+  }
+  return {
+    query: query,
+    threads: threads.length,
+    messagesOpened: openMessages ? allMessages : null,
+    enrollMessages: openMessages ? enrollMessages : null,
+    optionMessages: openMessages ? optionMessages : null,
+    uniquePeople: openMessages ? Object.keys(uniqueNames).length : null,
+    threadsWithMultipleMessages: openMessages ? bundled.length : null,
+    bundledSample: openMessages ? bundled.slice(0, 12) : []
+  };
+}
+
+function auditGmailThreadShape_() {
+  try {
+    var septEnroll = inspectQueryThreadsHub_(
+      'from:info@joyfit-service.jp subject:ご入会ありがとうございます after:2026/08/30 before:2026/10/01',
+      true,
+      400
+    );
+    var septOption = inspectQueryThreadsHub_(
+      'from:info@joyfit-service.jp subject:オプションご契約につきまして after:2026/08/30 before:2026/10/01',
+      true,
+      400
+    );
+    var allEnroll = inspectQueryThreadsHub_(
+      'from:info@joyfit-service.jp subject:ご入会ありがとうございます',
+      false,
+      800
+    );
+    var allOption = inspectQueryThreadsHub_(
+      'from:info@joyfit-service.jp subject:オプションご契約につきまして',
+      false,
+      800
+    );
+    return {
+      ok: true,
+      account: gmailAccountHub_(),
+      meaning: {
+        thread: 'Gmailの1行＝会話の束。左の info 7 は7通入っているという意味',
+        previous25: '前回の25は after/before 付き検索のスレッド数で、1通ずつではない。さらに各スレッドの先頭1通しか見ていなかった',
+        screenshotRows: '画面右上の 572行 / 784行 は期間なし検索の会話行数'
+      },
+      septemberEnroll: septEnroll,
+      septemberOption: septOption,
+      allTimeEnrollThreads: allEnroll.threads,
+      allTimeOptionThreads: allOption.threads
+    };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
+function parseOptionContractHub_(date, body, msgId) {
+  var results = [];
+  var nameMatch = String(body || '').match(/([^\r\n]{1,40}?)\s*様/);
+  var name = nameMatch ? String(nameMatch[1]).replace(/^[>\s]+/, '').trim() : '';
+  var re = /[（(【\[](利用開始|利用停止)[）)】\]]\s*([^\r\n]+)/g;
+  var m;
+  while ((m = re.exec(String(body || ''))) !== null) {
+    var status = m[1] === '利用開始' ? '利用開始(OP追加)' : '利用停止';
+    var raw = String(m[2]).trim();
+    if (!raw || /について|場合でも|^合計|^小計|^の場合|^円/.test(raw)) continue;
+    var norm = normalizeOptionNameHub_(raw);
+    if (!norm) continue;
+    results.push([date, name, status, raw, norm, msgId]);
+  }
+  return results;
+}
+
+function countGmailLabelThreadsHub_(labelName) {
+  var label = GmailApp.getUserLabelByName(labelName);
+  if (!label) return { name: labelName, exists: false, threads: 0 };
+  var n = 0;
+  var start = 0;
+  while (n < 3000) {
+    var batch = label.getThreads(start, 100);
+    if (!batch || !batch.length) break;
+    n += batch.length;
+    if (batch.length < 100) break;
+    start += batch.length;
+  }
+  return { name: labelName, exists: true, threads: n };
+}
+
+function rebuildFromUnbundledMail_(dryRun) {
+  try {
+    var ss = SpreadsheetApp.openById(UKETSUKE_SOURCE_ID_);
+    var data = ss.getSheetByName('入会・退会_データ');
+    var op = ss.getSheetByName('OP集計');
+    if (!data || !op) return { ok: false, message: 'sheet missing' };
+    var monthText = String(op.getRange('B1').getDisplayValue() || '2026年9月').trim();
+    var packCore = [
+      '安心サポートVIP', 'オンラインレッスン', '体組成計', 'レンタルマット',
+      'プロテイン＋水素水', 'レンタルタオル', 'ホットスタジオ'
+    ];
+
+    var lastData = Math.max(data.getLastRow(), 1);
+    var enrollRows = data.getRange(2, 1, lastData, 5).getValues();
+    var sheetByKey = {};
+    var sheetSept = [];
+    var i;
+    for (i = 0; i < enrollRows.length; i++) {
+      var sName = String(enrollRows[i][1] || '').trim();
+      if (!sName) continue;
+      var sYm = ymLabelOf_(enrollRows[i][2]);
+      var sKey = nameKeyHub_(sName) + '|' + sYm;
+      sheetByKey[sKey] = {
+        name: sName,
+        ym: sYm,
+        cat: String(enrollRows[i][3] || '')
+      };
+      if (sYm === monthText) sheetSept.push(sheetByKey[sKey]);
+    }
+
+    var enrollQ = 'from:info@joyfit-service.jp subject:ご入会ありがとうございます after:2026/08/30 before:2026/10/01';
+    var changeQ = 'from:info@joyfit-service.jp subject:オプションご契約につきまして after:2026/08/30 before:2026/10/01';
+    var enrollThreads = searchGmailPagedHub_(enrollQ, 400);
+    var changeThreads = searchGmailPagedHub_(changeQ, 400);
+
+    var gmailPeople = [];
+    var seenG = {};
+    var enrollMessages = 0;
+    var t;
+    for (t = 0; t < enrollThreads.length; t++) {
+      var messages = enrollThreads[t].getMessages() || [];
+      var mi;
+      for (mi = 0; mi < messages.length; mi++) {
+        var msg = messages[mi];
+        var subject = String(msg.getSubject() || '');
+        if (subject.indexOf('ご入会') === -1) continue;
+        enrollMessages++;
+        var body = String(msg.getPlainBody() || '');
+        if (body.length < 80) body = String(msg.getBody() || '').replace(/<[^>]+>/g, ' ');
+        var personName = extractNyukaiNameHub_(body);
+        if (!personName) continue;
+        var date = msg.getDate();
+        var ym = calcNyukaiYmHub_(body, date);
+        var cat = detectNyukaiCatHub_(subject, body);
+        var gKey = nameKeyHub_(personName) + '|' + ym;
+        if (seenG[gKey]) continue;
+        seenG[gKey] = true;
+        var ops = parseOpNamesFromBodyHub_(body);
+        gmailPeople.push({
+          name: personName,
+          ym: ym,
+          cat: cat,
+          six: cat.indexOf('法人') === -1,
+          date: date,
+          msgId: msg.getId(),
+          ops: ops,
+          opCount: ops.length,
+          inSheet: !!sheetByKey[gKey]
+        });
+      }
+    }
+
+    var septPeople = gmailPeople.filter(function (p) { return p.ym === monthText; });
+    var six = septPeople.filter(function (p) { return p.six; });
+    var corp = septPeople.filter(function (p) { return !p.six; });
+    var missing = septPeople.filter(function (p) { return !p.inSheet; });
+    var packShort = [];
+    var packOk = 0;
+    for (i = 0; i < six.length; i++) {
+      var uniq = {};
+      for (t = 0; t < six[i].ops.length; t++) uniq[six[i].ops[t]] = true;
+      var miss = [];
+      for (t = 0; t < packCore.length; t++) {
+        if (!uniq[packCore[t]]) miss.push(packCore[t]);
+      }
+      if (!uniq['タンニング'] && !uniq['セルフエステ']) miss.push('タンニングまたはセルフエステ');
+      if (miss.length) packShort.push({ name: six[i].name, opCount: six[i].opCount, missing: miss, inSheet: six[i].inSheet });
+      else packOk++;
+    }
+
+    var changeRows = [];
+    var changeMessages = 0;
+    for (t = 0; t < changeThreads.length; t++) {
+      var cmsgs = changeThreads[t].getMessages() || [];
+      for (i = 0; i < cmsgs.length; i++) {
+        var csub = String(cmsgs[i].getSubject() || '');
+        if (csub.indexOf('オプションご契約') === -1) continue;
+        changeMessages++;
+        var cbody = String(cmsgs[i].getPlainBody() || '');
+        if (cbody.length < 80) cbody = String(cmsgs[i].getBody() || '').replace(/<[^>]+>/g, ' ');
+        changeRows = changeRows.concat(parseOptionContractHub_(cmsgs[i].getDate(), cbody, cmsgs[i].getId()));
+      }
+    }
+
+    var labels = [
+      countGmailLabelThreadsHub_('入会メール/一般会員'),
+      countGmailLabelThreadsHub_('入会メール/法人会員'),
+      countGmailLabelThreadsHub_('退会メール/一般会員'),
+      countGmailLabelThreadsHub_('退会メール/法人会員'),
+      countGmailLabelThreadsHub_('オプションメール/追加・停止')
+    ];
+
+    var written = { enrollAdded: 0, opAdded: 0, compact: null };
+    if (!dryRun) {
+      var addEnroll = missing.map(function (p) {
+        return [p.date, p.name, p.ym, p.cat, p.msgId];
+      });
+      if (addEnroll.length) {
+        var start = lastData + 1;
+        data.getRange(start, 3, addEnroll.length, 1).setNumberFormat('@');
+        data.getRange(start, 1, addEnroll.length, 5).setValues(addEnroll);
+        data.getRange(start, 1, addEnroll.length, 1).setNumberFormat('yyyy/mm/dd hh:mm');
+        written.enrollAdded = addEnroll.length;
+      }
+
+      var lastOp = Math.max(op.getLastRow(), 1);
+      var log = op.getRange(1, 9, lastOp, 6).getValues();
+      var seenOp = {};
+      for (i = 1; i < log.length; i++) {
+        var k = uketsukeOpDedupeKey_(log[i]);
+        if (k) seenOp[k] = true;
+      }
+      var newOp = [];
+      for (i = 0; i < six.length; i++) {
+        for (t = 0; t < six[i].ops.length; t++) {
+          var row = [six[i].date, six[i].name, '利用開始(新規入会)', six[i].ops[t], six[i].ops[t], six[i].msgId];
+          var dk = uketsukeOpDedupeKey_(row);
+          if (seenOp[dk]) continue;
+          seenOp[dk] = true;
+          newOp.push(row);
+        }
+      }
+      for (i = 0; i < changeRows.length; i++) {
+        var ck = uketsukeOpDedupeKey_(changeRows[i]);
+        if (!ck || seenOp[ck]) continue;
+        seenOp[ck] = true;
+        newOp.push(changeRows[i]);
+      }
+      if (newOp.length) {
+        op.getRange(lastOp + 1, 9, newOp.length, 6).setValues(newOp);
+        written.opAdded = newOp.length;
+      }
+      written.compact = compactUketsukeOpDuplicates_();
+      var mm = monthText.match(/^(\d{4})年(\d{1,2})月$/);
+      if (mm) {
+        syncMonthlyEnrollCountsSafe_(ss, parseInt(mm[1], 10), parseInt(mm[2], 10) - 1, monthText);
+      }
+    }
+
+    return {
+      ok: true,
+      dryRun: !!dryRun,
+      meaning: {
+        previous74: '入会・退会_データの2026年9月ユニーク人数（6ヶ月割69+法人5）。法人以外がキャンペーン一般会員',
+        gmail82: '受信日8/30-10/1の入会メール通数。入会月は本文の利用開始日',
+        pack: '一般会員（6ヶ月割）にはテンプレ約7〜8種。法人は原則セットなし'
+      },
+      labels: labels,
+      gmail: {
+        enrollThreads: enrollThreads.length,
+        enrollMessages: enrollMessages,
+        uniqueNameMonth: gmailPeople.length,
+        septUnique: septPeople.length,
+        septSixMonth: six.length,
+        septCorporate: corp.length,
+        optionThreads: changeThreads.length,
+        optionMessages: changeMessages,
+        optionParsedRows: changeRows.length
+      },
+      sheetSept: {
+        total: sheetSept.length,
+        sixMonth: sheetSept.filter(function (p) { return String(p.cat).indexOf('法人') === -1; }).length,
+        corporate: sheetSept.filter(function (p) { return String(p.cat).indexOf('法人') !== -1; }).length
+      },
+      missingFromSheet: missing.map(function (p) {
+        return { name: p.name, ym: p.ym, cat: p.cat, opCount: p.opCount, ops: p.ops };
+      }),
+      packFromMail: {
+        complete: packOk,
+        short: packShort.length,
+        shortPeople: packShort
+      },
+      otherYmInWindow: gmailPeople.filter(function (p) { return p.ym !== monthText; }).map(function (p) {
+        return { name: p.name, ym: p.ym, cat: p.cat };
+      }),
+      written: written
+    };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
+function opStartAt_(optionName, monthOffset) {
+  var log = "'" + OP_LOG_HELPER_SHEET_ + "'";
+  var name = String(optionName).replace(/"/g, '""');
+  var counted =
+    'COUNTIFS(' + log + '!$A:$A,">="&EDATE($AB$5,' + monthOffset + '),' +
+    log + '!$A:$A,"<"&EDATE($AB$5,' + (monthOffset + 1) + '),' +
+    log + '!$C:$C,"' + name + '",' +
+    log + '!$B:$B,"*利用開始*")';
+  if (monthOffset !== 0) return '=' + counted;
+  var live =
+    'IFERROR(INDEX(\'' + OP_HELPER_SHEET_ + '\'!$D$3:$D$18,MATCH("' + name +
+    '",\'' + OP_HELPER_SHEET_ + '\'!$A$3:$A$18,0)),' + counted + ')';
+  return '=IF(TEXT($AB$5,"yymm")=TEXT(TODAY(),"yymm"),' + live + ',' + counted + ')';
+}
+
+function styleAllDataSheet_(sheet) {
+  var ss = sheet.getParent();
+  var maxR = sheet.getMaxRows();
+  var maxC = sheet.getMaxColumns();
+  sheet.clear();
+  try { sheet.clearConditionalFormatRules(); } catch (e0) {}
+  try { sheet.getRange(1, 1, maxR, maxC).breakApart(); } catch (e1) {}
+  sheet.setHiddenGridlines(true);
+  sheet.setTabColor('#111111');
+  sheet.setFrozenRows(6);
+
+  var ink = '#111111';
+  var paper = '#FFFFFF';
+  var zebra = '#F5F5F5';
+  var soft = '#E8E8E8';
+  var line = '#D4D4D4';
+  var mute = '#666666';
+
+  var now = new Date();
+  var monthList = [];
+  var jpYm = function (d) {
+    return d.getFullYear() + '年' + (d.getMonth() + 1) + '月';
+  };
+  for (var i = 0; i < 24; i++) {
+    monthList.push(jpYm(new Date(now.getFullYear(), now.getMonth() - i, 1)));
+  }
+
+  var needCols = 30;
+  if (sheet.getMaxColumns() < needCols) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), needCols - sheet.getMaxColumns());
+  }
+  sheet.getRange('AB1').setValue(UKETSUKE_SOURCE_ID_);
+  sheet.getRange('AB5').setFormula('=DATE(VALUE(LEFT($B$2,4)),VALUE(REGEXEXTRACT($B$2,"年(\\d+)月")),1)');
+  sheet.getRange('AB2').setFormula('=TEXT($AB$5,"yymm")');
+  sheet.getRange('AB3').setFormula('=TEXT(EDATE($AB$5,-1),"yymm")');
+  sheet.getRange('AB4').setFormula('=IMPORTRANGE($AB$1,"日報!B1")');
+  sheet.getRange('AB6').setFormula(
+    '=IMPORTRANGE("' + KENGAKU_SOURCE_ID_ + '","' + KENGAKU_SOURCE_SHEET_ + '!A1")'
+  );
+  try { sheet.hideColumns(28, 3); } catch (eHide) {}
+
+  sheet.getRange('A1').setValue('経堂マスタ');
+  sheet.getRange('A1:K1').merge();
+  sheet.getRange('A2').setValue('年月');
+  sheet.getRange('B2').setNumberFormat('@');
+  sheet.getRange('B2').setValue(jpYm(new Date(now.getFullYear(), now.getMonth(), 1)));
+  sheet.getRange('B2:C2').merge();
+  sheet.getRange('B2').setDataValidation(
+    SpreadsheetApp.newDataValidation()
+      .requireValueInList(monthList, true)
+      .setAllowInvalid(false)
+      .build()
+  );
+  sheet.getRange('E2').setValue('今日');
+  sheet.getRange('F2:G2').merge();
+  sheet.getRange('F2').setFormula('=TEXT(TODAY(),"yyyy年m月d日")');
+
+  var headerRow = 16;
+  sheet.getRange(headerRow, 1).setValue('項目');
+  sheet.getRange(headerRow, 2).setFormula('=TEXT(EDATE($AB$5,-4),"yyyy年m月")');
+  sheet.getRange(headerRow, 3).setFormula('=TEXT(EDATE($AB$5,-3),"yyyy年m月")');
+  sheet.getRange(headerRow, 4).setFormula('=TEXT(EDATE($AB$5,-2),"yyyy年m月")');
+  sheet.getRange(headerRow, 5).setFormula('=TEXT(EDATE($AB$5,-1),"yyyy年m月")');
+  sheet.getRange(headerRow, 6).setFormula('=TEXT($AB$5,"yyyy年m月")');
+  sheet.getRange(headerRow, 7).setValue('着地見込');
+  sheet.getRange(headerRow, 8).setValue('計画');
+  sheet.getRange(headerRow, 9).setValue('進捗');
+  sheet.getRange(headerRow, 10).setValue('対前月');
+
+  var mOff = [-4, -3, -2, -1, 0];
+  var five = function (builder) {
+    return mOff.map(function (off) { return builder(off); });
+  };
+
+  var start = 17;
+  var specs = [
+    { name: '入会計画', vals: five(function (o) { return trendAt_('入会計画', o); }) },
+    { name: '入会実績', vals: five(function (o) { return nippoOrTrend_('C13', '入 会  | 実績/見込', o); }), plan: '入会計画', pace: true },
+    { name: '解除計画', vals: five(function (o) { return trendAt_('解除計画', o); }) },
+    { name: '解除実績', vals: five(function (o) { return nippoOrTrend_('C15', '解 除  | 実績/見込', o); }), plan: '解除計画', pace: true },
+    { name: '月初計画', vals: five(function (o) { return trendAt_('月初計画', o); }) },
+    { name: '月初実績', vals: five(function (o) { return trendAt_('月初会員数 | 実績/見込', o); }), plan: '月初計画' },
+    { name: '月末計画', vals: five(function (o) { return trendAt_('月末計画', o); }) },
+    { name: '月末実績', vals: five(function (o) { return trendAt_('月末会員数 | 実績/見込', o); }), plan: '月末計画', paceMonthEnd: true },
+    { name: '純増', vals: five(function (o) { return trendAt_('純増', o); }), paceNet: true, planFromPrev: true },
+    { name: '休会', vals: five(function (o) { return trendAt_('休会', o); }), pace: true, planFromPrev: true },
+    { name: '紹介', vals: five(function (o) { return trendAt_('紹介', o); }), pace: true, planFromPrev: true }
+  ];
+  var opFirst = specs.length;
+  OP_NAMES_.forEach(function (opName) {
+    specs.push({
+      name: opName,
+      op: true,
+      pace: true,
+      planFromPrev: true,
+      vals: five(function (o) { return opStartAt_(opName, o); })
+    });
+  });
+  var opLast = specs.length - 1;
+  var opSumVals = five(function (o) {
+    var col = String.fromCharCode(70 + o);
+    return '=IFERROR(SUM(' + col + (start + opFirst) + ':' + col + (start + opLast) + '),)';
+  });
+  specs.push({ name: 'OP合計', vals: opSumVals, pace: true, planFromPrev: true, opTotal: true });
+  specs = specs.concat([
+    { name: '口コミ', vals: five(function (o) { return monthCountOff_('口コミ_経堂', o); }), pace: true, planFromPrev: true },
+    { name: '見学体験', vals: five(function (o) { return monthCountOff_('見学体験申請', o); }), pace: true, planFromPrev: true },
+    { name: 'レクチャー', vals: five(function (o) { return monthCountOff_('マシンレクチャー申込', o); }), pace: true, planFromPrev: true },
+    { name: '販促乗換', vals: five(function (o) { return monthCountOff_('販促_乗り換え', o); }), pace: true, planFromPrev: true },
+    { name: '販促ペア', vals: five(function (o) { return monthCountOff_('販促_紹介・ペア入会', o); }), pace: true, planFromPrev: true },
+    { name: '学校関係者', vals: five(function (o) { return monthCountOff_('販促_学校関係者', o); }), pace: true, planFromPrev: true },
+    { name: 'ラグビー割', vals: five(function (o) { return monthCountOff_('販促_ラグビー割', o); }), pace: true, planFromPrev: true },
+    { name: '6ヶ月継続', vals: five(function (o) { return monthCountOff_('販促_6ヶ月継続', o); }), pace: true, planFromPrev: true }
+  ]);
+
+  var enrollRow = start + 1;
+  var cancelRow = start + 3;
+  var beginRow = start + 5;
+  var body = specs.map(function (spec, idx) {
+    var r = start + idx;
+    var pace = '';
+    if (spec.pace) pace = paceFrom_('F' + r);
+    if (spec.paceNet) {
+      pace = '=IF(AND(ISNUMBER(G' + enrollRow + '),ISNUMBER(G' + cancelRow + ')),G' + enrollRow + '-G' + cancelRow + ',)';
+    }
+    if (spec.paceMonthEnd) {
+      pace =
+        '=IF(TEXT($AB$5,"yymm")<>TEXT(TODAY(),"yymm"),,' +
+        'IF(AND(ISNUMBER(F' + beginRow + '),ISNUMBER(G' + enrollRow + '),ISNUMBER(G' + cancelRow + ')),' +
+        'F' + beginRow + '+G' + enrollRow + '-G' + cancelRow + ',))';
+    }
+    var planCell = '';
+    if (spec.plan) planCell = trendAt_(spec.plan, 0);
+    else if (spec.planFromPrev) planCell = planFromPrev_(r);
+    var progress = (spec.plan || spec.planFromPrev) ? progressFormula_(r) : '';
+    var delta = '=IF(AND(ISNUMBER(F' + r + '),ISNUMBER(E' + r + ')),F' + r + '-E' + r + ',)';
+    return [spec.name].concat(spec.vals).concat([pace, planCell, progress, delta]);
+  });
+  sheet.getRange(start, 1, body.length, 10).setValues(body);
+
+  var last = start + body.length - 1;
+  var table = sheet.getRange(1, 1, last, 10);
+  table
+    .setFontFamily('Meiryo')
+    .setFontColor(ink)
+    .setVerticalAlignment('middle');
+
+  sheet.getRange('A1:K1')
+    .setBackground(ink)
+    .setFontColor(paper)
+    .setFontSize(20)
+    .setFontWeight('bold')
+    .setHorizontalAlignment('center');
+  sheet.setRowHeight(1, 32);
+
+  sheet.getRange('A2:K2').setBackground(paper).setFontSize(10);
+  sheet.getRange('A2').setFontWeight('bold').setFontColor(mute).setHorizontalAlignment('center');
+  sheet.getRange('B2:C2')
+    .setFontWeight('bold')
+    .setFontSize(10)
+    .setHorizontalAlignment('center')
+    .setBackground(zebra);
+  sheet.setRowHeight(2, 22);
+  sheet.getRange('E2')
+    .setFontWeight('bold')
+    .setFontColor(mute)
+    .setHorizontalAlignment('right');
+  sheet.getRange('F2:G2')
+    .setFontWeight('bold')
+    .setFontSize(10)
+    .setHorizontalAlignment('center')
+    .setBackground(soft);
+
+  sheet.getRange(headerRow, 1, 1, 10)
+    .setBackground(ink)
+    .setFontColor(paper)
+    .setFontSize(10)
+    .setFontWeight('bold')
+    .setHorizontalAlignment('center');
+  sheet.setRowHeight(headerRow, 22);
+
+  sheet.getRange(start, 1, body.length, 10)
+    .setBackground(paper)
+    .setFontSize(10);
+  sheet.getRange(start, 1, body.length, 1)
+    .setFontWeight('bold')
+    .setHorizontalAlignment('left');
+  sheet.getRange(start, 2, body.length, 9)
+    .setHorizontalAlignment('right')
+    .setFontWeight('bold');
+  sheet.getRange(start, 2, body.length, 7).setNumberFormat('#,##0');
+  sheet.getRange(start, 10, body.length, 1).setNumberFormat('#,##0;-#,##0');
+  sheet.getRange(start, 9, body.length, 1).setNumberFormat('0%');
+  sheet.getRange(start, 6, body.length, 1).setBackground(zebra);
+  sheet.getRange(start, 7, body.length, 1).setBackground(soft);
+  sheet.getRange(start, 8, body.length, 1).setBackground(zebra);
+
+  for (var r = 0; r < body.length; r++) {
+    if (r % 2 === 1) {
+      sheet.getRange(start + r, 1, 1, 5).setBackground(zebra);
+      sheet.getRange(start + r, 10).setBackground(zebra);
+    }
+    sheet.setRowHeight(start + r, 20);
+  }
+
+  var opTotalRow = start + opLast + 1;
+  sheet.getRange(start + opFirst, 1, OP_NAMES_.length, 1)
+    .setFontSize(10)
+    .setBackground(ink)
+    .setFontColor(paper);
+  sheet.getRange(start + opFirst, 2, OP_NAMES_.length, 4).setBackground(zebra);
+  sheet.getRange(opTotalRow, 1, 1, 10)
+    .setBackground(ink)
+    .setFontColor(paper)
+    .setFontWeight('bold')
+    .setFontSize(10);
+  sheet.getRange(opTotalRow, 6).setBackground(soft).setFontColor(ink);
+  sheet.getRange(opTotalRow, 7).setBackground(line).setFontColor(ink);
+  sheet.getRange(opTotalRow, 8).setBackground(zebra).setFontColor(ink);
+
+  var promoFirst = opTotalRow + 1;
+  sheet.getRange(promoFirst, 1, last - promoFirst + 1, 1)
+    .setBackground('#333333')
+    .setFontColor(paper)
+    .setFontSize(10);
+
+  sheet.getRange(headerRow, 1, last - headerRow + 1, 10).setBorder(
+    true, true, true, true, true, true,
+    line, SpreadsheetApp.BorderStyle.SOLID
+  );
+  sheet.getRange('A1:K1').setBorder(
+    true, true, true, true, false, false,
+    ink, SpreadsheetApp.BorderStyle.SOLID
+  );
+  sheet.getRange(headerRow, 1, 1, 10).setBorder(
+    true, true, true, true, false, false,
+    ink, SpreadsheetApp.BorderStyle.SOLID
+  );
+  sheet.getRange(start + opFirst, 1, OP_NAMES_.length + 1, 10).setBorder(
+    true, true, true, true, true, true,
+    line, SpreadsheetApp.BorderStyle.SOLID
+  );
+
+  sheet.setColumnWidth(1, 150);
+  var c;
+  for (c = 2; c <= 11; c++) sheet.setColumnWidth(c, 80);
+
+  addKyodoTodayBoard_(sheet);
+  addKyodoMasterSideLists_(sheet);
+  applyKyodoMasterFormats_(sheet, start, last);
+
+  var leftover = ss.getSheets();
+  for (var j = leftover.length - 1; j >= 0; j--) {
+    var nm = leftover[j].getName();
+    if (/^シート\d+$/.test(nm) && leftover[j].getLastRow() === 0 && ss.getSheets().length > 1) {
+      try { ss.deleteSheet(leftover[j]); } catch (eDel) {}
+    }
+  }
+}
+
+function todayMemberWhere_() {
+  return (
+    'Col1 >= date \'"&TEXT(TODAY(),"yyyy-mm-dd")&"\' and Col1 < date \'"&TEXT(TODAY()+1,"yyyy-mm-dd")&"\''
+  );
+}
+
+function addKyodoTodayBoard_(sheet) {
+  var ink = '#111111';
+  var paper = '#FFFFFF';
+  var zebra = '#F5F5F5';
+  var soft = '#E8E8E8';
+  var line = '#D4D4D4';
+  var mute = '#666666';
+  var irLive = function (a1) {
+    return '=IFERROR(N(IMPORTRANGE($AB$1,"日報!' + a1 + '")),)';
+  };
+  var where = todayMemberWhere_();
+  var enrollSh = "'" + NYUKAI_HELPER_SHEET_.replace(/'/g, "''") + "'";
+  var withdrawSh = "'" + TAIKAI_HELPER_SHEET_.replace(/'/g, "''") + "'";
+
+  sheet.getRange('A3:K15').setFontFamily('Meiryo').setVerticalAlignment('middle');
+  sheet.getRange('A3:K3').setBackground(paper).setFontColor(paper).setFontSize(10).clearContent();
+  sheet.setRowHeight(3, 10);
+
+  var cards = [
+    { label: '当日入会', formula: irLive('C9') },
+    { label: '当日退会', formula: irLive('C11') },
+    { label: '当月入会', formula: irLive('C13') },
+    { label: '当月末退会', formula: irLive('C15') },
+    { label: '当月移籍', formula: irLive('D14') }
+  ];
+  var i;
+  for (i = 0; i < cards.length; i++) {
+    var col = 2 + i * 2;
+    sheet.getRange(4, col, 1, 2).merge();
+    sheet.getRange(4, col).setValue(cards[i].label);
+    sheet.getRange(4, col, 1, 2)
+      .setBackground(zebra)
+      .setFontColor(mute)
+      .setFontSize(10)
+      .setFontWeight('bold')
+      .setHorizontalAlignment('center');
+    sheet.getRange(5, col, 2, 2).merge();
+    sheet.getRange(5, col).setFormula(cards[i].formula);
+    sheet.getRange(5, col, 2, 2)
+      .setBackground(zebra)
+      .setFontColor(ink)
+      .setFontSize(20)
+      .setFontWeight('bold')
+      .setHorizontalAlignment('center')
+      .setNumberFormat('#,##0" 名"');
+    sheet.getRange(4, col, 3, 2).setBorder(
+      true, true, true, true, false, false,
+      line, SpreadsheetApp.BorderStyle.SOLID
+    );
+  }
+  sheet.getRange('A4:A6').setBackground(paper);
+  sheet.setRowHeight(4, 22);
+  sheet.setRowHeight(5, 28);
+  sheet.setRowHeight(6, 28);
+
+  sheet.getRange('B7:C7').merge();
+  sheet.getRange('B7').setValue('今日の入会者');
+  sheet.getRange('D7:E7').merge();
+  sheet.getRange('D7').setValue('今日の退会者');
+  sheet.getRange('B7:E7')
+    .setBackground(ink)
+    .setFontColor(paper)
+    .setFontSize(10)
+    .setFontWeight('bold')
+    .setHorizontalAlignment('center');
+  sheet.getRange('A7').setBackground(paper);
+  sheet.setRowHeight(7, 20);
+
+  sheet.getRange('B8:E8').setValues([['氏名', '時刻', '氏名', '時刻']]);
+  sheet.getRange('B8:E8')
+    .setBackground(soft)
+    .setFontColor(ink)
+    .setFontSize(10)
+    .setFontWeight('bold')
+    .setHorizontalAlignment('center');
+  sheet.getRange('A8').setBackground(paper);
+  sheet.setRowHeight(8, 18);
+
+  sheet.getRange('B9').setFormula(
+    '=IFERROR(QUERY(' + enrollSh + '!A2:E,"select Col2, Col1 where ' +
+    where + ' order by Col1 desc limit 6",0),"")'
+  );
+  sheet.getRange('D9').setFormula(
+    '=IFERROR(QUERY(' + withdrawSh + '!A2:F,"select Col2, Col1 where ' +
+    where + ' and Col6 <> true order by Col1 desc limit 6",0),"")'
+  );
+  sheet.getRange('A9:E14').setBackground(paper).setFontColor(ink).setFontSize(10);
+  sheet.getRange('B9:E14').setFontWeight('bold');
+  sheet.getRange('B9:B14').setHorizontalAlignment('left');
+  sheet.getRange('D9:D14').setHorizontalAlignment('left');
+  sheet.getRange('C9:C14').setHorizontalAlignment('center').setNumberFormat('h:mm');
+  sheet.getRange('E9:E14').setHorizontalAlignment('center').setNumberFormat('h:mm');
+  for (i = 9; i <= 14; i++) {
+    if ((i - 9) % 2 === 1) {
+      sheet.getRange(i, 2, 1, 4).setBackground(zebra);
+    }
+    sheet.setRowHeight(i, 20);
+  }
+  sheet.getRange('B7:C14').setBorder(
+    true, true, true, true, true, false,
+    line, SpreadsheetApp.BorderStyle.SOLID
+  );
+  sheet.getRange('D7:E14').setBorder(
+    true, true, true, true, true, false,
+    line, SpreadsheetApp.BorderStyle.SOLID
+  );
+
+  sheet.getRange('A15:J15').merge();
+  sheet.getRange('A15').setValue('5ヶ月データベース');
+  sheet.getRange('A15:J15')
+    .setBackground(ink)
+    .setFontColor(paper)
+    .setFontFamily('Meiryo')
+    .setFontSize(10)
+    .setFontWeight('bold')
+    .setHorizontalAlignment('left')
+    .setVerticalAlignment('middle');
+  sheet.getRange('K15').setBackground(paper);
+  sheet.setRowHeight(15, 22);
+  addKyodoAiBriefPanel_(sheet);
+}
+
+function addKyodoAiBriefPanel_(sheet) {
+  var ink = '#111111';
+  var paper = '#FFFFFF';
+  var zebra = '#F5F5F5';
+  var soft = '#E8E8E8';
+  var line = '#D4D4D4';
+  try { sheet.getRange('F7:K14').breakApart(); } catch (e0) {}
+  sheet.getRange('F7:K14')
+    .setFontFamily('Meiryo')
+    .setFontSize(10)
+    .setFontColor(ink)
+    .setVerticalAlignment('middle')
+    .setWrap(true);
+
+  sheet.getRange('F7:K7').merge();
+  sheet.getRange('F7').setValue('今月の読み');
+  sheet.getRange('F7:K7')
+    .setBackground(ink)
+    .setFontColor(paper)
+    .setFontWeight('bold')
+    .setHorizontalAlignment('left')
+    .setVerticalAlignment('middle');
+
+  sheet.getRange('F8:K8').merge();
+  sheet.getRange('F8').setValue('数値を読んで作成します');
+  sheet.getRange('F8:K8')
+    .setBackground(soft)
+    .setFontColor('#333333')
+    .setFontWeight('bold')
+    .setHorizontalAlignment('left');
+
+  sheet.getRange('F9:F10').merge();
+  sheet.getRange('F9').setValue('好調');
+  sheet.getRange('F11:F12').merge();
+  sheet.getRange('F11').setValue('課題');
+  sheet.getRange('F13:F14').merge();
+  sheet.getRange('F13').setValue('一手');
+  sheet.getRange('F9:F14')
+    .setBackground(ink)
+    .setFontColor(paper)
+    .setFontWeight('bold')
+    .setHorizontalAlignment('center')
+    .setVerticalAlignment('middle');
+
+  sheet.getRange('G9:K10').merge();
+  sheet.getRange('G11:K12').merge();
+  sheet.getRange('G13:K14').merge();
+  sheet.getRange('G9').setValue('');
+  sheet.getRange('G11').setValue('');
+  sheet.getRange('G13').setValue('');
+  sheet.getRange('G9:K10').setBackground(paper).setVerticalAlignment('top');
+  sheet.getRange('G11:K12').setBackground(zebra).setVerticalAlignment('top');
+  sheet.getRange('G13:K14').setBackground(paper).setVerticalAlignment('top');
+  sheet.getRange('F7:K14').setBorder(
+    true, true, true, true, true, false,
+    line, SpreadsheetApp.BorderStyle.SOLID
+  );
+  sheet.setRowHeight(7, 22);
+  sheet.setRowHeight(8, 22);
+  var r;
+  for (r = 9; r <= 14; r++) sheet.setRowHeight(r, 24);
+}
+
+function parseKyodoPct_(v) {
+  if (typeof v === 'number' && isFinite(v)) return v > 3 ? v / 100 : v;
+  var s = String(v == null ? '' : v).replace(/%/g, '').replace(/,/g, '').trim();
+  if (!s) return null;
+  var n = Number(s);
+  if (!isFinite(n)) return null;
+  return n > 3 ? n / 100 : n;
+}
+
+function collectKyodoKpiSnapshot_(sheet) {
+  var last = Math.max(sheet.getLastRow(), 17);
+  var table = sheet.getRange(16, 1, last - 15, 10).getDisplayValues();
+  var items = [];
+  for (var i = 1; i < table.length; i++) {
+    var name = String(table[i][0] || '').trim();
+    if (!name) continue;
+    items.push({
+      name: name,
+      month: String(table[i][5] || ''),
+      pace: String(table[i][6] || ''),
+      plan: String(table[i][7] || ''),
+      progress: String(table[i][8] || ''),
+      vsPrev: String(table[i][9] || ''),
+      pct: parseKyodoPct_(table[i][8])
+    });
+  }
+  return {
+    month: String(sheet.getRange('B2').getDisplayValue() || ''),
+    today: String(sheet.getRange('F2').getDisplayValue() || ''),
+    todayEnroll: String(sheet.getRange('B5').getDisplayValue() || ''),
+    todayCancel: String(sheet.getRange('D5').getDisplayValue() || ''),
+    monthEnroll: String(sheet.getRange('F5').getDisplayValue() || ''),
+    monthCancel: String(sheet.getRange('H5').getDisplayValue() || ''),
+    monthMove: String(sheet.getRange('J5').getDisplayValue() || ''),
+    items: items
+  };
+}
+
+function findKyodoKpi_(items, name) {
+  for (var i = 0; i < items.length; i++) {
+    if (items[i].name === name) return items[i];
+  }
+  return { name: name, month: '', pace: '', plan: '', progress: '', vsPrev: '', pct: null };
+}
+
+function kyodoBriefTicker_(snap) {
+  var enroll = findKyodoKpi_(snap.items, '入会実績');
+  var cancel = findKyodoKpi_(snap.items, '解除実績');
+  var op = findKyodoKpi_(snap.items, 'OP合計');
+  var net = findKyodoKpi_(snap.items, '純増');
+  var stamp = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'M/d H:mm');
+  return (
+    '入会' + (enroll.progress || '—') +
+    '  解除' + (cancel.progress || '—') +
+    '  OP' + (op.progress || '—') +
+    '  純増' + (net.progress || '—') +
+    '    ' + stamp + ' 自動'
+  );
+}
+
+function rankedKyodoKpi_(items, wantHigh) {
+  var ranked = items.filter(function (it) {
+    if (it.pct == null) return false;
+    if (it.name.indexOf('計画') !== -1) return false;
+    if (it.name.indexOf('販促') === 0) return false;
+    if (it.name === '口コミ' || it.name === 'レクチャー' || it.name === '学校関係者') return false;
+    if (it.name === 'ラグビー割' || it.name === '6ヶ月継続') return false;
+    return true;
+  });
+  ranked.sort(function (a, b) {
+    return wantHigh ? b.pct - a.pct : a.pct - b.pct;
+  });
+  return ranked;
+}
+
+function buildKyodoAiBriefFallback_(snap) {
+  var enroll = findKyodoKpi_(snap.items, '入会実績');
+  var cancel = findKyodoKpi_(snap.items, '解除実績');
+  var op = findKyodoKpi_(snap.items, 'OP合計');
+  var net = findKyodoKpi_(snap.items, '純増');
+  var highs = rankedKyodoKpi_(snap.items, true);
+  var lows = rankedKyodoKpi_(snap.items, false);
+  var goodBits = [];
+  if (enroll.pct != null && enroll.pct >= 1) {
+    goodBits.push('入会の着地は' + enroll.progress + '（実績' + enroll.month + '／計画' + enroll.plan + '）。');
+  }
+  var hi = 0;
+  for (var i = 0; i < highs.length && hi < 2; i++) {
+    if (highs[i].name === '入会実績' || highs[i].name === '口コミ') continue;
+    if (highs[i].pct < 1) break;
+    goodBits.push(highs[i].name + 'は' + highs[i].progress + '。');
+    hi++;
+  }
+  if (!goodBits.length) goodBits.push('計画を明確に超えている項目はまだ少ない。');
+
+  var badBits = [];
+  if (cancel.pct != null && cancel.pct >= 1) {
+    badBits.push('解除の着地は' + cancel.progress + '（実績' + cancel.month + '／計画' + cancel.plan + '）。');
+  }
+  var lo = 0;
+  for (i = 0; i < lows.length && lo < 2; i++) {
+    if (lows[i].pct == null || lows[i].pct >= 0.8) continue;
+    if (lows[i].name === '解除実績') continue;
+    badBits.push(lows[i].name + 'は' + lows[i].progress + '。');
+    lo++;
+  }
+  if (!badBits.length) badBits.push('大きな割れはない。計画付近の項目を維持する。');
+
+  var acts = [];
+  if (enroll.pct != null && enroll.pct >= 1.2) {
+    acts.push('入会はペース維持。見学・紹介の当日クロージングを外さない。');
+  } else if (enroll.pct != null && enroll.pct < 0.9) {
+    acts.push('入会が計画を下回る。残日で体験からの当日入会を厚くする。');
+  }
+  if (cancel.pct != null && cancel.pct >= 1) {
+    acts.push('解除が計画以上。継続・休会の代替提案を退会面談で必ず出す。');
+  }
+  if (op.pct != null && op.pct < 0.95) {
+    acts.push('OP着地は' + op.progress + '。入会者のパック欠けをその場で埋める。');
+  }
+  if (net.pct != null && net.pct < 0.85) {
+    acts.push('純増が' + net.progress + '。入会維持より解除抑制を優先する。');
+  }
+  if (!acts.length) acts.push('数字は計画内。今日の入会者へOPの取りこぼしがないかだけ確認する。');
+
+  var headline = '着地を見て今日動く';
+  if (enroll.pct != null && enroll.pct >= 1.2 && cancel.pct != null && cancel.pct < 1) {
+    headline = '入会は強い。解除を抑える';
+  } else if (enroll.pct != null && enroll.pct >= 1.2) {
+    headline = '入会は過熱。取りこぼしを防ぐ';
+  } else if (cancel.pct != null && cancel.pct >= 1) {
+    headline = '解除が計画を超えている';
+  }
+
+  return {
+    headline: headline,
+    good: goodBits.join(''),
+    bad: badBits.join(''),
+    action: acts.slice(0, 2).join(''),
+    ticker: kyodoBriefTicker_(snap),
+    via: 'fallback'
+  };
+}
+
+function compactKyodoKpiForPrompt_(snap) {
+  var focus = {
+    '入会実績': 1, '解除実績': 1, '純増': 1, 'OP合計': 1,
+    '安心サポートVIP': 1, '水素水': 1, 'オンラインレッスン': 1,
+    'セルフエステ': 1, 'タンニング': 1, '口コミ': 1, '見学体験': 1
+  };
+  var rows = [];
+  for (var i = 0; i < snap.items.length; i++) {
+    var it = snap.items[i];
+    if (!focus[it.name] && (it.pct == null || (it.pct >= 0.85 && it.pct <= 1.15))) continue;
+    if (it.name.indexOf('計画') !== -1) continue;
+    rows.push(
+      it.name + ': 当月' + it.month + ' 着地' + it.pace +
+      ' 計画' + it.plan + ' 進捗' + it.progress + ' 対前月' + it.vsPrev
+    );
+  }
+  return rows.join('\n');
+}
+
+function parseKyodoAiJson_(raw) {
+  var s = String(raw || '').trim();
+  s = s.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/, '');
+  var start = s.indexOf('{');
+  var end = s.lastIndexOf('}');
+  if (start < 0 || end <= start) return null;
+  try {
+    var obj = JSON.parse(s.substring(start, end + 1));
+    if (!obj) return null;
+    return {
+      headline: String(obj.headline || '').replace(/\s+/g, ' ').trim(),
+      good: String(obj.good || '').replace(/\s+/g, ' ').trim(),
+      bad: String(obj.bad || '').replace(/\s+/g, ' ').trim(),
+      action: String(obj.action || '').replace(/\s+/g, ' ').trim()
+    };
+  } catch (err) {
+    return null;
+  }
+}
+
+function buildKyodoAiBriefWithGemini_(snap) {
+  var prompt = [
+    'あなたはJOYFIT24経堂の店舗経営参謀です。',
+    '与えた数字だけを根拠に、店長が今すぐ動ける短い日本語を返す。',
+    '推測で事実を作らない。空欄の指標は触れない。口コミの極端な進捗は件数母数が小さいので過大評価しない。',
+    '出力はJSONのみ。キーは headline, good, bad, action。',
+    'headline は18字以内の一言。good は好調1〜2点（数字必須、80字以内）。',
+    'bad は課題1〜2点（数字必須、80字以内）。action は今日〜今週の具体行動を2文（120字以内）。',
+    '',
+    '対象月: ' + snap.month + ' / 今日: ' + snap.today,
+    '当日入会 ' + snap.todayEnroll + ' / 当日退会 ' + snap.todayCancel +
+      ' / 当月入会 ' + snap.monthEnroll + ' / 当月末退会 ' + snap.monthCancel +
+      ' / 当月移籍 ' + snap.monthMove,
+    compactKyodoKpiForPrompt_(snap)
+  ].join('\n');
+  var gen = geminiGenerateText_(prompt);
+  if (!gen || !gen.ok) return { error: (gen && gen.message) || 'gemini failed' };
+  var parsed = parseKyodoAiJson_(gen.text);
+  if (!parsed || !parsed.good || !parsed.action) {
+    return { error: 'parse failed', raw: String((gen && gen.text) || '').slice(0, 240) };
+  }
+  return {
+    brief: {
+      headline: parsed.headline || '着地を見て今日動く',
+      good: parsed.good,
+      bad: parsed.bad || '',
+      action: parsed.action,
+      ticker: kyodoBriefTicker_(snap),
+      via: 'gemini',
+      model: gen.model || ''
+    }
+  };
+}
+
+function writeKyodoAiBrief_(sheet, brief) {
+  var title = '今月の読み';
+  if (brief.headline) title += '　' + brief.headline;
+  sheet.getRange('F7').setValue(title);
+  sheet.getRange('F8').setValue(brief.ticker || '');
+  sheet.getRange('G9').setValue(brief.good || '');
+  sheet.getRange('G11').setValue(brief.bad || '');
+  sheet.getRange('G13').setValue(brief.action || '');
+}
+
+function refreshKyodoAiBrief_() {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+  } catch (eLock) {
+    return { ok: false, message: 'lock timeout' };
+  }
+  var sheet;
+  try {
+    var ss = openWorkspaceSpreadsheet_();
+    sheet = ss.getSheetByName(ALLDATA_SHEET_NAME_);
+    if (!sheet) return { ok: false, message: '経堂マスタ not found' };
+    var triggerInfo = ensureKyodoAiBriefTrigger_();
+    SpreadsheetApp.flush();
+    var snap = collectKyodoKpiSnapshot_(sheet);
+    var enroll = findKyodoKpi_(snap.items, '入会実績');
+    if (!snap.items.length || (enroll.progress === '' && enroll.month === '')) {
+      writeKyodoAiBrief_(sheet, {
+        headline: '',
+        ticker: '数値の読み込み待ち',
+        good: '',
+        bad: '',
+        action: ''
+      });
+      return { ok: false, message: 'kpi not ready', via: 'pending' };
+    }
+    var attempted = buildKyodoAiBriefWithGemini_(snap);
+    var brief = (attempted && attempted.brief) || buildKyodoAiBriefFallback_(snap);
+    writeKyodoAiBrief_(sheet, brief);
+    return {
+      ok: true,
+      via: brief.via,
+      model: brief.model || '',
+      headline: brief.headline,
+      ticker: brief.ticker,
+      geminiError: (attempted && attempted.error) || '',
+      aiAuthUrl: kyodoAiAuthUrl_(),
+      aiTrigger: triggerInfo
+    };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  } finally {
+    try { lock.releaseLock(); } catch (eRel) {}
+  }
+}
+
+function kyodoAiAuthUrl_() {
+  try {
+    var info = ScriptApp.getAuthorizationInfo(ScriptApp.AuthMode.FULL);
+    if (info.getAuthorizationStatus() === ScriptApp.AuthorizationStatus.REQUIRED) {
+      return info.getAuthorizationUrl() || '';
+    }
+  } catch (err) {}
+  return '';
+}
+
+function refreshKyodoAiBriefTriggered_() {
+  return refreshKyodoAiBrief_();
+}
+
+function ensureKyodoAiBriefTrigger_() {
+  try {
+    var fn = 'refreshKyodoAiBriefTriggered_';
+    var triggers = ScriptApp.getProjectTriggers();
+    var count = 0;
+    var i;
+    for (i = 0; i < triggers.length; i++) {
+      if (triggers[i].getHandlerFunction() === fn) count++;
+    }
+    if (count < 1) {
+      ScriptApp.newTrigger(fn).timeBased().everyDays(1).atHour(8).create();
+      count++;
+    }
+    if (count < 2) {
+      ScriptApp.newTrigger(fn).timeBased().everyDays(1).atHour(21).create();
+    }
+    return { ok: true, count: Math.max(count, 2) };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
+function applyKyodoMasterFormats_(sheet, start, last) {
+  var progress = sheet.getRange(start, 9, last - start + 1, 1);
+  var delta = sheet.getRange(start, 10, last - start + 1, 1);
+  var rules = [];
+  var progressSteps = [
+    { formula: '=AND(ISNUMBER(I' + start + '),I' + start + '>=1.5)', bg: '#111111', fg: '#FFFFFF' },
+    { formula: '=AND(ISNUMBER(I' + start + '),I' + start + '>=1.2)', bg: '#333333', fg: '#FFFFFF' },
+    { formula: '=AND(ISNUMBER(I' + start + '),I' + start + '>=1)', bg: '#666666', fg: '#FFFFFF' },
+    { formula: '=AND(ISNUMBER(I' + start + '),I' + start + '>=0.8)', bg: '#D4D4D4', fg: '#111111' },
+    { formula: '=AND(ISNUMBER(I' + start + '),I' + start + '<0.8)', bg: '#F5F5F5', fg: '#666666' }
+  ];
+  for (var i = 0; i < progressSteps.length; i++) {
+    rules.push(
+      SpreadsheetApp.newConditionalFormatRule()
+        .whenFormulaSatisfied(progressSteps[i].formula)
+        .setBackground(progressSteps[i].bg)
+        .setFontColor(progressSteps[i].fg)
+        .setRanges([progress])
+        .build()
+    );
+  }
+  rules.push(
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenNumberGreaterThan(0)
+      .setBackground('#E8E8E8')
+      .setFontColor('#111111')
+      .setRanges([delta])
+      .build()
+  );
+  rules.push(
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenNumberLessThan(0)
+      .setBackground('#F5F5F5')
+      .setFontColor('#666666')
+      .setRanges([delta])
+      .build()
+  );
+  rules.push(
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenFormulaSatisfied('=$AA4=FALSE')
+      .setBackground('#F5F5F5')
+      .setFontColor('#666666')
+      .setRanges([sheet.getRange('AA4:AA40')])
+      .build()
+  );
+  rules.push(
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenFormulaSatisfied('=$AA4=TRUE')
+      .setBackground('#111111')
+      .setFontColor('#FFFFFF')
+      .setRanges([sheet.getRange('AA4:AA40')])
+      .build()
+  );
+  sheet.setConditionalFormatRules(rules);
+}
+
+function addKyodoMasterSideLists_(sheet) {
+  var monthFilter =
+    ' >= date \'"&TEXT($AB$5,"yyyy-mm-dd")&"\' and Col1 < date \'"&TEXT(EDATE($AB$5,1),"yyyy-mm-dd")&"\'';
+  var kengaku = sheet.getParent().getSheetByName(KENGAKU_DEST_SHEET_);
+  var kengakuLink = kengaku
+    ? (sheet.getParent().getUrl() + '#gid=' + kengaku.getSheetId())
+    : ('https://docs.google.com/spreadsheets/d/' + KENGAKU_SOURCE_ID_ + '/edit');
+
+  sheet.getRange('L1:N1').merge();
+  sheet.getRange('L1').setValue('今月の追加販促');
+  sheet.getRange('L1:N2')
+    .setFontFamily('Meiryo')
+    .setFontWeight('bold')
+    .setHorizontalAlignment('center')
+    .setVerticalAlignment('middle');
+  sheet.getRange('L1:N1').setBackground('#111111').setFontColor('#FFFFFF').setFontSize(10);
+  sheet.getRange('L2:N2').merge();
+  sheet.getRange('L2').setFormula(
+    '=HYPERLINK("https://docs.google.com/spreadsheets/d/' + PROMO_SOURCE_ID_ + '/edit","追加販促を開く")'
+  );
+  sheet.getRange('L2:N2').setBackground('#E8E8E8').setFontColor('#111111').setFontSize(10);
+  sheet.getRange('L3:N3').setValues([['申請日時', '種別', '名前']]);
+  sheet.getRange('L3:N3')
+    .setBackground('#111111')
+    .setFontColor('#FFFFFF')
+    .setFontFamily('Meiryo')
+    .setFontSize(10)
+    .setFontWeight('bold');
+  sheet.getRange('L4').setFormula(
+    '=IFERROR(QUERY({' +
+    '\'販促_乗り換え\'!A2:C;' +
+    '\'販促_紹介・ペア入会\'!A2:C;' +
+    '\'販促_ラグビー割\'!A2:C;' +
+    '\'販促_6ヶ月継続\'!A2:C' +
+    '},"select Col1,Col2,Col3 where Col1' +
+    monthFilter +
+    ' order by Col1 desc",0),"")'
+  );
+  sheet.getRange('L4:L40').setNumberFormat('yyyy/mm/dd HH:mm');
+  sheet.getRange('L3:N40').setFontFamily('Meiryo').setFontSize(10).setVerticalAlignment('middle');
+
+  sheet.getRange('R1:V1').merge();
+  sheet.getRange('R1').setValue('今月の見学体験');
+  sheet.getRange('R1:V2')
+    .setFontFamily('Meiryo')
+    .setFontWeight('bold')
+    .setHorizontalAlignment('center')
+    .setVerticalAlignment('middle');
+  sheet.getRange('R1:V1').setBackground('#111111').setFontColor('#FFFFFF').setFontSize(10);
+  sheet.getRange('R2:V2').merge();
+  sheet.getRange('R2').setFormula('=HYPERLINK("' + kengakuLink + '","見学体験申請シート")');
+  sheet.getRange('R2:V2').setBackground('#E8E8E8').setFontColor('#111111').setFontSize(10);
+  sheet.getRange('R3:V3').setValues([['申請日時', '区分', '名前', '希望日', '時刻']]);
+  sheet.getRange('R3:V3')
+    .setBackground('#111111')
+    .setFontColor('#FFFFFF')
+    .setFontFamily('Meiryo')
+    .setFontSize(10)
+    .setFontWeight('bold');
+  sheet.getRange('R4').setFormula(
+    '=IFERROR(QUERY(\'' + KENGAKU_DEST_SHEET_ + '\'!A2:I,"select Col1,Col2,Col3,Col8,Col9 where Col1' +
+    monthFilter +
+    ' order by Col1 desc",0),"")'
+  );
+  sheet.getRange('R4:R40').setNumberFormat('yyyy/mm/dd HH:mm');
+  sheet.getRange('U4:U40').setNumberFormat('yyyy/mm/dd');
+  sheet.getRange('V4:V40').setNumberFormat('hh:mm');
+  sheet.getRange('R3:V40').setFontFamily('Meiryo').setFontSize(10).setVerticalAlignment('middle');
+
+  sheet.getRange('X1:AA1').merge();
+  sheet.getRange('X1').setValue('今月の口コミ');
+  sheet.getRange('X1:AA2')
+    .setFontFamily('Meiryo')
+    .setFontWeight('bold')
+    .setHorizontalAlignment('center')
+    .setVerticalAlignment('middle');
+  sheet.getRange('X1:AA1').setBackground('#111111').setFontColor('#FFFFFF').setFontSize(10);
+  sheet.getRange('X2:AA2').merge();
+  sheet.getRange('X2').setFormula(
+    '=HYPERLINK("' + REVIEW_GRANT_APP_URL_ + '","口コミ付与アプリ")'
+  );
+  sheet.getRange('X2:AA2').setBackground('#E8E8E8').setFontColor('#111111').setFontSize(10);
+  sheet.getRange('X3:AA3').setValues([['日時', '氏名', '会員番号', '付与']]);
+  sheet.getRange('X3:AA3')
+    .setBackground('#111111')
+    .setFontColor('#FFFFFF')
+    .setFontFamily('Meiryo')
+    .setFontSize(10)
+    .setFontWeight('bold');
+  fillKyodoMasterReviews_(sheet);
+  sheet.getRange('X4:X40').setNumberFormat('yyyy/mm/dd');
+  sheet.getRange('X3:AA40').setFontFamily('Meiryo').setFontSize(10).setVerticalAlignment('middle');
+
+  sheet.setColumnWidth(12, 128);
+  sheet.setColumnWidth(13, 96);
+  sheet.setColumnWidth(14, 110);
+  sheet.setColumnWidth(15, 16);
+  sheet.setColumnWidth(16, 16);
+  sheet.setColumnWidth(17, 16);
+  sheet.setColumnWidth(18, 128);
+  sheet.setColumnWidth(19, 52);
+  sheet.setColumnWidth(20, 110);
+  sheet.setColumnWidth(21, 88);
+  sheet.setColumnWidth(22, 52);
+  sheet.setColumnWidth(23, 16);
+  sheet.setColumnWidth(24, 96);
+  sheet.setColumnWidth(25, 110);
+  sheet.setColumnWidth(26, 110);
+  sheet.setColumnWidth(27, 52);
+}
+
+function parseMasterMonthStart_(sheet) {
+  var raw = String(sheet.getRange('B2').getDisplayValue() || sheet.getRange('B2').getValue() || '');
+  var m = raw.match(/(\d{4})年(\d{1,2})月/);
+  if (!m) {
+    var now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  }
+  return new Date(Number(m[1]), Number(m[2]) - 1, 1);
+}
+
+function fillKyodoMasterReviews_(sheet) {
+  var start = parseMasterMonthStart_(sheet);
+  var end = new Date(start.getFullYear(), start.getMonth() + 1, 1);
+  var src = SpreadsheetApp.openById(REVIEW_SOURCE_ID_).getSheetByName(REVIEW_JOYFIT_SHEET_);
+  if (!src) return;
+  var last = Math.max(src.getLastRow(), 1);
+  var vals = src.getRange(1, 1, last, 23).getValues();
+  var rows = [];
+  for (var i = 1; i < vals.length; i++) {
+    var row = vals[i];
+    if (String(row[1] || '') !== 'kyodo') continue;
+    var ts = row[0];
+    var t = ts instanceof Date ? ts : new Date(ts);
+    if (!(t instanceof Date) || isNaN(t.getTime())) continue;
+    if (t < start || t >= end) continue;
+    var granted = row[21] === true || String(row[21]).toUpperCase() === 'TRUE';
+    rows.push({
+      ts: t,
+      name: row[4] || '',
+      code: row[5] || '',
+      granted: granted,
+      submissionId: String(row[15] || ''),
+      eastRow: i + 1
+    });
+  }
+  rows.sort(function (a, b) {
+    if (a.granted !== b.granted) return a.granted ? 1 : -1;
+    return b.ts.getTime() - a.ts.getTime();
+  });
+  var maxList = 37;
+  if (rows.length > maxList) rows = rows.slice(0, maxList);
+  var bodyEnd = 40;
+  sheet.getRange(4, 24, bodyEnd - 3, 4).clearContent();
+  sheet.getRange(4, 29, bodyEnd - 3, 2).clearContent();
+  try { sheet.getRange(4, 27, bodyEnd - 3, 1).clearDataValidations(); } catch (e0) {}
+  if (!rows.length) return;
+  var display = [];
+  var meta = [];
+  for (var r = 0; r < rows.length; r++) {
+    display.push([rows[r].ts, rows[r].name, rows[r].code, rows[r].granted]);
+    meta.push([rows[r].submissionId, rows[r].eastRow]);
+  }
+  sheet.getRange(4, 24, display.length, 4).setValues(display);
+  sheet.getRange(4, 29, meta.length, 2).setValues(meta);
+  var aa = sheet.getRange(4, 27, display.length, 1);
+  aa.setDataValidation(
+    SpreadsheetApp.newDataValidation().requireCheckbox().setAllowInvalid(true).build()
+  );
+}
+
+function ensureKyodoMasterEditTrigger_(ss) {
+  try {
+    var dest = ss || openWorkspaceSpreadsheet_();
+    var fn = 'onKyodoMasterEdit_';
+    var triggers = ScriptApp.getProjectTriggers();
+    var found = false;
+    for (var i = 0; i < triggers.length; i++) {
+      if (triggers[i].getHandlerFunction() === fn) found = true;
+    }
+    if (!found) {
+      ScriptApp.newTrigger(fn).forSpreadsheet(dest.getId()).onEdit().create();
+    }
+  } catch (err) {}
+}
+
+function onKyodoMasterEdit_(e) {
+  try {
+    if (!e || !e.range) return;
+    var sheet = e.range.getSheet();
+    if (sheet.getName() !== ALLDATA_SHEET_NAME_) return;
+    var row = e.range.getRow();
+    var col = e.range.getColumn();
+    if (row === 2 && (col === 2 || col === 3)) {
+      fillKyodoMasterReviews_(sheet);
+      refreshKyodoAiBrief_();
+      return;
+    }
+    if (col !== 27 || row < 4) return;
+    var granted = e.range.getValue() === true;
+    var eastRow = Number(sheet.getRange(row, 30).getValue());
+    var submissionId = String(sheet.getRange(row, 29).getValue() || '');
+    var code = String(sheet.getRange(row, 26).getValue() || '');
+    var src = SpreadsheetApp.openById(REVIEW_SOURCE_ID_).getSheetByName(REVIEW_JOYFIT_SHEET_);
+    if (!src) return;
+    if (!eastRow || eastRow < 2) {
+      eastRow = findEastReviewRow_(src, submissionId, code);
+    }
+    if (!eastRow) return;
+    src.getRange(eastRow, 22).setValue(granted);
+    src.getRange(eastRow, 23).setValue(granted ? new Date() : '');
+  } catch (err) {}
+}
+
+function findEastReviewRow_(src, submissionId, code) {
+  var last = Math.max(src.getLastRow(), 1);
+  var vals = src.getRange(1, 1, last, 16).getValues();
+  var sid = String(submissionId || '');
+  var member = String(code || '');
+  for (var i = 1; i < vals.length; i++) {
+    if (String(vals[i][1] || '') !== 'kyodo') continue;
+    if (sid && String(vals[i][15] || '') === sid) return i + 1;
+  }
+  if (!member) return 0;
+  for (var j = 1; j < vals.length; j++) {
+    if (String(vals[j][1] || '') !== 'kyodo') continue;
+    if (String(vals[j][5] || '') === member) return j + 1;
+  }
+  return 0;
+}
+
+var KYODO_TREND_SOURCE_ID_ = '1LOOUG97wuiKbhzl0BjJstXgLaaSCZAKNFdD8P3I5x_o';
+var KYODO_TREND_SOURCE_SHEET_ = '経堂';
+var KYODO_TREND_DEST_SHEET_ = '【経堂】会員動向';
+
+function setupKyodoTrend_() {
+  try {
+    var dest = openWorkspaceSpreadsheet_();
+    var existing = dest.getSheetByName(KYODO_TREND_DEST_SHEET_);
+    if (existing) dest.deleteSheet(existing);
+    var afterAllData = dest.getSheetByName(ALLDATA_SHEET_NAME_) ? 1 : 0;
+    var sh = dest.insertSheet(KYODO_TREND_DEST_SHEET_, afterAllData);
+    styleKyodoTrendSheet_(sh);
+    return {
+      ok: true,
+      sheet: KYODO_TREND_DEST_SHEET_,
+      sourceSheet: KYODO_TREND_SOURCE_SHEET_,
+      range: 'A1:N115',
+      workspaceUrl: dest.getUrl() + '#gid=' + sh.getSheetId()
+    };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
+function styleKyodoTrendSheet_(sheet) {
+  sheet.clear();
+  try { sheet.clearConditionalFormatRules(); } catch (e0) {}
+  sheet.setHiddenGridlines(true);
+  sheet.setTabColor('#111111');
+  sheet.setFrozenRows(1);
+  sheet.setFrozenColumns(2);
+
+  sheet.getRange(1, 1).setFormula(
+    '=IMPORTRANGE("' + KYODO_TREND_SOURCE_ID_ + '","' + KYODO_TREND_SOURCE_SHEET_ + '!A1:N115")'
+  );
+
+  var rows = 115;
+  var cols = 14;
+  var area = sheet.getRange(1, 1, rows, cols);
+  area
+    .setFontFamily('Meiryo')
+    .setFontSize(10)
+    .setFontColor('#111111')
+    .setVerticalAlignment('middle')
+    .setBackground('#FFFFFF');
+
+  sheet.getRange(1, 1, 1, cols)
+    .setBackground('#111111')
+    .setFontColor('#FFFFFF')
+    .setFontWeight('bold')
+    .setHorizontalAlignment('center');
+  sheet.setRowHeight(1, 28);
+
+  for (var r = 2; r <= rows; r++) {
+    sheet.setRowHeight(r, 22);
+    if (r % 2 === 0) {
+      sheet.getRange(r, 1, 1, cols).setBackground('#F5F5F5');
+    }
+  }
+
+  sheet.getRange(1, 1, rows, 2).setFontWeight('bold').setHorizontalAlignment('left');
+  sheet.getRange(2, 3, rows - 1, cols - 2).setHorizontalAlignment('right');
+
+  area.setBorder(
+    true, true, true, true, true, true,
+    '#BDBDBD', SpreadsheetApp.BorderStyle.SOLID
+  );
+  sheet.getRange(1, 1, 1, cols).setBorder(
+    true, true, true, true, false, false,
+    '#111111', SpreadsheetApp.BorderStyle.SOLID
+  );
+
+  sheet.setColumnWidth(1, 88);
+  sheet.setColumnWidth(2, 168);
+  for (var c = 3; c <= cols; c++) sheet.setColumnWidth(c, 72);
+}
+
 function removeReviewSyncTriggers_() {
   try {
     var handlers = { syncReviewKyodoTriggered_: 1, syncReviewKyodo_: 1 };
@@ -1072,6 +3551,36 @@ function handleApiGet_(e) {
     if (api === 'inspectBook') {
       return jsonOutput_(inspectSpreadsheetBook_(String((e.parameter && e.parameter.id) || '')));
     }
+    if (api === 'inspectRange') {
+      return jsonOutput_(inspectSheetRange_(
+        String((e.parameter && e.parameter.id) || ''),
+        String((e.parameter && e.parameter.sheet) || ''),
+        String((e.parameter && e.parameter.range) || ''),
+        String((e.parameter && e.parameter.formulas) || '') === '1',
+        String((e.parameter && e.parameter.format) || '') === '1'
+      ));
+    }
+    if (api === 'compactUketsukeOpDuplicates') {
+      return jsonOutput_(compactUketsukeOpDuplicates_());
+    }
+    if (api === 'auditNyukaiGmail') {
+      return jsonOutput_(auditNyukaiGmail_());
+    }
+    if (api === 'backfillEnrollFromOp') {
+      return jsonOutput_(backfillEnrollFromOpLog_());
+    }
+    if (api === 'auditOpMailCoverage') {
+      return jsonOutput_(auditOpMailCoverage_());
+    }
+    if (api === 'auditGmailThreadShape') {
+      return jsonOutput_(auditGmailThreadShape_());
+    }
+    if (api === 'auditUnbundledEnroll') {
+      return jsonOutput_(rebuildFromUnbundledMail_(true));
+    }
+    if (api === 'rebuildFromUnbundledMail') {
+      return jsonOutput_(rebuildFromUnbundledMail_(String((e.parameter && e.parameter.dry) || '') === '1'));
+    }
     if (api === 'setupReviewImport') {
       return jsonOutput_(setupReviewImport_());
     }
@@ -1080,6 +3589,18 @@ function handleApiGet_(e) {
     }
     if (api === 'setupMachineImport') {
       return jsonOutput_(setupMachineImport_());
+    }
+    if (api === 'setupKengakuImport') {
+      return jsonOutput_(setupKengakuImport_());
+    }
+    if (api === 'setupAllData') {
+      return jsonOutput_(setupAllData_());
+    }
+    if (api === 'refreshKyodoAiBrief') {
+      return jsonOutput_(refreshKyodoAiBrief_());
+    }
+    if (api === 'setupKyodoTrend') {
+      return jsonOutput_(setupKyodoTrend_());
     }
     if (api === 'dayContext') {
       if (!isApiAuthorized_(e, null)) return unauthorized_();
@@ -3165,6 +5686,51 @@ function openWorkspaceSpreadsheet_() {
   }
 }
 
+function geminiGenerateText_(prompt) {
+  var key = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+  if (!key) {
+    return { ok: false, message: 'GEMINI_API_KEY が未設定です。' };
+  }
+  var models = ['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-flash-latest', 'gemini-1.5-flash'];
+  var lastErr = '';
+  for (var i = 0; i < models.length; i++) {
+    try {
+      var url =
+        'https://generativelanguage.googleapis.com/v1beta/models/' +
+        models[i] +
+        ':generateContent?key=' +
+        encodeURIComponent(key);
+      var res = UrlFetchApp.fetch(url, {
+        method: 'post',
+        contentType: 'application/json',
+        payload: JSON.stringify({
+          contents: [{ parts: [{ text: String(prompt || '') }] }]
+        }),
+        muteHttpExceptions: true
+      });
+      var code = res.getResponseCode();
+      var json = JSON.parse(res.getContentText() || '{}');
+      if (code >= 400) {
+        lastErr = (json.error && json.error.message) || ('API エラー（コード ' + code + '）');
+        if (code === 404 || code === 400) continue;
+        return { ok: false, message: lastErr };
+      }
+      var text =
+        json.candidates &&
+        json.candidates[0] &&
+        json.candidates[0].content &&
+        json.candidates[0].content.parts &&
+        json.candidates[0].content.parts[0] &&
+        json.candidates[0].content.parts[0].text;
+      if (text) return { ok: true, text: String(text).trim(), model: models[i] };
+      lastErr = '返答を取得できませんでした。';
+    } catch (err) {
+      lastErr = String(err && err.message ? err.message : err);
+    }
+  }
+  return { ok: false, message: lastErr || 'Gemini を呼べませんでした' };
+}
+
 /**
  * Gemini で所感を校閲（敬語・誤字・分量）。
  * スクリプトのプロパティに GEMINI_API_KEY を設定（Google AI Studio で発行可）。
@@ -3174,55 +5740,12 @@ function polishKansouWithGemini(rawText) {
     if (!rawText || String(rawText).trim() === '') {
       return { ok: false, message: 'テキストを入力してください。' };
     }
-    var key = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
-    if (!key) {
-      return {
-        ok: false,
-        message:
-          'GEMINI_API_KEY が未設定です。プロジェクトの設定 → スクリプトのプロパティ にキーを追加してください。',
-      };
-    }
-    var url =
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' +
-      encodeURIComponent(key);
-    var body = {
-      contents: [
-        {
-          parts: [
-            {
-              text:
-                '以下はフィットネス施設のスタッフ日報「所感」欄の下書きです。ビジネスメール向けの敬語に整え、誤字脱字を修正し、300文字以内で簡潔にまとめてください。事実と意味は変えないでください。出力は所感の本文のみ（説明・見出し・引用符は不要）。\n\n' +
-                String(rawText),
-            },
-          ],
-        },
-      ],
-    };
-    var res = UrlFetchApp.fetch(url, {
-      method: 'post',
-      contentType: 'application/json',
-      payload: JSON.stringify(body),
-      muteHttpExceptions: true,
-    });
-    var code = res.getResponseCode();
-    var json = JSON.parse(res.getContentText());
-    if (code !== 200) {
-      return {
-        ok: false,
-        message: (json.error && json.error.message) || 'API エラー（コード ' + code + '）',
-      };
-    }
-    var text =
-      json.candidates &&
-      json.candidates[0] &&
-      json.candidates[0].content &&
-      json.candidates[0].content.parts &&
-      json.candidates[0].content.parts[0] &&
-      json.candidates[0].content.parts[0].text;
-    if (!text) {
-      return { ok: false, message: '返答を取得できませんでした。' };
-    }
-    return { ok: true, text: String(text).trim() };
+    var gen = geminiGenerateText_(
+      '以下はフィットネス施設のスタッフ日報「所感」欄の下書きです。ビジネスメール向けの敬語に整え、誤字脱字を修正し、300文字以内で簡潔にまとめてください。事実と意味は変えないでください。出力は所感の本文のみ（説明・見出し・引用符は不要）。\n\n' +
+      String(rawText)
+    );
+    if (!gen.ok) return gen;
+    return { ok: true, text: gen.text };
   } catch (e) {
     console.error(e);
     return { ok: false, message: String(e.message || e) };
