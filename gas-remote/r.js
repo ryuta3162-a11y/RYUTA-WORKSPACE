@@ -942,11 +942,15 @@ function setupAllData_() {
     var sh = dest.insertSheet(ALLDATA_SHEET_NAME_, 0);
     styleAllDataSheet_(sh);
     ensureKyodoMasterEditTrigger_(dest);
+    ensureKyodoAiBriefTrigger_();
+    SpreadsheetApp.flush();
+    var brief = refreshKyodoAiBrief_();
     return {
       ok: true,
       sheet: ALLDATA_SHEET_NAME_,
       workspaceUrl: dest.getUrl() + '#gid=' + sh.getSheetId(),
-      uketsukeId: UKETSUKE_SOURCE_ID_
+      uketsukeId: UKETSUKE_SOURCE_ID_,
+      aiBrief: brief
     };
   } catch (err) {
     return { ok: false, message: String(err && err.message ? err.message : err) };
@@ -2517,7 +2521,6 @@ function addKyodoTodayBoard_(sheet) {
     .setFontWeight('bold')
     .setHorizontalAlignment('center');
   sheet.getRange('A7').setBackground(paper);
-  sheet.getRange('F7:K7').setBackground(paper);
   sheet.setRowHeight(7, 20);
 
   sheet.getRange('B8:E8').setValues([['氏名', '時刻', '氏名', '時刻']]);
@@ -2528,7 +2531,6 @@ function addKyodoTodayBoard_(sheet) {
     .setFontWeight('bold')
     .setHorizontalAlignment('center');
   sheet.getRange('A8').setBackground(paper);
-  sheet.getRange('F8:K8').setBackground(paper);
   sheet.setRowHeight(8, 18);
 
   sheet.getRange('B9').setFormula(
@@ -2539,7 +2541,7 @@ function addKyodoTodayBoard_(sheet) {
     '=IFERROR(QUERY(' + withdrawSh + '!A2:F,"select Col2, Col1 where ' +
     where + ' and Col6 <> true order by Col1 desc limit 6",0),"")'
   );
-  sheet.getRange('A9:K14').setBackground(paper).setFontColor(ink).setFontSize(10);
+  sheet.getRange('A9:E14').setBackground(paper).setFontColor(ink).setFontSize(10);
   sheet.getRange('B9:E14').setFontWeight('bold');
   sheet.getRange('B9:B14').setHorizontalAlignment('left');
   sheet.getRange('D9:D14').setHorizontalAlignment('left');
@@ -2572,6 +2574,346 @@ function addKyodoTodayBoard_(sheet) {
     .setVerticalAlignment('middle');
   sheet.getRange('K15').setBackground(paper);
   sheet.setRowHeight(15, 22);
+  addKyodoAiBriefPanel_(sheet);
+}
+
+function addKyodoAiBriefPanel_(sheet) {
+  var ink = '#111111';
+  var paper = '#FFFFFF';
+  var zebra = '#F5F5F5';
+  var soft = '#E8E8E8';
+  var line = '#D4D4D4';
+  try { sheet.getRange('F7:K14').breakApart(); } catch (e0) {}
+  sheet.getRange('F7:K14')
+    .setFontFamily('Meiryo')
+    .setFontSize(10)
+    .setFontColor(ink)
+    .setVerticalAlignment('middle')
+    .setWrap(true);
+
+  sheet.getRange('F7:K7').merge();
+  sheet.getRange('F7').setValue('今月の読み');
+  sheet.getRange('F7:K7')
+    .setBackground(ink)
+    .setFontColor(paper)
+    .setFontWeight('bold')
+    .setHorizontalAlignment('left')
+    .setVerticalAlignment('middle');
+
+  sheet.getRange('F8:K8').merge();
+  sheet.getRange('F8').setValue('数値を読んで作成します');
+  sheet.getRange('F8:K8')
+    .setBackground(soft)
+    .setFontColor('#333333')
+    .setFontWeight('bold')
+    .setHorizontalAlignment('left');
+
+  sheet.getRange('F9:F10').merge();
+  sheet.getRange('F9').setValue('好調');
+  sheet.getRange('F11:F12').merge();
+  sheet.getRange('F11').setValue('課題');
+  sheet.getRange('F13:F14').merge();
+  sheet.getRange('F13').setValue('一手');
+  sheet.getRange('F9:F14')
+    .setBackground(ink)
+    .setFontColor(paper)
+    .setFontWeight('bold')
+    .setHorizontalAlignment('center')
+    .setVerticalAlignment('middle');
+
+  sheet.getRange('G9:K10').merge();
+  sheet.getRange('G11:K12').merge();
+  sheet.getRange('G13:K14').merge();
+  sheet.getRange('G9').setValue('');
+  sheet.getRange('G11').setValue('');
+  sheet.getRange('G13').setValue('');
+  sheet.getRange('G9:K10').setBackground(paper).setVerticalAlignment('top');
+  sheet.getRange('G11:K12').setBackground(zebra).setVerticalAlignment('top');
+  sheet.getRange('G13:K14').setBackground(paper).setVerticalAlignment('top');
+  sheet.getRange('F7:K14').setBorder(
+    true, true, true, true, true, false,
+    line, SpreadsheetApp.BorderStyle.SOLID
+  );
+  sheet.setRowHeight(7, 22);
+  sheet.setRowHeight(8, 22);
+  var r;
+  for (r = 9; r <= 14; r++) sheet.setRowHeight(r, 24);
+}
+
+function parseKyodoPct_(v) {
+  if (typeof v === 'number' && isFinite(v)) return v > 3 ? v / 100 : v;
+  var s = String(v == null ? '' : v).replace(/%/g, '').replace(/,/g, '').trim();
+  if (!s) return null;
+  var n = Number(s);
+  if (!isFinite(n)) return null;
+  return n > 3 ? n / 100 : n;
+}
+
+function collectKyodoKpiSnapshot_(sheet) {
+  var last = Math.max(sheet.getLastRow(), 17);
+  var table = sheet.getRange(16, 1, last - 15, 10).getDisplayValues();
+  var items = [];
+  for (var i = 1; i < table.length; i++) {
+    var name = String(table[i][0] || '').trim();
+    if (!name) continue;
+    items.push({
+      name: name,
+      month: String(table[i][5] || ''),
+      pace: String(table[i][6] || ''),
+      plan: String(table[i][7] || ''),
+      progress: String(table[i][8] || ''),
+      vsPrev: String(table[i][9] || ''),
+      pct: parseKyodoPct_(table[i][8])
+    });
+  }
+  return {
+    month: String(sheet.getRange('B2').getDisplayValue() || ''),
+    today: String(sheet.getRange('F2').getDisplayValue() || ''),
+    todayEnroll: String(sheet.getRange('B5').getDisplayValue() || ''),
+    todayCancel: String(sheet.getRange('D5').getDisplayValue() || ''),
+    monthEnroll: String(sheet.getRange('F5').getDisplayValue() || ''),
+    monthCancel: String(sheet.getRange('H5').getDisplayValue() || ''),
+    monthMove: String(sheet.getRange('J5').getDisplayValue() || ''),
+    items: items
+  };
+}
+
+function findKyodoKpi_(items, name) {
+  for (var i = 0; i < items.length; i++) {
+    if (items[i].name === name) return items[i];
+  }
+  return { name: name, month: '', pace: '', plan: '', progress: '', vsPrev: '', pct: null };
+}
+
+function kyodoBriefTicker_(snap) {
+  var enroll = findKyodoKpi_(snap.items, '入会実績');
+  var cancel = findKyodoKpi_(snap.items, '解除実績');
+  var op = findKyodoKpi_(snap.items, 'OP合計');
+  var net = findKyodoKpi_(snap.items, '純増');
+  var stamp = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'M/d H:mm');
+  return (
+    '入会' + (enroll.progress || '—') +
+    '  解除' + (cancel.progress || '—') +
+    '  OP' + (op.progress || '—') +
+    '  純増' + (net.progress || '—') +
+    '    ' + stamp + ' 自動'
+  );
+}
+
+function rankedKyodoKpi_(items, wantHigh) {
+  var ranked = items.filter(function (it) {
+    return it.pct != null && it.name.indexOf('計画') === -1;
+  });
+  ranked.sort(function (a, b) {
+    return wantHigh ? b.pct - a.pct : a.pct - b.pct;
+  });
+  return ranked;
+}
+
+function buildKyodoAiBriefFallback_(snap) {
+  var enroll = findKyodoKpi_(snap.items, '入会実績');
+  var cancel = findKyodoKpi_(snap.items, '解除実績');
+  var op = findKyodoKpi_(snap.items, 'OP合計');
+  var net = findKyodoKpi_(snap.items, '純増');
+  var highs = rankedKyodoKpi_(snap.items, true);
+  var lows = rankedKyodoKpi_(snap.items, false);
+  var goodBits = [];
+  if (enroll.pct != null && enroll.pct >= 1) {
+    goodBits.push('入会の着地は' + enroll.progress + '（実績' + enroll.month + '／計画' + enroll.plan + '）。');
+  }
+  var hi = 0;
+  for (var i = 0; i < highs.length && hi < 2; i++) {
+    if (highs[i].name === '入会実績' || highs[i].name === '口コミ') continue;
+    if (highs[i].pct < 1) break;
+    goodBits.push(highs[i].name + 'は' + highs[i].progress + '。');
+    hi++;
+  }
+  if (!goodBits.length) goodBits.push('計画を明確に超えている項目はまだ少ない。');
+
+  var badBits = [];
+  if (cancel.pct != null && cancel.pct >= 1) {
+    badBits.push('解除の着地は' + cancel.progress + '（実績' + cancel.month + '／計画' + cancel.plan + '）。');
+  }
+  var lo = 0;
+  for (i = 0; i < lows.length && lo < 2; i++) {
+    if (lows[i].pct == null || lows[i].pct >= 0.8) continue;
+    if (lows[i].name === '解除実績') continue;
+    badBits.push(lows[i].name + 'は' + lows[i].progress + '。');
+    lo++;
+  }
+  if (!badBits.length) badBits.push('大きな割れはない。計画付近の項目を維持する。');
+
+  var acts = [];
+  if (enroll.pct != null && enroll.pct >= 1.2) {
+    acts.push('入会はペース維持。見学・紹介の当日クロージングを外さない。');
+  } else if (enroll.pct != null && enroll.pct < 0.9) {
+    acts.push('入会が計画を下回る。残日で体験からの当日入会を厚くする。');
+  }
+  if (cancel.pct != null && cancel.pct >= 1) {
+    acts.push('解除が計画以上。継続・休会の代替提案を退会面談で必ず出す。');
+  }
+  if (op.pct != null && op.pct < 0.95) {
+    acts.push('OP着地は' + op.progress + '。入会者のパック欠けをその場で埋める。');
+  }
+  if (net.pct != null && net.pct < 0.85) {
+    acts.push('純増が' + net.progress + '。入会維持より解除抑制を優先する。');
+  }
+  if (!acts.length) acts.push('数字は計画内。今日の入会者へOPの取りこぼしがないかだけ確認する。');
+
+  var headline = '着地を見て今日動く';
+  if (enroll.pct != null && enroll.pct >= 1.2 && cancel.pct != null && cancel.pct < 1) {
+    headline = '入会は強い。解除を抑える';
+  } else if (enroll.pct != null && enroll.pct >= 1.2) {
+    headline = '入会は過熱。取りこぼしを防ぐ';
+  } else if (cancel.pct != null && cancel.pct >= 1) {
+    headline = '解除が計画を超えている';
+  }
+
+  return {
+    headline: headline,
+    good: goodBits.join(''),
+    bad: badBits.join(''),
+    action: acts.slice(0, 2).join(''),
+    ticker: kyodoBriefTicker_(snap),
+    via: 'fallback'
+  };
+}
+
+function compactKyodoKpiForPrompt_(snap) {
+  var focus = {
+    '入会実績': 1, '解除実績': 1, '純増': 1, 'OP合計': 1,
+    '安心サポートVIP': 1, '水素水': 1, 'オンラインレッスン': 1,
+    'セルフエステ': 1, 'タンニング': 1, '口コミ': 1, '見学体験': 1
+  };
+  var rows = [];
+  for (var i = 0; i < snap.items.length; i++) {
+    var it = snap.items[i];
+    if (!focus[it.name] && (it.pct == null || (it.pct >= 0.85 && it.pct <= 1.15))) continue;
+    if (it.name.indexOf('計画') !== -1) continue;
+    rows.push(
+      it.name + ': 当月' + it.month + ' 着地' + it.pace +
+      ' 計画' + it.plan + ' 進捗' + it.progress + ' 対前月' + it.vsPrev
+    );
+  }
+  return rows.join('\n');
+}
+
+function parseKyodoAiJson_(raw) {
+  var s = String(raw || '').trim();
+  s = s.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/, '');
+  var start = s.indexOf('{');
+  var end = s.lastIndexOf('}');
+  if (start < 0 || end <= start) return null;
+  try {
+    var obj = JSON.parse(s.substring(start, end + 1));
+    if (!obj) return null;
+    return {
+      headline: String(obj.headline || '').replace(/\s+/g, ' ').trim(),
+      good: String(obj.good || '').replace(/\s+/g, ' ').trim(),
+      bad: String(obj.bad || '').replace(/\s+/g, ' ').trim(),
+      action: String(obj.action || '').replace(/\s+/g, ' ').trim()
+    };
+  } catch (err) {
+    return null;
+  }
+}
+
+function buildKyodoAiBriefWithGemini_(snap) {
+  var prompt = [
+    'あなたはJOYFIT24経堂の店舗経営参謀です。',
+    '与えた数字だけを根拠に、店長が今すぐ動ける短い日本語を返す。',
+    '推測で事実を作らない。空欄の指標は触れない。口コミの極端な進捗は件数母数が小さいので過大評価しない。',
+    '出力はJSONのみ。キーは headline, good, bad, action。',
+    'headline は18字以内の一言。good は好調1〜2点（数字必須、80字以内）。',
+    'bad は課題1〜2点（数字必須、80字以内）。action は今日〜今週の具体行動を2文（120字以内）。',
+    '',
+    '対象月: ' + snap.month + ' / 今日: ' + snap.today,
+    '当日入会 ' + snap.todayEnroll + ' / 当日退会 ' + snap.todayCancel +
+      ' / 当月入会 ' + snap.monthEnroll + ' / 当月末退会 ' + snap.monthCancel +
+      ' / 当月移籍 ' + snap.monthMove,
+    compactKyodoKpiForPrompt_(snap)
+  ].join('\n');
+  var gen = geminiGenerateText_(prompt);
+  if (!gen || !gen.ok) return null;
+  var parsed = parseKyodoAiJson_(gen.text);
+  if (!parsed || !parsed.good || !parsed.action) return null;
+  return {
+    headline: parsed.headline || '着地を見て今日動く',
+    good: parsed.good,
+    bad: parsed.bad || '',
+    action: parsed.action,
+    ticker: kyodoBriefTicker_(snap),
+    via: 'gemini',
+    model: gen.model || ''
+  };
+}
+
+function writeKyodoAiBrief_(sheet, brief) {
+  var title = '今月の読み';
+  if (brief.headline) title += '　' + brief.headline;
+  sheet.getRange('F7').setValue(title);
+  sheet.getRange('F8').setValue(brief.ticker || '');
+  sheet.getRange('G9').setValue(brief.good || '');
+  sheet.getRange('G11').setValue(brief.bad || '');
+  sheet.getRange('G13').setValue(brief.action || '');
+}
+
+function refreshKyodoAiBrief_() {
+  try {
+    var ss = openWorkspaceSpreadsheet_();
+    var sheet = ss.getSheetByName(ALLDATA_SHEET_NAME_);
+    if (!sheet) return { ok: false, message: '経堂マスタ not found' };
+    SpreadsheetApp.flush();
+    var snap = collectKyodoKpiSnapshot_(sheet);
+    var enroll = findKyodoKpi_(snap.items, '入会実績');
+    if (!snap.items.length || (enroll.progress === '' && enroll.month === '')) {
+      writeKyodoAiBrief_(sheet, {
+        headline: '',
+        ticker: '数値の読み込み待ち',
+        good: '',
+        bad: '',
+        action: ''
+      });
+      return { ok: false, message: 'kpi not ready', via: 'pending' };
+    }
+    var brief = buildKyodoAiBriefWithGemini_(snap) || buildKyodoAiBriefFallback_(snap);
+    writeKyodoAiBrief_(sheet, brief);
+    return {
+      ok: true,
+      via: brief.via,
+      model: brief.model || '',
+      headline: brief.headline,
+      ticker: brief.ticker
+    };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
+function refreshKyodoAiBriefTriggered_() {
+  return refreshKyodoAiBrief_();
+}
+
+function ensureKyodoAiBriefTrigger_() {
+  try {
+    var fn = 'refreshKyodoAiBriefTriggered_';
+    var triggers = ScriptApp.getProjectTriggers();
+    var count = 0;
+    var i;
+    for (i = 0; i < triggers.length; i++) {
+      if (triggers[i].getHandlerFunction() === fn) count++;
+    }
+    if (count < 1) {
+      ScriptApp.newTrigger(fn).timeBased().everyDays(1).atHour(8).create();
+      count++;
+    }
+    if (count < 2) {
+      ScriptApp.newTrigger(fn).timeBased().everyDays(1).atHour(21).create();
+    }
+    return { ok: true, count: Math.max(count, 2) };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
 }
 
 function applyKyodoMasterFormats_(sheet, start, last) {
@@ -2825,6 +3167,7 @@ function onKyodoMasterEdit_(e) {
     var col = e.range.getColumn();
     if (row === 2 && (col === 2 || col === 3)) {
       fillKyodoMasterReviews_(sheet);
+      refreshKyodoAiBrief_();
       return;
     }
     if (col !== 27 || row < 4) return;
@@ -3217,6 +3560,9 @@ function handleApiGet_(e) {
     }
     if (api === 'setupAllData') {
       return jsonOutput_(setupAllData_());
+    }
+    if (api === 'refreshKyodoAiBrief') {
+      return jsonOutput_(refreshKyodoAiBrief_());
     }
     if (api === 'setupKyodoTrend') {
       return jsonOutput_(setupKyodoTrend_());
@@ -5305,6 +5651,51 @@ function openWorkspaceSpreadsheet_() {
   }
 }
 
+function geminiGenerateText_(prompt) {
+  var key = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+  if (!key) {
+    return { ok: false, message: 'GEMINI_API_KEY が未設定です。' };
+  }
+  var models = ['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-1.5-flash'];
+  var lastErr = '';
+  for (var i = 0; i < models.length; i++) {
+    try {
+      var url =
+        'https://generativelanguage.googleapis.com/v1beta/models/' +
+        models[i] +
+        ':generateContent?key=' +
+        encodeURIComponent(key);
+      var res = UrlFetchApp.fetch(url, {
+        method: 'post',
+        contentType: 'application/json',
+        payload: JSON.stringify({
+          contents: [{ parts: [{ text: String(prompt || '') }] }]
+        }),
+        muteHttpExceptions: true
+      });
+      var code = res.getResponseCode();
+      var json = JSON.parse(res.getContentText() || '{}');
+      if (code >= 400) {
+        lastErr = (json.error && json.error.message) || ('API エラー（コード ' + code + '）');
+        if (code === 404 || code === 400) continue;
+        return { ok: false, message: lastErr };
+      }
+      var text =
+        json.candidates &&
+        json.candidates[0] &&
+        json.candidates[0].content &&
+        json.candidates[0].content.parts &&
+        json.candidates[0].content.parts[0] &&
+        json.candidates[0].content.parts[0].text;
+      if (text) return { ok: true, text: String(text).trim(), model: models[i] };
+      lastErr = '返答を取得できませんでした。';
+    } catch (err) {
+      lastErr = String(err && err.message ? err.message : err);
+    }
+  }
+  return { ok: false, message: lastErr || 'Gemini を呼べませんでした' };
+}
+
 /**
  * Gemini で所感を校閲（敬語・誤字・分量）。
  * スクリプトのプロパティに GEMINI_API_KEY を設定（Google AI Studio で発行可）。
@@ -5314,55 +5705,12 @@ function polishKansouWithGemini(rawText) {
     if (!rawText || String(rawText).trim() === '') {
       return { ok: false, message: 'テキストを入力してください。' };
     }
-    var key = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
-    if (!key) {
-      return {
-        ok: false,
-        message:
-          'GEMINI_API_KEY が未設定です。プロジェクトの設定 → スクリプトのプロパティ にキーを追加してください。',
-      };
-    }
-    var url =
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' +
-      encodeURIComponent(key);
-    var body = {
-      contents: [
-        {
-          parts: [
-            {
-              text:
-                '以下はフィットネス施設のスタッフ日報「所感」欄の下書きです。ビジネスメール向けの敬語に整え、誤字脱字を修正し、300文字以内で簡潔にまとめてください。事実と意味は変えないでください。出力は所感の本文のみ（説明・見出し・引用符は不要）。\n\n' +
-                String(rawText),
-            },
-          ],
-        },
-      ],
-    };
-    var res = UrlFetchApp.fetch(url, {
-      method: 'post',
-      contentType: 'application/json',
-      payload: JSON.stringify(body),
-      muteHttpExceptions: true,
-    });
-    var code = res.getResponseCode();
-    var json = JSON.parse(res.getContentText());
-    if (code !== 200) {
-      return {
-        ok: false,
-        message: (json.error && json.error.message) || 'API エラー（コード ' + code + '）',
-      };
-    }
-    var text =
-      json.candidates &&
-      json.candidates[0] &&
-      json.candidates[0].content &&
-      json.candidates[0].content.parts &&
-      json.candidates[0].content.parts[0] &&
-      json.candidates[0].content.parts[0].text;
-    if (!text) {
-      return { ok: false, message: '返答を取得できませんでした。' };
-    }
-    return { ok: true, text: String(text).trim() };
+    var gen = geminiGenerateText_(
+      '以下はフィットネス施設のスタッフ日報「所感」欄の下書きです。ビジネスメール向けの敬語に整え、誤字脱字を修正し、300文字以内で簡潔にまとめてください。事実と意味は変えないでください。出力は所感の本文のみ（説明・見出し・引用符は不要）。\n\n' +
+      String(rawText)
+    );
+    if (!gen.ok) return gen;
+    return { ok: true, text: gen.text };
   } catch (e) {
     console.error(e);
     return { ok: false, message: String(e.message || e) };
