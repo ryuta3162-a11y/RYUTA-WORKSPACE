@@ -942,7 +942,7 @@ function setupAllData_() {
     var sh = dest.insertSheet(ALLDATA_SHEET_NAME_, 0);
     styleAllDataSheet_(sh);
     ensureKyodoMasterEditTrigger_(dest);
-    ensureKyodoAiBriefTrigger_();
+    var aiTrigger = ensureKyodoAiBriefTrigger_();
     SpreadsheetApp.flush();
     var brief = refreshKyodoAiBrief_();
     return {
@@ -950,7 +950,8 @@ function setupAllData_() {
       sheet: ALLDATA_SHEET_NAME_,
       workspaceUrl: dest.getUrl() + '#gid=' + sh.getSheetId(),
       uketsukeId: UKETSUKE_SOURCE_ID_,
-      aiBrief: brief
+      aiBrief: brief,
+      aiTrigger: aiTrigger
     };
   } catch (err) {
     return { ok: false, message: String(err && err.message ? err.message : err) };
@@ -2702,7 +2703,12 @@ function kyodoBriefTicker_(snap) {
 
 function rankedKyodoKpi_(items, wantHigh) {
   var ranked = items.filter(function (it) {
-    return it.pct != null && it.name.indexOf('計画') === -1;
+    if (it.pct == null) return false;
+    if (it.name.indexOf('計画') !== -1) return false;
+    if (it.name.indexOf('販促') === 0) return false;
+    if (it.name === '口コミ' || it.name === 'レクチャー' || it.name === '学校関係者') return false;
+    if (it.name === 'ラグビー割' || it.name === '6ヶ月継続') return false;
+    return true;
   });
   ranked.sort(function (a, b) {
     return wantHigh ? b.pct - a.pct : a.pct - b.pct;
@@ -2834,17 +2840,21 @@ function buildKyodoAiBriefWithGemini_(snap) {
     compactKyodoKpiForPrompt_(snap)
   ].join('\n');
   var gen = geminiGenerateText_(prompt);
-  if (!gen || !gen.ok) return null;
+  if (!gen || !gen.ok) return { error: (gen && gen.message) || 'gemini failed' };
   var parsed = parseKyodoAiJson_(gen.text);
-  if (!parsed || !parsed.good || !parsed.action) return null;
+  if (!parsed || !parsed.good || !parsed.action) {
+    return { error: 'parse failed', raw: String((gen && gen.text) || '').slice(0, 240) };
+  }
   return {
-    headline: parsed.headline || '着地を見て今日動く',
-    good: parsed.good,
-    bad: parsed.bad || '',
-    action: parsed.action,
-    ticker: kyodoBriefTicker_(snap),
-    via: 'gemini',
-    model: gen.model || ''
+    brief: {
+      headline: parsed.headline || '着地を見て今日動く',
+      good: parsed.good,
+      bad: parsed.bad || '',
+      action: parsed.action,
+      ticker: kyodoBriefTicker_(snap),
+      via: 'gemini',
+      model: gen.model || ''
+    }
   };
 }
 
@@ -2859,9 +2869,16 @@ function writeKyodoAiBrief_(sheet, brief) {
 }
 
 function refreshKyodoAiBrief_() {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+  } catch (eLock) {
+    return { ok: false, message: 'lock timeout' };
+  }
+  var sheet;
   try {
     var ss = openWorkspaceSpreadsheet_();
-    var sheet = ss.getSheetByName(ALLDATA_SHEET_NAME_);
+    sheet = ss.getSheetByName(ALLDATA_SHEET_NAME_);
     if (!sheet) return { ok: false, message: '経堂マスタ not found' };
     SpreadsheetApp.flush();
     var snap = collectKyodoKpiSnapshot_(sheet);
@@ -2876,17 +2893,21 @@ function refreshKyodoAiBrief_() {
       });
       return { ok: false, message: 'kpi not ready', via: 'pending' };
     }
-    var brief = buildKyodoAiBriefWithGemini_(snap) || buildKyodoAiBriefFallback_(snap);
+    var attempted = buildKyodoAiBriefWithGemini_(snap);
+    var brief = (attempted && attempted.brief) || buildKyodoAiBriefFallback_(snap);
     writeKyodoAiBrief_(sheet, brief);
     return {
       ok: true,
       via: brief.via,
       model: brief.model || '',
       headline: brief.headline,
-      ticker: brief.ticker
+      ticker: brief.ticker,
+      geminiError: (attempted && attempted.error) || ''
     };
   } catch (err) {
     return { ok: false, message: String(err && err.message ? err.message : err) };
+  } finally {
+    try { lock.releaseLock(); } catch (eRel) {}
   }
 }
 
@@ -5656,7 +5677,7 @@ function geminiGenerateText_(prompt) {
   if (!key) {
     return { ok: false, message: 'GEMINI_API_KEY が未設定です。' };
   }
-  var models = ['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-1.5-flash'];
+  var models = ['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-flash-latest', 'gemini-1.5-flash'];
   var lastErr = '';
   for (var i = 0; i < models.length; i++) {
     try {
