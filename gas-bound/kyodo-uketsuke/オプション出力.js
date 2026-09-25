@@ -2119,6 +2119,7 @@ function updateNippoSheetForMonth(ss, targetYear, targetMonth, logSheet) {
 
   const anchor = resolveNippoOpAnchor_(nippoSheet);
   ensureNippoOpFormulasLight_(nippoSheet, anchor);
+  ensureNippoIriaiBreakdownFormulas_(nippoSheet);
 
   const result = countOpDataForMonth_(logSheet, targetYear, targetMonth);
   const n = OPTION_LIST.length;
@@ -2337,6 +2338,23 @@ function ensureNippoOpFormulas_(nippoSheet) {
 }
 
 /** 増減式だけ軽く確認・セット（既にあれば触らない） */
+/** 日報の移籍・復会・紹介は 2609 の H/I/J/K を参照する（手入力0のままにしない） */
+function ensureNippoIriaiBreakdownFormulas_(nippoSheet) {
+  if (!nippoSheet) return;
+  const dayI = '=IFERROR(N(INDEX(INDIRECT("\'"&$B$1&"\'!$I$5:$I$35"),DAY(TODAY())))+N(INDEX(INDIRECT("\'"&$B$1&"\'!$H$5:$H$35"),DAY(TODAY()))),0)';
+  const dayJ = '=IFERROR(N(INDEX(INDIRECT("\'"&$B$1&"\'!$J$5:$J$35"),DAY(TODAY()))),0)';
+  const dayK = '=IFERROR(N(INDEX(INDIRECT("\'"&$B$1&"\'!$K$5:$K$35"),DAY(TODAY()))),0)';
+  const monthHI = '=IFERROR(N(INDIRECT($B$1&"!H36"))+N(INDIRECT($B$1&"!I36")),0)';
+  const monthJ = '=IFERROR(N(INDIRECT($B$1&"!J36")),0)';
+  const monthK = '=IFERROR(N(INDIRECT($B$1&"!K36")),0)';
+  nippoSheet.getRange("D10").setFormula(dayI);
+  nippoSheet.getRange("F10").setFormula(dayJ);
+  nippoSheet.getRange("H10").setFormula(dayK);
+  nippoSheet.getRange("D14").setFormula(monthHI);
+  nippoSheet.getRange("F14").setFormula(monthJ);
+  nippoSheet.getRange("H14").setFormula(monthK);
+}
+
 function ensureNippoOpFormulasLight_(nippoSheet, anchorOpt) {
   const anchor = anchorOpt || resolveNippoOpAnchor_(nippoSheet);
   const sample = String(nippoSheet.getRange(anchor.startRow, NIPPO_COL_NET).getFormula() || "");
