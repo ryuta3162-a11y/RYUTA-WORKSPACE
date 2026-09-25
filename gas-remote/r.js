@@ -951,7 +951,8 @@ function setupAllData_() {
       workspaceUrl: dest.getUrl() + '#gid=' + sh.getSheetId(),
       uketsukeId: UKETSUKE_SOURCE_ID_,
       aiBrief: brief,
-      aiTrigger: aiTrigger
+      aiTrigger: aiTrigger,
+      aiAuthUrl: kyodoAiAuthUrl_()
     };
   } catch (err) {
     return { ok: false, message: String(err && err.message ? err.message : err) };
@@ -2902,13 +2903,24 @@ function refreshKyodoAiBrief_() {
       model: brief.model || '',
       headline: brief.headline,
       ticker: brief.ticker,
-      geminiError: (attempted && attempted.error) || ''
+      geminiError: (attempted && attempted.error) || '',
+      aiAuthUrl: kyodoAiAuthUrl_()
     };
   } catch (err) {
     return { ok: false, message: String(err && err.message ? err.message : err) };
   } finally {
     try { lock.releaseLock(); } catch (eRel) {}
   }
+}
+
+function kyodoAiAuthUrl_() {
+  try {
+    var info = ScriptApp.getAuthorizationInfo(ScriptApp.AuthMode.FULL);
+    if (info.getAuthorizationStatus() === ScriptApp.AuthorizationStatus.REQUIRED) {
+      return info.getAuthorizationUrl() || '';
+    }
+  } catch (err) {}
+  return '';
 }
 
 function refreshKyodoAiBriefTriggered_() {
