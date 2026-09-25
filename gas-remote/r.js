@@ -1838,6 +1838,102 @@ function auditOpMailCoverage_() {
   }
 }
 
+function inspectQueryThreadsHub_(query, openMessages, maxThreads) {
+  var threads = searchGmailPagedHub_(query, maxThreads || 800);
+  var uniqueNames = {};
+  var enrollMessages = 0;
+  var optionMessages = 0;
+  var allMessages = 0;
+  var bundled = [];
+  var i;
+  if (openMessages) {
+    for (i = 0; i < threads.length; i++) {
+      var messages = threads[i].getMessages() || [];
+      allMessages += messages.length;
+      var names = [];
+      var j;
+      for (j = 0; j < messages.length; j++) {
+        var subject = String(messages[j].getSubject() || '');
+        var body = '';
+        var name = '';
+        if (subject.indexOf('ご入会') !== -1) {
+          enrollMessages++;
+          body = String(messages[j].getPlainBody() || '');
+          if (body.length < 80) body = String(messages[j].getBody() || '').replace(/<[^>]+>/g, ' ');
+          name = extractNyukaiNameHub_(body);
+        } else if (subject.indexOf('オプションご契約') !== -1) {
+          optionMessages++;
+          if (!name) {
+            body = String(messages[j].getPlainBody() || '');
+            var m = body.match(/(.{1,20}?)様/);
+            if (m) name = String(m[1]).replace(/^[>\s]+/, '').trim();
+          }
+        }
+        if (name) {
+          uniqueNames[nameKeyHub_(name)] = name;
+          names.push(name);
+        }
+      }
+      if (messages.length > 1) {
+        bundled.push({
+          messages: messages.length,
+          names: names
+        });
+      }
+    }
+  }
+  return {
+    query: query,
+    threads: threads.length,
+    messagesOpened: openMessages ? allMessages : null,
+    enrollMessages: openMessages ? enrollMessages : null,
+    optionMessages: openMessages ? optionMessages : null,
+    uniquePeople: openMessages ? Object.keys(uniqueNames).length : null,
+    threadsWithMultipleMessages: openMessages ? bundled.length : null,
+    bundledSample: openMessages ? bundled.slice(0, 12) : []
+  };
+}
+
+function auditGmailThreadShape_() {
+  try {
+    var septEnroll = inspectQueryThreadsHub_(
+      'from:info@joyfit-service.jp subject:ご入会ありがとうございます after:2026/08/30 before:2026/10/01',
+      true,
+      400
+    );
+    var septOption = inspectQueryThreadsHub_(
+      'from:info@joyfit-service.jp subject:オプションご契約につきまして after:2026/08/30 before:2026/10/01',
+      true,
+      400
+    );
+    var allEnroll = inspectQueryThreadsHub_(
+      'from:info@joyfit-service.jp subject:ご入会ありがとうございます',
+      false,
+      800
+    );
+    var allOption = inspectQueryThreadsHub_(
+      'from:info@joyfit-service.jp subject:オプションご契約につきまして',
+      false,
+      800
+    );
+    return {
+      ok: true,
+      account: gmailAccountHub_(),
+      meaning: {
+        thread: 'Gmailの1行＝会話の束。左の info 7 は7通入っているという意味',
+        previous25: '前回の25は after/before 付き検索のスレッド数で、1通ずつではない。さらに各スレッドの先頭1通しか見ていなかった',
+        screenshotRows: '画面右上の 572行 / 784行 は期間なし検索の会話行数'
+      },
+      septemberEnroll: septEnroll,
+      septemberOption: septOption,
+      allTimeEnrollThreads: allEnroll.threads,
+      allTimeOptionThreads: allOption.threads
+    };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
 function opStartAt_(optionName, monthOffset) {
   var log = "'" + OP_LOG_HELPER_SHEET_ + "'";
   var name = String(optionName).replace(/"/g, '""');
@@ -2881,6 +2977,9 @@ function handleApiGet_(e) {
     }
     if (api === 'auditOpMailCoverage') {
       return jsonOutput_(auditOpMailCoverage_());
+    }
+    if (api === 'auditGmailThreadShape') {
+      return jsonOutput_(auditGmailThreadShape_());
     }
     if (api === 'setupReviewImport') {
       return jsonOutput_(setupReviewImport_());
