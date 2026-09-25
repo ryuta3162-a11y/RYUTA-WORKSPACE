@@ -1147,6 +1147,13 @@ function executeFetchMonthForYm_(ss, logSheet, targetYear, targetMonth, silent, 
   );
 
   writeOpLogValues_(opSheet, [header].concat(keptOtherMonths).concat(uniqueThisMonth).concat(added));
+  try {
+    if (typeof backfillEnrollmentsFromOpLog_ === "function") {
+      backfillEnrollmentsFromOpLog_(ss, targetYear, targetMonth, opSheet);
+    }
+  } catch (enrollErr) {
+    Logger.log("入会名簿をOPから補完: " + enrollErr);
+  }
   syncSummarySheetFromOpData_(ss, targetYear, targetMonth, opSheet);
   updateNippoSheetForMonth(ss, targetYear, targetMonth, opSheet);
 

@@ -73,8 +73,8 @@ const DAILY_ENROLL_TOTAL_ROW = 36;    // D36 = 当月入会合計
  */
 const SILENT_FETCH_DAYS_BACK = 14;
 const MEMBERSHIP_UPDATE_DAYS_BACK = 14;
-/** 1回の検索で見るスレッド上限（新しい順。GAS上限100） */
-const MEMBERSHIP_UPDATE_MAX_THREADS = 100;
+/** 直近検索のスレッド上限。100件1ページだと他店の入会メールに埋もれて経堂が落ちる */
+const MEMBERSHIP_UPDATE_MAX_THREADS = 400;
 /** 全件再取得後にラベルを付け直す日数（全期間ラベル付けはタイムアウトしやすい） */
 const MEMBERSHIP_LABEL_CATCHUP_DAYS = 45;
 
@@ -308,10 +308,20 @@ function appendMembershipRows_(dataSheet, startCol, colCount, newRows) {
   );
 }
 
-/** 新しいスレッドだけ（最大 maxThreads 件・1ページ） */
+/** 新しいスレッドをページングして取る（1回100件制限をまたぐ） */
 function searchGmailRecentThreads_(query, maxThreads) {
-  const limit = Math.max(1, Math.min(100, maxThreads || MEMBERSHIP_UPDATE_MAX_THREADS));
-  return GmailApp.search(query, 0, limit);
+  const limit = Math.max(1, Math.min(500, maxThreads || MEMBERSHIP_UPDATE_MAX_THREADS));
+  const out = [];
+  let start = 0;
+  while (out.length < limit) {
+    const page = Math.min(100, limit - out.length);
+    const batch = GmailApp.search(query, start, page);
+    if (!batch || !batch.length) break;
+    for (let i = 0; i < batch.length; i++) out.push(batch[i]);
+    if (batch.length < page) break;
+    start += batch.length;
+  }
+  return out;
 }
 
 /** スレッド内の未登録メールを取り込む
@@ -1172,9 +1182,10 @@ function syncMembershipDailyCountsForMonth_(ss, year, month) {
   const enrollCorporateByDay = countMembersByDay_(enrollRows, year, month, CATEGORY_CORPORATE);
   const withdrawByDay = countWithdrawalsByDay_(withdrawRows, year, month);
   const corporateAdvance = countCorporateWithdrawAdvance_(withdrawRows, year, month);
+  const cols = resolveMonthlyEnrollWriteCols_(sheet);
 
-  writeDailyCountColumn_(sheet, DAILY_ENROLL_ROW_START, DAILY_ENROLL_GENERAL_COL, enrollGeneralByDay, "");
-  writeDailyCountColumn_(sheet, DAILY_ENROLL_ROW_START, DAILY_ENROLL_CORPORATE_COL, enrollCorporateByDay, "");
+  writeDailyCountColumn_(sheet, DAILY_ENROLL_ROW_START, cols.general, enrollGeneralByDay, "");
+  writeDailyCountColumn_(sheet, DAILY_ENROLL_ROW_START, cols.corporate, enrollCorporateByDay, "");
   writeDailyCountColumn_(sheet, DAILY_WITHDRAW_ROW_START, DAILY_WITHDRAW_COL, withdrawByDay, "");
   sheet.getRange(DAILY_WITHDRAW_CORPORATE_ADVANCE_ROW, DAILY_WITHDRAW_CORPORATE_ADVANCE_COL)
     .setValue(corporateAdvance || "")
@@ -1224,6 +1235,11 @@ function repairMonthlyEnrollSumFormulas() {
   if (!sheet) throw new Error("シート「" + sheetName + "」が見つかりません。日報B1を確認してください。");
   ensureMonthlyEnrollSumFormulas_(sheet);
   return sheetName + " の D5:D35 と D36 に合計数式を入れました。";
+}
+
+/** 2609 の見出しは F=前受/G=法人 だが、F列に法人実数が入っているので従来どおり E/F に書く */
+function resolveMonthlyEnrollWriteCols_(sheet) {
+  return { general: DAILY_ENROLL_GENERAL_COL, corporate: DAILY_ENROLL_CORPORATE_COL, clearF: false };
 }
 
 /** 指定列の日別件数だけを書き込む（書式・装飾は触らない） */
@@ -1617,4 +1633,46 @@ function getOrCreateGmailLabel_(name) {
   let label = GmailApp.getUserLabelByName(name);
   if (!label) label = GmailApp.createLabel(name);
   return label;
+}
+
+/**
+ * OPログの「利用開始(新規入会)」にいるのに入会・退会_データに無い人を足す。
+ * 入会Gmail検索が100件で打ち切られ、他店メールに埋もれて落ちる穴の修復。
+ */
+function backfillEnrollmentsFromOpLog_(ss, year, month, opSheet) {
+  ss = ss || SpreadsheetApp.getActiveSpreadsheet();
+  const dataSheet = ss.getSheetByName(SHEET_NAME_DATA);
+  const logSheet = opSheet || (typeof getOpSheet_ === "function" ? getOpSheet_(ss) : ss.getSheetByName("OP集計"));
+  if (!dataSheet || !logSheet) return { added: 0 };
+
+  const monthLabel = year + "年" + (month + 1) + "月";
+  const enrollRows = readEnrollData_(dataSheet);
+  const have = {};
+  enrollRows.forEach(function (r) {
+    if (normalizeYearMonthLabel_(r[2]) !== monthLabel) return;
+    have[normalizeMemberName_(r[1])] = true;
+  });
+
+  const log = typeof readOpLogValues_ === "function"
+    ? readOpLogValues_(logSheet)
+    : [];
+  const added = [];
+  const seen = {};
+  for (let i = 1; i < log.length; i++) {
+    const row = log[i];
+    const cat = String(row[2] || "");
+    if (cat.indexOf("新規入会") === -1) continue;
+    const d = typeof parseOpLogDate_ === "function" ? parseOpLogDate_(row[0]) : null;
+    if (!d || d.getFullYear() !== year || d.getMonth() !== month) continue;
+    const name = String(row[1] || "").trim();
+    const key = normalizeMemberName_(name);
+    if (!key || have[key] || seen[key]) continue;
+    seen[key] = true;
+    added.push([row[0], name, monthLabel, CATEGORY_SIX_MONTH, String(row[5] || "")]);
+  }
+  if (!added.length) return { added: 0, month: monthLabel };
+
+  appendMembershipRows_(dataSheet, DATA_ENROLL_COL, DATA_ENROLL_COLS, added);
+  Logger.log("入会補完 " + monthLabel + " +" + added.length + " " + added.map(function (r) { return r[1]; }).join(","));
+  return { added: added.length, month: monthLabel, names: added.map(function (r) { return r[1]; }) };
 }
