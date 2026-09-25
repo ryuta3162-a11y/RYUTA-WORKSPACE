@@ -1701,7 +1701,39 @@ function auditOpMailCoverage_() {
       else packOk.push(item);
     }
 
-    var gmail = { account: gmailAccountHub_(), enrollThreads: 0, enrollParsed: 0, enrollSept: 0, opChangeThreads: 0, enrollPeople: [], missingVsSheet: [], extraVsSheet: [] };
+    var corpWithOp = corp.filter(function (p) { return p.startOps.length; }).map(function (p) {
+      return { name: p.name, opCount: p.startOps.length, ops: p.startOps };
+    });
+    var signupNotSix = [];
+    for (i = 0; i < enrollList.length; i++) {
+      if (enrollList[i].six) continue;
+      if (enrollList[i].startOps.length) signupNotSix.push({
+        name: enrollList[i].name,
+        cat: enrollList[i].cat,
+        ops: enrollList[i].startOps
+      });
+    }
+    var startOnly = [];
+    var pk;
+    for (pk in startPeople) {
+      if (!startPeople.hasOwnProperty(pk)) continue;
+      if (!enrollByKey[pk]) startOnly.push({ name: pk, ops: startPeople[pk] });
+      else if (!enrollByKey[pk].six) startOnly.push({
+        name: enrollByKey[pk].name,
+        cat: enrollByKey[pk].cat,
+        ops: startPeople[pk]
+      });
+    }
+    var gmail = {
+      account: gmailAccountHub_(),
+      enrollThreads: 0,
+      enrollParsed: 0,
+      enrollSept: 0,
+      opChangeThreads: 0,
+      enrollPeople: [],
+      missingVsSheet: [],
+      extraVsSheet: []
+    };
     try {
       var enrollQ = 'from:info@joyfit-service.jp subject:ご入会ありがとうございます after:2026/08/30 before:2026/10/01';
       var changeQ = 'from:info@joyfit-service.jp subject:オプションご契約につきまして after:2026/08/30 before:2026/10/01';
@@ -1768,7 +1800,9 @@ function auditOpMailCoverage_() {
       enroll: {
         total: enrollList.length,
         sixMonth: six.length,
-        corporate: corp.length
+        corporate: corp.length,
+        corporateWithSignupOp: corpWithOp,
+        signupOpNotSixMonth: startOnly
       },
       pack: {
         expectedCore: packCore.length + 1,
@@ -1781,6 +1815,9 @@ function auditOpMailCoverage_() {
       opLogPeople: {
         newSignupPeople: Object.keys(startPeople).length,
         opAddPeople: Object.keys(addPeople).length,
+        opAddNames: Object.keys(addPeople).map(function (k) {
+          return { name: (enrollByKey[k] && enrollByKey[k].name) || k, ops: addPeople[k] };
+        }),
         orphanNewSignupRows: orphanStarts.length
       },
       optionStarts: startTotals,
