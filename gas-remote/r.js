@@ -1489,6 +1489,318 @@ function syncMonthlyEnrollCountsSafe_(ss, year, month, monthText) {
   };
 }
 
+function nameKeyHub_(s) {
+  return String(s || '').replace(/\s+/g, '');
+}
+
+function normalizeOptionNameHub_(rawName) {
+  var s = String(rawName || '');
+  if (s.indexOf('水素水') !== -1 && s.indexOf('プロテイン') !== -1) return 'プロテイン＋水素水';
+  if (s.indexOf('VIP') !== -1 && (s.indexOf('あんしん') !== -1 || s.indexOf('安心') !== -1)) return '安心サポートVIP';
+  if (s.indexOf('ボディプランナー') !== -1 || s.indexOf('ボディープランナー') !== -1 || s.indexOf('体組成') !== -1) {
+    return '体組成計';
+  }
+  if (s.indexOf('マットレンタル') !== -1 || s.indexOf('レンタルマット') !== -1) return 'レンタルマット';
+  if (s.indexOf('ピラティス') !== -1) return 'ピラティスリフォーマー';
+  if (s.indexOf('ロッカー') !== -1 && /(1[,，]?500|１[,，]?５００|1500)/.test(s)) return '契約ロッカー1,500';
+  if (s.indexOf('ヨガ') !== -1 && s.indexOf('ロッカー') !== -1) return 'ヨガロッカー';
+  if (s.indexOf('レンタルタオル') !== -1 || (s.indexOf('タオル') !== -1 && s.indexOf('レンタル') !== -1)) {
+    return 'レンタルタオル';
+  }
+  if (s.indexOf('ホットスタジオ') !== -1 || s.indexOf('HOTスタジオ') !== -1) return 'ホットスタジオ';
+  if (s.indexOf('オンラインレッスン') !== -1 || s.indexOf('オンライン・レッスン') !== -1) return 'オンラインレッスン';
+  if (s.indexOf('セルフエステ') !== -1) return 'セルフエステ';
+  if (s.indexOf('タンニング') !== -1) return 'タンニング';
+  if (s.indexOf('プロテイン') !== -1 && (s.indexOf('無制限') !== -1 || s.indexOf('制限なし') !== -1)) {
+    return 'プロテイン無制限';
+  }
+  if (s.indexOf('プロテイン') !== -1 && (s.indexOf('12') !== -1 || s.indexOf('１２') !== -1)) return 'プロテイン12杯';
+  if (s.indexOf('安心サポート') !== -1 || s.indexOf('あんしんサポート') !== -1) return '安心サポート';
+  if (s.indexOf('水素水') !== -1) return '水素水';
+  var byLen = OP_NAMES_.slice().sort(function (a, b) { return b.length - a.length; });
+  var i;
+  for (i = 0; i < byLen.length; i++) {
+    if (s.indexOf(byLen[i]) !== -1) return byLen[i];
+  }
+  return '';
+}
+
+function extractFeeSectionHub_(body) {
+  var text = String(body || '');
+  if (!text) return '';
+  var start = text.search(/月会費.*内訳|お支払い内容|ご契約中のオプション|お支払い内容は以下/);
+  if (start >= 0) {
+    var rest = text.substring(start);
+    var endRel = rest.search(/APP登録方法|お支払方法|注意事項|ご案内|ご利用規約|クレジットカード|JOYFIT App/);
+    return endRel > 0 ? rest.substring(0, endRel) : rest;
+  }
+  var m = text.search(/[（(]\s*\d{1,2}\s*月分\s*[）)]/);
+  if (m < 0) return text;
+  return text.substring(Math.max(0, m - 80), Math.min(text.length, m + 1400));
+}
+
+function parseOpNamesFromBodyHub_(body) {
+  var text = extractFeeSectionHub_(body);
+  var found = {};
+  var list = [];
+  var re = /([^\n\r]{2,40}?)[（(]\s*(\d{1,2})\s*月分\s*[）)][^\n\r]{0,80}?(\d[\d,]*)\s*円/g;
+  var m;
+  while ((m = re.exec(text)) !== null) {
+    var raw = String(m[1] || '').replace(/^[\s\-・･>]+/, '').trim();
+    if (!raw || /法人個人月払|法人会員|ナショナル会員|入会金|事務手数料|月会費|小計|合計/.test(raw)) continue;
+    var norm = normalizeOptionNameHub_(raw);
+    if (!norm || found[norm]) continue;
+    found[norm] = true;
+    list.push(norm);
+  }
+  if (list.length < 2) {
+    var i;
+    for (i = 0; i < OP_NAMES_.length; i++) {
+      var name = OP_NAMES_[i];
+      if (found[name]) continue;
+      if (text.indexOf(name) === -1) continue;
+      if (name === '安心サポート' && found['安心サポートVIP']) continue;
+      if (name === '水素水' && found['プロテイン＋水素水']) continue;
+      found[name] = true;
+      list.push(name);
+    }
+  }
+  return list;
+}
+
+function searchGmailPagedHub_(query, maxThreads) {
+  var out = [];
+  var start = 0;
+  var cap = Math.max(1, maxThreads || 400);
+  while (out.length < cap) {
+    var batch = GmailApp.search(query, start, 100);
+    if (!batch || !batch.length) break;
+    var i;
+    for (i = 0; i < batch.length && out.length < cap; i++) out.push(batch[i]);
+    if (batch.length < 100) break;
+    start += batch.length;
+  }
+  return out;
+}
+
+function gmailAccountHub_() {
+  try {
+    return Session.getActiveUser().getEmail() || Session.getEffectiveUser().getEmail() || '';
+  } catch (e0) {
+    try { return Session.getEffectiveUser().getEmail() || ''; } catch (e1) { return ''; }
+  }
+}
+
+function auditOpMailCoverage_() {
+  try {
+    var ss = SpreadsheetApp.openById(UKETSUKE_SOURCE_ID_);
+    var op = ss.getSheetByName('OP集計');
+    var data = ss.getSheetByName('入会・退会_データ');
+    if (!op || !data) return { ok: false, message: 'sheet missing' };
+    var monthText = String(op.getRange('B1').getDisplayValue() || '2026年9月').trim();
+    var mm = monthText.match(/^(\d{4})年(\d{1,2})月$/);
+    var year = mm ? parseInt(mm[1], 10) : 2026;
+    var month = mm ? parseInt(mm[2], 10) - 1 : 8;
+
+    var lastData = Math.max(data.getLastRow(), 1);
+    var enrollRows = data.getRange(2, 1, lastData, 5).getValues();
+    var enrollByKey = {};
+    var enrollList = [];
+    var i;
+    for (i = 0; i < enrollRows.length; i++) {
+      var name = String(enrollRows[i][1] || '').trim();
+      if (!name) continue;
+      if (ymLabelOf_(enrollRows[i][2]) !== monthText) continue;
+      var key = nameKeyHub_(name);
+      if (enrollByKey[key]) continue;
+      var cat = String(enrollRows[i][3] || '');
+      var rec = {
+        name: name,
+        cat: cat,
+        six: cat.indexOf('法人') === -1,
+        msgId: String(enrollRows[i][4] || ''),
+        startOps: [],
+        addOps: [],
+        stopOps: []
+      };
+      enrollByKey[key] = rec;
+      enrollList.push(rec);
+    }
+
+    var lastOp = Math.max(op.getLastRow(), 1);
+    var log = op.getRange(1, 9, lastOp, 6).getValues();
+    var startCounts = {};
+    var addCounts = {};
+    var stopCounts = {};
+    var uniqueStart = {};
+    var uniqueAdd = {};
+    var uniqueStop = {};
+    var startPeople = {};
+    var addPeople = {};
+    var orphanStarts = [];
+    var j;
+    for (j = 0; j < OP_NAMES_.length; j++) {
+      startCounts[OP_NAMES_[j]] = 0;
+      addCounts[OP_NAMES_[j]] = 0;
+      stopCounts[OP_NAMES_[j]] = 0;
+    }
+    for (i = 1; i < log.length; i++) {
+      var row = log[i];
+      var d = parseUketsukeOpDate_(row[0]);
+      if (!d || d.getFullYear() !== year || d.getMonth() !== month) continue;
+      var opt = String(row[4] || '').trim();
+      var cat2 = String(row[2] || '');
+      var person = String(row[1] || '').trim();
+      var pk = nameKeyHub_(person);
+      var ukey = uketsukeOpDedupeKey_(row);
+      if (cat2.indexOf('利用停止') !== -1) {
+        if (uniqueStop[ukey]) continue;
+        uniqueStop[ukey] = true;
+        if (stopCounts[opt] !== undefined) stopCounts[opt]++;
+        if (enrollByKey[pk]) enrollByKey[pk].stopOps.push(opt);
+      } else if (cat2.indexOf('新規入会') !== -1) {
+        if (uniqueStart[ukey]) continue;
+        uniqueStart[ukey] = true;
+        if (startCounts[opt] !== undefined) startCounts[opt]++;
+        if (!startPeople[pk]) startPeople[pk] = [];
+        startPeople[pk].push(opt);
+        if (enrollByKey[pk]) enrollByKey[pk].startOps.push(opt);
+        else orphanStarts.push({ name: person, opt: opt });
+      } else if (cat2.indexOf('利用開始') !== -1 || cat2.indexOf('OP追加') !== -1) {
+        if (uniqueAdd[ukey]) continue;
+        uniqueAdd[ukey] = true;
+        if (addCounts[opt] !== undefined) addCounts[opt]++;
+        if (!addPeople[pk]) addPeople[pk] = [];
+        addPeople[pk].push(opt);
+        if (enrollByKey[pk]) enrollByKey[pk].addOps.push(opt);
+      }
+    }
+
+    var packCore = [
+      '安心サポートVIP', 'オンラインレッスン', '体組成計', 'レンタルマット',
+      'プロテイン＋水素水', 'レンタルタオル', 'ホットスタジオ'
+    ];
+    var six = enrollList.filter(function (p) { return p.six; });
+    var corp = enrollList.filter(function (p) { return !p.six; });
+    var packOk = [];
+    var packShort = [];
+    var packZero = [];
+    for (i = 0; i < six.length; i++) {
+      var ops = six[i].startOps;
+      var uniqOps = {};
+      for (j = 0; j < ops.length; j++) uniqOps[ops[j]] = true;
+      var n = Object.keys(uniqOps).length;
+      var missing = [];
+      for (j = 0; j < packCore.length; j++) {
+        if (!uniqOps[packCore[j]]) missing.push(packCore[j]);
+      }
+      if (!uniqOps['タンニング'] && !uniqOps['セルフエステ']) missing.push('タンニングまたはセルフエステ');
+      var item = { name: six[i].name, opCount: n, ops: Object.keys(uniqOps), missing: missing };
+      if (n === 0) packZero.push(item);
+      else if (missing.length) packShort.push(item);
+      else packOk.push(item);
+    }
+
+    var gmail = { account: gmailAccountHub_(), enrollThreads: 0, enrollParsed: 0, enrollSept: 0, opChangeThreads: 0, enrollPeople: [], missingVsSheet: [], extraVsSheet: [] };
+    try {
+      var enrollQ = 'from:info@joyfit-service.jp subject:ご入会ありがとうございます after:2026/08/30 before:2026/10/01';
+      var changeQ = 'from:info@joyfit-service.jp subject:オプションご契約につきまして after:2026/08/30 before:2026/10/01';
+      var enrollThreads = searchGmailPagedHub_(enrollQ, 400);
+      var changeThreads = searchGmailPagedHub_(changeQ, 400);
+      gmail.enrollThreads = enrollThreads.length;
+      gmail.opChangeThreads = changeThreads.length;
+      var seenG = {};
+      for (i = 0; i < enrollThreads.length; i++) {
+        var messages = enrollThreads[i].getMessages();
+        var midx;
+        for (midx = messages.length - 1; midx >= 0; midx--) {
+          var msg = messages[midx];
+          var subject = String(msg.getSubject() || '');
+          if (subject.indexOf('ご入会') === -1) continue;
+          var body = String(msg.getPlainBody() || '');
+          if (body.length < 80) body = String(msg.getBody() || '').replace(/<[^>]+>/g, ' ');
+          var personName = extractNyukaiNameHub_(body);
+          if (!personName) continue;
+          var date = msg.getDate();
+          var ym = calcNyukaiYmHub_(body, date);
+          gmail.enrollParsed++;
+          if (ym !== monthText) continue;
+          var gk = nameKeyHub_(personName);
+          if (seenG[gk]) continue;
+          seenG[gk] = true;
+          var opsG = parseOpNamesFromBodyHub_(body);
+          gmail.enrollSept++;
+          gmail.enrollPeople.push({
+            name: personName,
+            cat: detectNyukaiCatHub_(subject, body),
+            opCount: opsG.length,
+            ops: opsG
+          });
+          break;
+        }
+      }
+      for (i = 0; i < gmail.enrollPeople.length; i++) {
+        if (!enrollByKey[nameKeyHub_(gmail.enrollPeople[i].name)]) {
+          gmail.extraVsSheet.push(gmail.enrollPeople[i].name);
+        }
+      }
+      for (i = 0; i < six.length; i++) {
+        if (!seenG[nameKeyHub_(six[i].name)]) gmail.missingVsSheet.push(six[i].name);
+      }
+    } catch (gerr) {
+      gmail.error = String(gerr && gerr.message ? gerr.message : gerr);
+    }
+
+    var startTotals = {};
+    for (j = 0; j < OP_NAMES_.length; j++) {
+      startTotals[OP_NAMES_[j]] = {
+        newSignup: startCounts[OP_NAMES_[j]],
+        opAdd: addCounts[OP_NAMES_[j]],
+        start: startCounts[OP_NAMES_[j]] + addCounts[OP_NAMES_[j]],
+        stop: stopCounts[OP_NAMES_[j]]
+      };
+    }
+
+    return {
+      ok: true,
+      month: monthText,
+      gmailAccount: gmail.account,
+      enroll: {
+        total: enrollList.length,
+        sixMonth: six.length,
+        corporate: corp.length
+      },
+      pack: {
+        expectedCore: packCore.length + 1,
+        complete: packOk.length,
+        short: packShort.length,
+        zero: packZero.length,
+        shortPeople: packShort,
+        zeroPeople: packZero
+      },
+      opLogPeople: {
+        newSignupPeople: Object.keys(startPeople).length,
+        opAddPeople: Object.keys(addPeople).length,
+        orphanNewSignupRows: orphanStarts.length
+      },
+      optionStarts: startTotals,
+      gmailKusaka: {
+        account: gmail.account,
+        enrollThreads: gmail.enrollThreads,
+        enrollParsed: gmail.enrollParsed,
+        enrollSeptUnique: gmail.enrollSept,
+        opChangeThreads: gmail.opChangeThreads,
+        sixMonthMissingInThisGmail: gmail.missingVsSheet,
+        extraInThisGmail: gmail.extraVsSheet,
+        error: gmail.error || ''
+      },
+      note: '店舗Gmailの入会・退会_データ／OPログを正とし、この実行アカウントのGmailは照合用。6ヶ月割はテンプレ8種（コア7+タンニングかセルフエステ）。'
+    };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
 function opStartAt_(optionName, monthOffset) {
   var log = "'" + OP_LOG_HELPER_SHEET_ + "'";
   var name = String(optionName).replace(/"/g, '""');
@@ -2529,6 +2841,9 @@ function handleApiGet_(e) {
     }
     if (api === 'backfillEnrollFromOp') {
       return jsonOutput_(backfillEnrollFromOpLog_());
+    }
+    if (api === 'auditOpMailCoverage') {
+      return jsonOutput_(auditOpMailCoverage_());
     }
     if (api === 'setupReviewImport') {
       return jsonOutput_(setupReviewImport_());
