@@ -1981,7 +1981,7 @@ function handleApiGet_(e) {
   try {
     var api = e && e.parameter ? String(e.parameter.api || '') : '';
     if (api === 'status') {
-      return jsonOutput_({ ok: true, service: 'ryuta-workspace-gas', version: 'v2-hub-tiles2' });
+      return jsonOutput_({ ok: true, service: 'ryuta-workspace-gas', version: 'v2-hub-urls' });
     }
     if (api === 'listSheets') {
       return jsonOutput_(listWorkspaceSheets_());
@@ -4239,14 +4239,15 @@ var HUB_KEY_BASE_ = 16;
 
 function hubUi_() {
   return {
-    bg: '#F2F2F2',
+    bg: '#F3F3F3',
     card: '#FFFFFF',
-    ink: '#111111',
-    mute: '#666666',
-    line: '#111111',
-    onBg: '#111111',
+    ink: '#0A0A0A',
+    mute: '#6A6A6A',
+    line: '#0A0A0A',
+    onBg: '#0A0A0A',
     onFg: '#FFFFFF',
-    shut: '#111111'
+    shut: '#0A0A0A',
+    rail: '#0A0A0A'
   };
 }
 
@@ -4259,8 +4260,7 @@ function hubCatalog_(ss) {
     { group: '現場', name: '見学体験申請', title: '見学' },
     { group: '現場', name: '口コミ_経堂', title: '口コミ' },
     { group: '現場', name: 'マシンレクチャー申込', title: 'レクチャー' },
-    { group: '現場', name: '入会者一覧＋自動メール管理', title: '入会者' },
-    { group: '一覧', name: 'URL一覧', title: 'URL一覧' }
+    { group: '現場', name: '入会者一覧＋自動メール管理', title: '入会者' }
   ];
   var sheets = ss.getSheets();
   var i;
@@ -4284,36 +4284,15 @@ function hubShortTitle_(title) {
   return title;
 }
 
-function hubUrlBoard_(ss) {
-  var out = [];
-  var seen = {};
-  var add = function (title, url) {
-    url = String(url || '').trim();
-    if (!url || seen[url]) return;
-    seen[url] = true;
-    out.push({ title: String(title || url).trim() || url, url: url });
-  };
-  var src = ss.getSheetByName('URL一覧');
-  if (src && src.getLastRow() >= 2) {
-    var vals = src.getRange(2, 1, src.getLastRow() - 1, 4).getDisplayValues();
-    var i;
-    for (i = 0; i < vals.length; i++) {
-      add(vals[i][2] || vals[i][1], vals[i][3]);
-    }
-  }
-  var extra = hubSourceLinks_();
-  var j;
-  for (j = 0; j < extra.length; j++) add(extra[j].title, extra[j].url);
-  return out;
-}
-
 function hubSourceLinks_() {
   return [
-    { title: '受付', url: 'https://docs.google.com/spreadsheets/d/14hxiLBzvGTuIpfZcoVjiHpz8b419OzUrtQAr5788h3w/edit' },
-    { title: '未納元', url: 'https://docs.google.com/spreadsheets/d/' + UNPAID_SOURCE_ID_ + '/edit' },
-    { title: '見学元', url: 'https://docs.google.com/spreadsheets/d/1RPUw0slNCit9ZwJgINGfv89oc2Hxw8zzAZyMt6g_QuY/edit' },
-    { title: '販促元', url: 'https://docs.google.com/spreadsheets/d/1w7ExndmZn7t2_z55CvxRDMZy4QAcuEyNhIuj-6sUy3E/edit' },
-    { title: '付与', url: REVIEW_GRANT_APP_URL_ }
+    { title: '経堂　受付状況表', url: 'https://docs.google.com/spreadsheets/d/14hxiLBzvGTuIpfZcoVjiHpz8b419OzUrtQAr5788h3w/edit' },
+    { title: '26年度未納管理ドライブ【経堂】', url: 'https://docs.google.com/spreadsheets/d/' + UNPAID_SOURCE_ID_ + '/edit' },
+    { title: '経堂　見学・体験フォーム', url: 'https://docs.google.com/spreadsheets/d/1RPUw0slNCit9ZwJgINGfv89oc2Hxw8zzAZyMt6g_QuY/edit' },
+    { title: 'JOYFIT24経堂追加販促', url: 'https://docs.google.com/spreadsheets/d/1w7ExndmZn7t2_z55CvxRDMZy4QAcuEyNhIuj-6sUy3E/edit' },
+    { title: 'EAST口コミ回答者', url: 'https://docs.google.com/spreadsheets/d/13_E8m3vQa_61hcoMAPb7XZTyVDVtQ9O7rkVDNtHQvRM/edit' },
+    { title: '20分マシンレクチャー・自動送信メール', url: 'https://docs.google.com/spreadsheets/d/1wntzhyPGcz9hW4saswppYmVG-zHINbjAibu9VkCyEQ8/edit' },
+    { title: '口コミ付与アプリ', url: REVIEW_GRANT_APP_URL_ }
   ];
 }
 
@@ -4455,7 +4434,7 @@ function setupHubHome_() {
 
     var u = hubUi_();
     var items = hubCatalog_(ss);
-    var links = hubUrlBoard_(ss);
+    var links = hubSourceLinks_();
     var groups = [];
     var seen = {};
     var i;
@@ -4513,45 +4492,41 @@ function setupHubHome_() {
           .setBorder(true, true, true, true, false, false, u.line, solid);
         sh.getRange(row, HUB_KEY_BASE_ + col).setValue('SHEET:' + it.name);
       }
-      sh.setRowHeight(row, 42);
+      sh.setRowHeight(row, 44);
       row += 1;
     }
 
-    sh.getRange(1, 7).setValue('名前').setFontSize(11).setFontWeight('bold')
-      .setBackground(u.ink).setFontColor('#FFFFFF').setHorizontalAlignment('center')
-      .setBorder(true, true, true, true, false, false, u.line, solid);
-    sh.getRange(1, 8).setValue('URL').setFontSize(11).setFontWeight('bold')
-      .setBackground(u.ink).setFontColor('#FFFFFF').setHorizontalAlignment('center')
+    sh.getRange(1, 7, 40, 1).setBackground(u.bg).setBorder(false, false, false, false, false, false);
+    sh.getRange(1, 8).setValue('引用元').setFontSize(11).setFontWeight('bold')
+      .setBackground(u.rail).setFontColor('#FFFFFF').setHorizontalAlignment('center')
       .setBorder(true, true, true, true, false, false, u.line, solid);
     var c;
-    var linkMax = Math.min(links.length, 40);
-    for (c = 0; c < linkMax; c++) {
+    for (c = 0; c < links.length; c++) {
       var lr = 2 + c;
       var title = String(links[c].title).replace(/"/g, '""');
       var url = String(links[c].url).replace(/"/g, '""');
-      sh.getRange(lr, 7)
+      sh.getRange(lr, 8)
         .setFormula('=HYPERLINK("' + url + '","' + title + '")')
-        .setFontColor(u.ink)
-        .setFontSize(11)
+        .setFontColor('#FFFFFF')
+        .setFontSize(10)
         .setFontWeight('bold')
         .setHorizontalAlignment('left')
-        .setBackground(u.card)
-        .setBorder(true, true, true, true, false, false, u.line, solid);
-      sh.getRange(lr, 8)
-        .setFormula('=HYPERLINK("' + url + '","' + url + '")')
-        .setFontColor('#444444')
-        .setFontSize(10)
-        .setHorizontalAlignment('left')
-        .setBackground(u.card)
-        .setBorder(true, true, true, true, false, false, u.line, solid);
-      sh.setRowHeight(lr, 28);
+        .setVerticalAlignment('middle')
+        .setWrap(true)
+        .setBackground(u.rail)
+        .setBorder(true, true, true, true, false, false, '#2A2A2A', solid);
     }
+
+    try {
+      var leftover = ss.getSheetByName('URL一覧');
+      if (leftover && ss.getSheets().length > 1) ss.deleteSheet(leftover);
+    } catch (eDel) {}
 
     sh.setHiddenGridlines(true);
     sh.setFrozenRows(1);
-    sh.setColumnWidth(1, 72);
-    for (i = 2; i <= 6; i++) sh.setColumnWidth(i, 120);
-    sh.setColumnWidth(7, 160);
+    sh.setColumnWidth(1, 64);
+    for (i = 2; i <= 6; i++) sh.setColumnWidth(i, 118);
+    sh.setColumnWidth(7, 28);
     sh.setColumnWidth(8, 280);
     try { sh.showColumns(7, 2); } catch (eShow) {}
     try { sh.hideColumns(9, 7); } catch (eH1) {}
