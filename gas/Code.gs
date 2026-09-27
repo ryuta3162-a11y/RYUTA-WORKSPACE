@@ -65,9 +65,13 @@ function onOpen() {
   } catch (eShow) {}
 }
 
-function onEdit(e) {}
+function onEdit(e) {
+  try { masterMonthTabSelect_(e); } catch (err) {}
+}
 
-function onSelectionChange(e) {}
+function onSelectionChange(e) {
+  try { masterMonthTabSelect_(e); } catch (err) {}
+}
 
 function callReceptionRefreshApi_(api) {
   var res = UrlFetchApp.fetch(
@@ -4971,74 +4975,218 @@ function paintMasterSideCard_(sh, col, w, titleF, linkF, headers, listF, widths)
 }
 
 function setupMasterSchoolPanel_(sh) {
-  var wide = masterFindRowLabel_(sh, 1, '学校関係者割');
-  if (wide) {
-    var maxC = sh.getMaxColumns();
-    var drop = Math.min(SCHOOL_FORM_COLS_, maxC - wide + 1);
-    if (drop >= 8) {
-      try { sh.getRange(1, wide, 3, drop).breakApart(); } catch (eBr) {}
-      sh.deleteColumns(wide, drop);
-    }
+  return setupMasterMonthPanel_(sh);
+}
+
+function masterMonthTabs_() {
+  return ['すべて', '見学体験', '紹介', '学割', 'ラグビー割', '乗り換え', '6ヶ月', 'レクチャー', '口コミ', '入会メール', '入会', '退会'];
+}
+
+function masterMonthWhere_(monthA1) {
+  return 'Col1 >= date \'"&TEXT($' + monthA1 + ',"yyyy-mm-dd")&"\' and Col1 < date \'"&TEXT(EDATE($' + monthA1 + ',1),"yyyy-mm-dd")&"\'';
+}
+
+function masterMonthQ_(rangeA1, selectCols, monthA1) {
+  return 'QUERY(' + rangeA1 + ',"select ' + selectCols + ' where ' + masterMonthWhere_(monthA1) + ' order by Col1 desc",0)';
+}
+
+function masterMonthStackFormula_(monthA1) {
+  var w = masterMonthWhere_(monthA1);
+  var blank = '{"","","",""}';
+  var q = function (rng, sel) {
+    return 'IFERROR(QUERY(' + rng + ',"select ' + sel + ' where ' + w + '",0),' + blank + ')';
+  };
+  var inner = [
+    q("'見学体験申請'!A2:D", "Col1,'見学体験',Col3,Col4"),
+    q("'販促_紹介・ペア入会'!A3:G", "Col1,'紹介',Col6,Col7"),
+    q("'学割'!A2:D", "Col1,'学割',Col3,Col4"),
+    q("'販促_ラグビー割'!A3:E", "Col1,'ラグビー割',Col3,Col5"),
+    q("'販促_乗り換え'!A3:D", "Col1,'乗り換え',Col3,Col4"),
+    q("'販促_6ヶ月継続'!A3:D", "Col1,'6ヶ月',Col3,Col4"),
+    q("'マシンレクチャー申込'!A3:D", "Col1,'レクチャー',Col2,Col4"),
+    q("'口コミ_経堂'!A3:F", "Col1,'口コミ',Col5,Col6"),
+    q("'入会者一覧＋自動メール管理'!A3:C", "Col1,'入会メール',Col2,Col3"),
+    q("'経堂_入会'!A2:F", "Col1,'入会',Col2,Col6"),
+    q("'経堂_退会'!A2:C", "Col1,'退会',Col2,Col3")
+  ].join(';');
+  return 'QUERY({' + inner + '},"select Col1,Col2,Col3,Col4 where Col1 is not null order by Col1 desc",0)';
+}
+
+function masterMonthQueryFormula_(monthA1, selA1) {
+  var sel = '$' + selA1;
+  var q = function (inner) {
+    return 'IFERROR(' + inner + ',"")';
+  };
+  return '=SWITCH(' + sel + ',' +
+    '"見学体験",' + q(masterMonthQ_("'見学体験申請'!A2:J", 'Col1,Col2,Col3,Col4,Col5,Col8,Col9,Col10', monthA1)) + ',' +
+    '"紹介",' + q(masterMonthQ_("'販促_紹介・ペア入会'!A3:G", 'Col1,Col2,Col3,Col5,Col6,Col7', monthA1)) + ',' +
+    '"学割",' + q(masterMonthQ_("'学割'!A2:P", '*', monthA1)) + ',' +
+    '"ラグビー割",' + q(masterMonthQ_("'販促_ラグビー割'!A3:F", 'Col1,Col3,Col4,Col5,Col6', monthA1)) + ',' +
+    '"乗り換え",' + q(masterMonthQ_("'販促_乗り換え'!A3:E", 'Col1,Col3,Col4,Col5', monthA1)) + ',' +
+    '"6ヶ月",' + q(masterMonthQ_("'販促_6ヶ月継続'!A3:D", 'Col1,Col3,Col4', monthA1)) + ',' +
+    '"レクチャー",' + q(masterMonthQ_("'マシンレクチャー申込'!A3:G", 'Col1,Col2,Col3,Col4,Col5,Col6,Col7', monthA1)) + ',' +
+    '"口コミ",' + q(masterMonthQ_("'口コミ_経堂'!A3:W", 'Col1,Col5,Col6,Col9,Col10,Col22', monthA1)) + ',' +
+    '"入会メール",' + q(masterMonthQ_("'入会者一覧＋自動メール管理'!A3:E", 'Col1,Col2,Col3,Col4,Col5', monthA1)) + ',' +
+    '"入会",' + q(masterMonthQ_("'経堂_入会'!A2:F", 'Col1,Col2,Col3,Col4,Col6', monthA1)) + ',' +
+    '"退会",' + q(masterMonthQ_("'経堂_退会'!A2:D", 'Col1,Col2,Col3,Col4', monthA1)) + ',' +
+    q(masterMonthStackFormula_(monthA1)) + ')';
+}
+
+function masterMonthHeaderFormula_(selA1) {
+  var sel = '$' + selA1;
+  var school = '{"' + schoolDiscountHeaders_().join('","') + '"}';
+  return '=SWITCH(' + sel + ',' +
+    '"見学体験",{"日時","区分","名前","メール","電話","希望日","時刻","入会"},' +
+    '"紹介",{"日時","種別","紹介者","紹介者電話","被紹介者","被紹介者電話"},' +
+    '"学割",' + school + ',' +
+    '"ラグビー割",{"日時","名前","フリガナ","電話","メール"},' +
+    '"乗り換え",{"日時","名前","移籍元","地名"},' +
+    '"6ヶ月",{"日時","名前","同意"},' +
+    '"レクチャー",{"日時","名前","年齢","メール","希望","予約日","予約時間"},' +
+    '"口コミ",{"日時","氏名","会員番号","メール","来店日","付与"},' +
+    '"入会メール",{"入会日","名前","メール","アンケート","レクチャーメール"},' +
+    '"入会",{"日時","氏名","入会月","区分","メール"},' +
+    '"退会",{"日時","氏名","退会月","区分"},' +
+    '{"日時","種別","名前","連絡先"})';
+}
+
+function masterMonthLinkFormula_(ss, selA1) {
+  var sel = '$' + selA1;
+  var gid = function (name) {
+    return hubSheetGidUrl_(ss, name);
+  };
+  return '=SWITCH(' + sel + ',' +
+    '"学割",HYPERLINK("' + gid('学割') + '","学割シートを開く ↗"),' +
+    '"見学体験",HYPERLINK("' + gid('見学体験申請') + '","見学体験申請を開く ↗"),' +
+    '"紹介",HYPERLINK("' + gid('販促_紹介・ペア入会') + '","紹介シートを開く ↗"),' +
+    '"ラグビー割",HYPERLINK("' + gid('販促_ラグビー割') + '","ラグビー割を開く ↗"),' +
+    '"乗り換え",HYPERLINK("' + gid('販促_乗り換え') + '","乗り換えを開く ↗"),' +
+    '"6ヶ月",HYPERLINK("' + gid('販促_6ヶ月継続') + '","6ヶ月継続を開く ↗"),' +
+    '"レクチャー",HYPERLINK("' + gid('マシンレクチャー申込') + '","レクチャーを開く ↗"),' +
+    '"口コミ",HYPERLINK("' + REVIEW_GRANT_APP_URL_ + '","口コミ付与アプリ"),' +
+    '"入会メール",HYPERLINK("' + gid('入会者一覧＋自動メール管理') + '","入会メールを開く ↗"),' +
+    '"入会",HYPERLINK("' + gid('経堂_入会') + '","入会シートを開く ↗"),' +
+    '"退会",HYPERLINK("' + gid('経堂_退会') + '","退会シートを開く ↗"),' +
+    'HYPERLINK("' + hubBookUrl_(ss.getId()) + '#gid=989823202","トップでシートを探す ↗"))';
+}
+
+function masterMonthTabSelect_(e) {
+  if (!e || !e.range) return;
+  var sh = e.range.getSheet();
+  if (!sh || sh.getName() !== '経堂マスタ') return;
+  if (e.range.getRow() !== 2) return;
+  var start = masterFindRowLabel_(sh, 1, '当月の申請');
+  if (!start) return;
+  var col = e.range.getColumn();
+  var tabs = masterMonthTabs_();
+  if (col < start || col > start + tabs.length) return;
+  var raw = String(e.range.getDisplayValue() || '');
+  var hit = '';
+  var i;
+  for (i = 0; i < tabs.length; i++) {
+    if (raw === tabs[i]) hit = tabs[i];
   }
-  var promoCol = masterFindRowLabel_(sh, 1, '紹介');
-  if (!promoCol) promoCol = masterFindRowLabel_(sh, 1, '今月の追加販促');
-  var kengakuCol = masterFindRowLabel_(sh, 1, '見学体験');
-  var reviewCol = masterFindRowLabel_(sh, 1, '口コミ');
-  var schoolCol = masterFindRowLabel_(sh, 1, '学割');
-  if (schoolCol && schoolCol === wide) schoolCol = 0;
-  if (!schoolCol && promoCol) {
-    var after = promoCol + 2;
-    var next = kengakuCol || reviewCol;
-    if (next && after + 1 === next) {
-      sh.insertColumnsAfter(after, 3);
-      kengakuCol = masterFindRowLabel_(sh, 1, '見学体験');
-      reviewCol = masterFindRowLabel_(sh, 1, '口コミ');
-    }
-    schoolCol = after + 1;
+  if (!hit) return;
+  var sel = sh.getRange(2, start);
+  if (String(sel.getDisplayValue() || '') !== hit) sel.setValue(hit);
+  masterPaintMonthTabs_(sh, start);
+}
+
+function masterPaintMonthTabs_(sh, start) {
+  var t = dnTheme_();
+  var tabs = masterMonthTabs_();
+  var sel = String(sh.getRange(2, start).getDisplayValue() || 'すべて');
+  var hair = SpreadsheetApp.BorderStyle.SOLID;
+  var helperCol = 0;
+  try { helperCol = sh.getRange(masterMonthCellA1_(sh)).getColumn(); } catch (eH) {}
+  var lastChip = start + tabs.length;
+  if (helperCol && lastChip >= helperCol) lastChip = helperCol - 1;
+  var i;
+  for (i = 0; i < tabs.length; i++) {
+    var col = start + 1 + i;
+    if (col > lastChip) break;
+    var cell = sh.getRange(2, col);
+    var on = tabs[i] === sel;
+    cell.setValue(tabs[i]);
+    hubType_(cell)
+      .setFontSize(9)
+      .setFontWeight('bold')
+      .setHorizontalAlignment('center')
+      .setVerticalAlignment('middle')
+      .setWrap(true)
+      .setBackground(on ? t.ink : t.cream)
+      .setFontColor(on ? t.paper : t.ink)
+      .setBorder(true, true, true, true, false, false, t.ash, hair);
   }
-  var ss = sh.getParent();
+}
+
+function setupMasterMonthPanel_(sh) {
+  var kpiEnd = masterFindRowLabel_(sh, 4, '当月学割');
+  if (!kpiEnd) kpiEnd = masterFindRowLabel_(sh, 4, '当月紹介');
+  var start = kpiEnd ? kpiEnd + 2 : 16;
+  var tabs = masterMonthTabs_();
+  var need = Math.max(16, tabs.length + 2);
   var monthA1 = masterMonthCellA1_(sh);
-  if (promoCol) {
-    paintMasterSideCard_(
-      sh, promoCol, 3,
-      '="紹介　"&COUNTA(\'販促_紹介・ペア入会\'!A3:A)&"件"',
-      '=HYPERLINK("' + hubSheetGidUrl_(ss, '販促_紹介・ペア入会') + '","紹介シートを開く ↗")',
-      ['申請日時', '種別', '名前'],
-      masterIntroListFormula_(),
-      [132, 88, 140]
-    );
+  var helperCol = sh.getRange(monthA1).getColumn();
+  if (helperCol > start && helperCol - start < need) {
+    sh.insertColumnsBefore(helperCol, need - (helperCol - start));
+    monthA1 = masterMonthCellA1_(sh);
+    helperCol = sh.getRange(monthA1).getColumn();
   }
-  if (schoolCol) {
-    paintMasterSideCard_(
-      sh, schoolCol, 3,
-      '="学割　"&COUNTA(\'' + SCHOOL_WS_SHEET_ + '\'!A2:A)&"件"',
-      '=HYPERLINK("' + hubSheetGidUrl_(ss, SCHOOL_WS_SHEET_) + '","学割シートを開く ↗")',
-      ['申請日時', '氏名', '学校名'],
-      schoolMasterListFormula_(),
-      [132, 150, 150]
-    );
+  var width = helperCol > start ? helperCol - start : need;
+  var prev = '';
+  try { prev = String(sh.getRange(2, start).getDisplayValue() || ''); } catch (ePrev) {}
+  try { sh.getRange(1, start, 3, width).breakApart(); } catch (e0) {}
+  try { sh.getRange(1, start, sh.getMaxRows(), width).clearDataValidations(); } catch (e1) {}
+  try { sh.getRange(1, start, 3, width).clearContent(); } catch (e2) {}
+  try { sh.getRange(4, start, Math.min(Math.max(sh.getMaxRows() - 3, 1), 400), width).clearContent(); } catch (e3) {}
+  var t = dnTheme_();
+  var medium = SpreadsheetApp.BorderStyle.SOLID_MEDIUM;
+  var selA1 = columnLetter_(start) + '2';
+  var ss = sh.getParent();
+  if (tabs.indexOf(prev) === -1) prev = 'すべて';
+  sh.getRange(1, start, 1, Math.max(width - 1, 1)).merge()
+    .setFormula('="当月の申請　"&TEXT($' + monthA1 + ',"yyyy年m月")&"　"&$' + selA1)
+    .setBackground(t.ink).setFontColor(t.paper).setFontWeight('bold')
+    .setHorizontalAlignment('center').setVerticalAlignment('middle')
+    .setBorder(false, false, true, false, false, false, t.blood, medium);
+  hubType_(sh.getRange(1, start));
+  sh.setRowHeight(1, 30);
+  sh.getRange(1, start + width - 1)
+    .setFormula(masterMonthLinkFormula_(ss, selA1))
+    .setBackground(t.ash).setFontColor(t.paper).setFontWeight('bold')
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
+  hubType_(sh.getRange(1, start + width - 1)).setFontSize(9);
+  sh.getRange(2, start).setValue(prev);
+  var rule = SpreadsheetApp.newDataValidation().requireValueInList(tabs, true).setAllowInvalid(false).build();
+  sh.getRange(2, start).setDataValidation(rule);
+  hubType_(sh.getRange(2, start))
+    .setFontSize(10).setFontWeight('bold')
+    .setBackground(t.ink).setFontColor(t.paper)
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
+  masterPaintMonthTabs_(sh, start);
+  sh.setRowHeight(2, 32);
+  sh.getRange(3, start).setFormula(masterMonthHeaderFormula_(selA1));
+  hubType_(sh.getRange(3, start, 1, width))
+    .setBackground(t.ink).setFontColor(t.paper).setFontWeight('bold')
+    .setHorizontalAlignment('center').setFontSize(9).setWrap(true);
+  sh.setRowHeight(3, 28);
+  sh.getRange(4, start).setFormula(masterMonthQueryFormula_(monthA1, selA1));
+  var body = Math.min(Math.max(sh.getMaxRows() - 3, 1), 400);
+  hubType_(sh.getRange(4, start, body, width))
+    .setBackground(t.paper).setFontColor(t.ink)
+    .setVerticalAlignment('middle');
+  sh.getRange(4, start, body, 1).setNumberFormat('yyyy/mm/dd HH:mm').setHorizontalAlignment('center');
+  var z;
+  for (z = 1; z < Math.min(body, 80); z += 2) {
+    sh.getRange(4 + z, start, 1, width).setBackground('#E6E6E6');
   }
-  if (kengakuCol) {
-    paintMasterSideCard_(
-      sh, kengakuCol, 5,
-      kengakuMasterTitleFormula_(monthA1),
-      '=HYPERLINK("' + hubSheetGidUrl_(ss, '見学体験申請') + '","見学体験申請を開く ↗")',
-      ['申請日時', '区分', '名前', '希望日', '入会'],
-      kengakuMasterListFormula_(),
-      [132, 56, 140, 88, 56]
-    );
+  sh.setColumnWidth(start, 118);
+  var c;
+  for (c = 1; c < width; c++) {
+    sh.setColumnWidth(start + c, c === 1 ? 92 : c === 2 ? 150 : c === width - 1 ? 140 : 108);
   }
-  if (reviewCol) {
-    paintMasterSideCard_(
-      sh, reviewCol, 4,
-      '="口コミ　"&COUNTA(\'口コミ_経堂\'!A3:A)&"件"',
-      '=HYPERLINK("' + REVIEW_GRANT_APP_URL_ + '","口コミ付与アプリ")',
-      ['日時', '氏名', '会員番号', '付与'],
-      masterReviewListFormula_(),
-      [120, 120, 100, 48]
-    );
-  }
-  return { ok: true, schoolCol: schoolCol, promoCol: promoCol, kengakuCol: kengakuCol, reviewCol: reviewCol };
+  return { ok: true, start: start, width: width, monthCell: monthA1, tab: prev };
 }
 
 /** 学校関係者割フォーム（経堂だけ）を Workspace へ。元ブックは読み取りのみ */
@@ -5167,7 +5315,7 @@ function setupMasterSchoolKpi_() {
 }
 
 function stripMasterSideConditionalFormats_(sh) {
-  var reviewCol = masterFindRowLabel_(sh, 1, '口コミ');
+  var reviewCol = masterFindRowLabel_(sh, 1, '当月の申請');
   if (!reviewCol) return;
   var rules = sh.getConditionalFormatRules();
   var kept = [];
@@ -5303,30 +5451,21 @@ function restyleKyodoMasterLook_(sh) {
     sh.getRange('F7').setBackground(t.blood).setFontColor(t.paper);
   } catch (eBrief) {}
   try {
-    var side = [
-      { needle: '紹介', cols: 3 },
-      { needle: '学割', cols: 3 },
-      { needle: '見学体験', cols: 5 },
-      { needle: '口コミ', cols: 4 }
-    ];
-    var sideLast = Math.max(sh.getLastRow(), 24);
-    var s;
-    for (s = 0; s < side.length; s++) {
-      var c = masterFindRowLabel_(sh, 1, side[s].needle);
-      if (!c) continue;
-      var w = side[s].cols;
-      sh.getRange(1, c, 1, w).setBackground(t.ink).setFontColor(t.paper);
-      sh.getRange(2, c, 1, w).setBackground(t.ash).setFontColor(t.paper);
-      sh.getRange(3, c, 1, w).setBackground(t.ink).setFontColor(t.paper);
-      var body = Math.min(Math.max(sideLast - 3, 1), 400);
-      hubType_(sh.getRange(4, c, body, w))
+    var sideStart = masterFindRowLabel_(sh, 1, '当月の申請');
+    if (sideStart) {
+      try { masterPaintMonthTabs_(sh, sideStart); } catch (eTab) {}
+      var helperCol = sh.getRange(masterMonthCellA1_(sh)).getColumn();
+      var sideW = helperCol > sideStart ? helperCol - sideStart : 16;
+      sh.getRange(1, sideStart, 1, Math.max(sideW - 1, 1)).setBackground(t.ink).setFontColor(t.paper);
+      sh.getRange(3, sideStart, 1, sideW).setBackground(t.ink).setFontColor(t.paper);
+      var body = Math.min(Math.max(Math.max(sh.getLastRow(), 24) - 3, 1), 400);
+      hubType_(sh.getRange(4, sideStart, body, sideW))
         .setBackground(t.paper)
         .setFontColor(t.ink)
         .setVerticalAlignment('middle');
       var z;
-      var zebra = Math.min(body, 80);
-      for (z = 1; z < zebra; z += 2) {
-        sh.getRange(4 + z, c, 1, w).setBackground('#E6E6E6');
+      for (z = 1; z < Math.min(body, 80); z += 2) {
+        sh.getRange(4 + z, sideStart, 1, sideW).setBackground('#E6E6E6');
       }
     }
   } catch (eSide) {}

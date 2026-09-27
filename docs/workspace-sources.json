@@ -104,7 +104,7 @@
       "filter": "Col2 = 'JOYFIT24 経堂'",
       "importRange": "A:P",
       "workspaceSheet": "学割",
-      "masterPanel": "経堂マスタ right cards: 紹介 / 学割 / 見学体験 / 口コミ (all rows, newest first). Full A:P lives on sheet 学割.",
+      "masterPanel": "経堂マスタ P+ = 当月の申請. Row 2 chips switch 見学体験/紹介/学割/ラグビー割/乗り換え/6ヶ月/レクチャー/口コミ/入会メール/入会/退会 for the month in B2. Full detail stays on named sheets.",
       "sync": "QUERY(IMPORTRANGE(...))",
       "setupApi": "setupSchoolDiscountImport",
       "shareWith": ["r-kusaka@okamoto-group.co.jp"],
