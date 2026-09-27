@@ -1,6 +1,6 @@
 {
   "updated": "2026-09-27",
-  "purpose": "RYUTA Workspace aggregation hub 窶・shared spreadsheet IDs and sync map for handoff",
+  "purpose": "RYUTA Workspace aggregation hub — shared spreadsheet IDs and sync map for handoff",
   "policy": {
     "sync": "IMPORTRANGE",
     "sharing": "restricted_ok",
@@ -37,58 +37,58 @@
   "sources": [
     {
       "key": "unpaid",
-      "name": "26蟷ｴ蠎ｦ譛ｪ邏咲ｮ｡逅・ラ繝ｩ繧､繝悶千ｵ悟ゅ・,
+      "name": "26年度未納管理ドライブ【経堂】",
       "spreadsheetId": "10vpQRDfTdwx_Wb7JaSm3lZCkTk8msLyf8ggAHhI1shI",
       "url": "https://docs.google.com/spreadsheets/d/10vpQRDfTdwx_Wb7JaSm3lZCkTk8msLyf8ggAHhI1shI/edit",
       "role": "unpaid_billing_source",
-      "sourceSheets": ["25蟷ｴ8譛・... 26蟷ｴ9譛茨ｼ域怦縺斐→縺ｮ繧ｿ繝厄ｼ・],
-      "workspaceSheets": ["譛ｪ邏咲ｮ｡逅・, "譛ｪ邏咲ｮ｡逅・謗ｨ遘ｻ"],
+      "sourceSheets": ["25年8月 ... 26年9月（月ごとのタブ）"],
+      "workspaceSheets": ["未納管理", "未納管理_推移"],
       "sync": "IMPORTRANGE",
       "owner": "other (r-kusaka is editor)",
       "setupApi": "setupUnpaidView"
     },
     {
       "key": "reception",
-      "name": "邨悟ゅ蜿嶺ｻ倡憾豕∬｡ｨ",
+      "name": "経堂　受付状況表",
       "spreadsheetId": "14hxiLBzvGTuIpfZcoVjiHpz8b419OzUrtQAr5788h3w",
       "url": "https://docs.google.com/spreadsheets/d/14hxiLBzvGTuIpfZcoVjiHpz8b419OzUrtQAr5788h3w/edit",
       "role": "daily_ops_kpi_source",
-      "sourceSheets": ["譌･蝣ｱ", "蜈･莨壹・騾莨喟繝・・繧ｿ", "OP髮・ｨ・],
-      "workspaceSheets": ["邨悟ゅ・繧ｹ繧ｿ", "邨悟・蜈･莨・, "邨悟・騾莨・, "邨悟・OP"],
+      "sourceSheets": ["日報", "入会・退会_データ", "OP集計"],
+      "workspaceSheets": ["経堂マスタ", "経堂_入会", "経堂_退会", "経堂_OP"],
       "sync": "IMPORTRANGE",
       "shareWith": ["r-kusaka@okamoto-group.co.jp"],
-      "reAllowCellsHint": ["邨悟ゅ・繧ｹ繧ｿ!AB4", "邨悟・蜈･莨・A1", "邨悟・騾莨・A1", "邨悟・OP!A1"]
+      "reAllowCellsHint": ["経堂マスタ!AB4", "経堂_入会!A1", "経堂_退会!A1", "経堂_OP!A1"]
     },
     {
       "key": "kengaku",
-      "name": "邨悟ゅ隕句ｭｦ繝ｻ菴馴ｨ薙ヵ繧ｩ繝ｼ繝",
+      "name": "経堂　見学・体験フォーム",
       "spreadsheetId": "1RPUw0slNCit9ZwJgINGfv89oc2Hxw8zzAZyMt6g_QuY",
       "url": "https://docs.google.com/spreadsheets/d/1RPUw0slNCit9ZwJgINGfv89oc2Hxw8zzAZyMt6g_QuY/edit",
       "role": "tour_trial_source",
-      "workspaceSheets": ["邨悟ゅ・繧ｹ繧ｿ", "隕句ｭｦ菴馴ｨ鍋筏隲・],
+      "workspaceSheets": ["経堂マスタ", "見学体験申請"],
       "sync": "IMPORTRANGE",
       "shareWith": ["r-kusaka@okamoto-group.co.jp"],
-      "reAllowCellsHint": ["邨悟ゅ・繧ｹ繧ｿ!AB6"]
+      "reAllowCellsHint": ["経堂マスタ!AB6"]
     },
     {
       "key": "promo",
-      "name": "JOYFIT24邨悟りｿｽ蜉雋ｩ菫・,
+      "name": "JOYFIT24経堂追加販促",
       "spreadsheetId": "1w7ExndmZn7t2_z55CvxRDMZy4QAcuEyNhIuj-6sUy3E",
       "url": "https://docs.google.com/spreadsheets/d/1w7ExndmZn7t2_z55CvxRDMZy4QAcuEyNhIuj-6sUy3E/edit",
       "role": "staff_input",
       "sourceSheets": [
-        "荵励ｊ謠帙∴",
-        "邏ｹ莉九・繝壹い蜈･莨・,
-        "蟄ｦ譬｡髢｢菫り・,
-        "繝ｩ繧ｰ繝薙・蜑ｲ",
-        "6繝ｶ譛育ｶ咏ｶ・
+        "乗り換え",
+        "紹介・ペア入会",
+        "学校関係者",
+        "ラグビー割",
+        "6ヶ月継続"
       ],
       "workspaceSheets": [
-        "雋ｩ菫ダ荵励ｊ謠帙∴",
-        "雋ｩ菫ダ邏ｹ莉九・繝壹い蜈･莨・,
-        "雋ｩ菫ダ蟄ｦ譬｡髢｢菫り・,
-        "雋ｩ菫ダ繝ｩ繧ｰ繝薙・蜑ｲ",
-        "雋ｩ菫ダ6繝ｶ譛育ｶ咏ｶ・
+        "販促_乗り換え",
+        "販促_紹介・ペア入会",
+        "販促_学校関係者",
+        "販促_ラグビー割",
+        "販促_6ヶ月継続"
       ],
       "sync": "IMPORTRANGE",
       "setupApi": "setupPromoImport",
@@ -96,33 +96,33 @@
     },
     {
       "key": "review_east",
-      "name": "EAST蜿｣繧ｳ繝溷屓遲碑・,
+      "name": "EAST口コミ回答者",
       "spreadsheetId": "13_E8m3vQa_61hcoMAPb7XZTyVDVtQ9O7rkVDNtHQvRM",
       "url": "https://docs.google.com/spreadsheets/d/13_E8m3vQa_61hcoMAPb7XZTyVDVtQ9O7rkVDNtHQvRM/edit",
       "role": "all_stores_read_only_from_workspace",
-      "sourceSheet": "蝗樒ｭ斐す繝ｼ繝・JOYFIT",
+      "sourceSheet": "回答シート_JOYFIT",
       "filter": "Col2 = 'kyodo'",
-      "workspaceSheet": "蜿｣繧ｳ繝歙邨悟・,
+      "workspaceSheet": "口コミ_経堂",
       "sync": "QUERY(IMPORTRANGE(...))",
       "importRange": "A:W",
       "setupApi": "setupReviewImport",
       "shareWith": ["r-kusaka@okamoto-group.co.jp"],
       "grantAppUrl": "https://script.google.com/a/macros/okamoto-group.co.jp/s/AKfycbwu1eUxJzePa494p-343axfwgUcnHATf-db7FKw806rXZQsHn_ea0uHc6415yw-RZ80/exec",
-      "notes": "Do not edit EAST from Workspace. Point grants via EAST web app write to 蝗樒ｭ斐す繝ｼ繝・JOYFIT."
+      "notes": "Do not edit EAST from Workspace. Point grants via EAST web app write to 回答シート_JOYFIT."
     },
     {
       "key": "machine_lecture",
-      "name": "20蛻・・繧ｷ繝ｳ繝ｬ繧ｯ繝√Ε繝ｼ繝ｻ閾ｪ蜍暮∽ｿ｡繝｡繝ｼ繝ｫ",
+      "name": "20分マシンレクチャー・自動送信メール",
       "spreadsheetId": "1wntzhyPGcz9hW4saswppYmVG-zHINbjAibu9VkCyEQ8",
       "url": "https://docs.google.com/spreadsheets/d/1wntzhyPGcz9hW4saswppYmVG-zHINbjAibu9VkCyEQ8/edit",
       "role": "store_ops",
       "sourceSheets": [
-        "繝槭す繝ｳ繝ｬ繧ｯ繝√Ε繝ｼ逕ｳ霎ｼ",
-        "蜈･莨夊・ｸ隕ｧ・玖・蜍輔Γ繝ｼ繝ｫ邂｡逅・
+        "マシンレクチャー申込",
+        "入会者一覧＋自動メール管理"
       ],
       "workspaceSheets": [
-        "繝槭す繝ｳ繝ｬ繧ｯ繝√Ε繝ｼ逕ｳ霎ｼ",
-        "蜈･莨夊・ｸ隕ｧ・玖・蜍輔Γ繝ｼ繝ｫ邂｡逅・
+        "マシンレクチャー申込",
+        "入会者一覧＋自動メール管理"
       ],
       "sync": "IMPORTRANGE",
       "setupApi": "setupMachineImport",
@@ -131,7 +131,7 @@
     }
   ],
   "workspaceNativeSheets": [
-    "URL荳隕ｧ",
+    "URL一覧",
     "Tasks",
     "WorkspaceSync"
   ]
