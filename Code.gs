@@ -52,7 +52,7 @@ var RECEPTION_REFRESH_TOKEN_ = 'kyodo-ws-refresh-7f3c91';
 function onOpen() {
   var ui = SpreadsheetApp.getUi();
   ui.createMenu('今日の作業')
-    .addItem('トップへ戻る（他シートを隠す）', 'hubCloseWork_')
+    .addItem('しまう', 'hubCloseWork_')
     .addItem('トップを表示', 'hubShowHome_')
     .addToUi();
   ui.createMenu('数値更新')
@@ -61,9 +61,11 @@ function onOpen() {
     .addToUi();
 }
 
-function onEdit(e) {
+function onEdit(e) {}
+
+function onSelectionChange(e) {
   try {
-    handleHubHomeEdit_(e);
+    handleHubHomeSelect_(e);
   } catch (err) {}
 }
 
@@ -1979,7 +1981,7 @@ function handleApiGet_(e) {
   try {
     var api = e && e.parameter ? String(e.parameter.api || '') : '';
     if (api === 'status') {
-      return jsonOutput_({ ok: true, service: 'ryuta-workspace-gas', version: 'v2-hub-multi' });
+      return jsonOutput_({ ok: true, service: 'ryuta-workspace-gas', version: 'v2-hub-tiles' });
     }
     if (api === 'listSheets') {
       return jsonOutput_(listWorkspaceSheets_());
@@ -4235,45 +4237,51 @@ function hubIsWorkSheet_(name) {
 
 var HUB_KEY_BASE_ = 16;
 
-function hubMono_() {
+function hubUi_() {
   return {
-    bg: '#1E1E1E',
-    fg: '#F2F2F2',
-    dim: '#9A9A9A',
-    line: '#3A3A3A',
-    cell: '#2A2A2A',
-    onBg: '#FFFFFF',
-    onFg: '#111111'
+    bg: '#EDEDED',
+    card: '#FFFFFF',
+    ink: '#111111',
+    mute: '#5C5C5C',
+    line: '#111111',
+    onBg: '#111111',
+    onFg: '#FFFFFF',
+    shut: '#8B1216'
   };
 }
 
 function hubCatalog_(ss) {
   var items = [
-    { group: '数字', name: '経堂マスタ', title: 'マスタ', blurb: '当日入会・着地・今日の動き' },
-    { group: '数字', name: '【経堂】会員動向', title: '動向', blurb: '在籍がどう動いているか' },
-    { group: '未納', name: '未納管理', title: '今月', blurb: '未納一覧と回収率' },
-    { group: '未納', name: '未納管理_推移', title: '推移', blurb: '月ごとの回収の流れ' },
-    { group: '現場', name: '見学体験申請', title: '見学', blurb: '申込と入会できたか' },
-    { group: '現場', name: '口コミ_経堂', title: '口コミ', blurb: '経堂の口コミと付与' },
-    { group: '現場', name: 'マシンレクチャー申込', title: 'レクチャー', blurb: '20分レクチャーの申込' },
-    { group: '現場', name: '入会者一覧＋自動メール管理', title: '入会者', blurb: '入会者と自動メール' }
+    { group: '数字', name: '経堂マスタ', title: 'マスタ', blurb: '当日入会・着地' },
+    { group: '数字', name: '【経堂】会員動向', title: '動向', blurb: '在籍の動き' },
+    { group: '未納', name: '未納管理', title: '今月', blurb: '一覧と回収率' },
+    { group: '未納', name: '未納管理_推移', title: '推移', blurb: '月ごとの回収' },
+    { group: '現場', name: '見学体験申請', title: '見学', blurb: '申込と入会' },
+    { group: '現場', name: '口コミ_経堂', title: '口コミ', blurb: '経堂の口コミ' },
+    { group: '現場', name: 'マシンレクチャー申込', title: 'レクチャー', blurb: '20分申込' },
+    { group: '現場', name: '入会者一覧＋自動メール管理', title: '入会者', blurb: 'メール管理' }
   ];
   var sheets = ss.getSheets();
   var i;
   for (i = 0; i < sheets.length; i++) {
     var n = sheets[i].getName();
     if (/^販促_/.test(n) && n.indexOf('backup') === -1) {
-      items.push({
-        group: '販促',
-        name: n,
-        title: n.replace(/^販促_/, ''),
-        blurb: '販促の入力内容'
-      });
+      var title = n.replace(/^販促_/, '');
+      items.push({ group: '販促', name: n, title: title, blurb: hubPromoBlurb_(title) });
     }
   }
   return items.filter(function (it) {
     return !!ss.getSheetByName(it.name);
   });
+}
+
+function hubPromoBlurb_(title) {
+  if (/乗換/.test(title)) return '他社からの乗換';
+  if (/紹介|ペア/.test(title)) return '紹介・ペア';
+  if (/学校/.test(title)) return '学校関係者';
+  if (/ラグビー/.test(title)) return 'ラグビー割';
+  if (/6ヶ月|6カ月/.test(title)) return '6ヶ月継続';
+  return '販促';
 }
 
 function hubSourceLinks_() {
@@ -4286,14 +4294,11 @@ function hubSourceLinks_() {
   ];
 }
 
-function hubPaintCard_(home, row, col, on) {
-  var m = hubMono_();
-  home.getRange(row, col, 1, 2)
-    .setBackground(on ? m.onBg : m.cell)
-    .setFontColor(on ? m.onFg : m.fg);
-  home.getRange(row + 1, col, 1, 2)
-    .setBackground(on ? m.onBg : m.cell)
-    .setFontColor(on ? m.onFg : m.dim);
+function hubPaintTile_(home, row, col, on) {
+  var u = hubUi_();
+  home.getRange(row, col)
+    .setBackground(on ? u.onBg : u.card)
+    .setFontColor(on ? u.onFg : u.ink);
 }
 
 function hubApplyFocus_(ss, sheetName) {
@@ -4321,36 +4326,23 @@ function hubCloseWork_() {
     }
   }
   if (home) {
-    hubClearChecks_(home);
+    hubResetTiles_(home);
     ss.setActiveSheet(home);
   }
   return { ok: true, open: HUB_HOME_SHEET_ };
 }
 
-function hubClearChecks_(home) {
-  var last = Math.max(home.getLastRow(), 8);
-  var keys = home.getRange(1, HUB_KEY_BASE_ + 1, last, 10).getDisplayValues();
+function hubResetTiles_(home) {
+  var last = Math.max(home.getLastRow(), 4);
+  var keys = home.getRange(1, HUB_KEY_BASE_ + 1, last, 8).getDisplayValues();
   var r;
   var c;
-  var i;
-  var checks = [];
-  var paints = [];
   for (r = 0; r < keys.length; r++) {
     for (c = 0; c < keys[r].length; c++) {
-      var key = String(keys[r][c] || '');
-      var col = c + 1;
-      var row = r + 1;
-      if (key === 'CLOSE' || key.indexOf('SHEET:') === 0) {
-        checks.push({ row: row, col: col });
+      if (String(keys[r][c] || '').indexOf('SHEET:') === 0) {
+        hubPaintTile_(home, r + 1, c + 1, false);
       }
-      if (key.indexOf('SHEET:') === 0) paints.push({ row: row, col: col });
     }
-  }
-  for (i = 0; i < checks.length; i++) {
-    home.getRange(checks[i].row, checks[i].col).setValue(false);
-  }
-  for (i = 0; i < paints.length; i++) {
-    hubPaintCard_(home, paints[i].row, paints[i].col, false);
   }
 }
 
@@ -4360,7 +4352,6 @@ function hubShowHome_() {
   if (!home) return setupHubHome_();
   try { home.showSheet(); } catch (e0) {}
   ss.setActiveSheet(home);
-  hubRefreshStatus_(home, ss);
   return { ok: true, open: HUB_HOME_SHEET_ };
 }
 
@@ -4373,63 +4364,51 @@ function hubOpenNamed_(name) {
 }
 
 function hubRefreshStatus_(home, ss) {
-  var m = hubMono_();
-  var last = Math.max(home.getLastRow(), 8);
-  var maxC = 10;
-  var keys = home.getRange(1, HUB_KEY_BASE_ + 1, last, maxC).getDisplayValues();
+  var last = Math.max(home.getLastRow(), 4);
+  var keys = home.getRange(1, HUB_KEY_BASE_ + 1, last, 8).getDisplayValues();
   var r;
   var c;
   for (r = 0; r < keys.length; r++) {
     for (c = 0; c < keys[r].length; c++) {
       var key = String(keys[r][c] || '');
       if (key.indexOf('SHEET:') !== 0) continue;
-      var col = c + 1;
-      var row = r + 1;
       var target = ss.getSheetByName(key.slice(6));
-      var on = target && !target.isSheetHidden();
-      home.getRange(row, col, 1, 2)
-        .setBackground(on ? m.onBg : m.cell)
-        .setFontColor(on ? m.onFg : m.fg);
-      home.getRange(row + 1, col, 1, 2)
-        .setBackground(on ? m.onBg : m.cell)
-        .setFontColor(on ? m.onFg : m.dim);
+      hubPaintTile_(home, r + 1, c + 1, !!(target && !target.isSheetHidden()));
     }
   }
 }
 
-function handleHubHomeEdit_(e) {
+function handleHubHomeSelect_(e) {
   if (!e || !e.range) return;
+  if (e.range.getNumRows() !== 1 || e.range.getNumColumns() !== 1) return;
   var sh = e.range.getSheet();
   if (sh.getName() !== HUB_HOME_SHEET_) return;
-  var col = e.range.getColumn();
-  if (col >= HUB_KEY_BASE_) return;
   var row = e.range.getRow();
-  var key = String(sh.getRange(row, HUB_KEY_BASE_ + col).getDisplayValue() || '');
+  var col = e.range.getColumn();
+  var key = String(sh.getRange(row, HUB_KEY_BASE_ + col).getValue() || '');
   if (!key) return;
-  var on = e.range.getValue() === true || e.range.getValue() === 'TRUE';
-  var ss = sh.getParent();
   if (key === 'CLOSE') {
-    if (!on) return;
     hubCloseWork_();
     return;
   }
   if (key.indexOf('SHEET:') !== 0) return;
   var name = key.slice(6);
+  var ss = sh.getParent();
   var target = ss.getSheetByName(name);
   if (!target) return;
-  if (on) {
+  var opening = target.isSheetHidden();
+  if (opening) {
     try { target.showSheet(); } catch (e1) {}
-    hubPaintCard_(sh, row, col, true);
-  } else if (hubIsWorkSheet_(name) && !target.isSheetHidden()) {
+  } else if (hubIsWorkSheet_(name)) {
     try { target.hideSheet(); } catch (e2) {}
-    hubPaintCard_(sh, row, col, false);
   }
+  hubPaintTile_(sh, row, col, opening);
 }
 
+function handleHubHomeEdit_(e) {}
+
 function restyleHubHomeLook_(sh) {
-  var m = hubMono_();
-  sh.setTabColor('#333333');
-  sh.getRange(1, 1, 2, 9).setBackground(m.bg).setFontColor(m.fg).setFontFamily('Noto Sans JP');
+  sh.setTabColor('#111111');
 }
 
 function setupHubHome_() {
@@ -4438,14 +4417,20 @@ function setupHubHome_() {
     var sh = ss.getSheetByName(HUB_HOME_SHEET_);
     if (!sh) sh = ss.insertSheet(HUB_HOME_SHEET_, 0);
     sh.showSheet();
-    try { sh.getRange(1, 1, Math.max(sh.getMaxRows(), 1), Math.max(sh.getMaxColumns(), 1)).breakApart(); } catch (eBr) {}
-    sh.clear();
+    var maxR = Math.max(sh.getMaxRows(), 40);
+    var maxC = Math.max(sh.getMaxColumns(), 40);
+    try { sh.getRange(1, 1, maxR, maxC).breakApart(); } catch (eBr) {}
+    try { sh.getRange(1, 1, maxR, maxC).clearDataValidations(); } catch (eVal) {}
     try { sh.clearConditionalFormatRules(); } catch (e0) {}
-    try { sh.getDataRange().clearDataValidations(); } catch (e1) {}
+    sh.clear();
     ss.setActiveSheet(sh);
     ss.moveActiveSheet(1);
+    if (sh.getMaxColumns() < 40) sh.insertColumnsAfter(sh.getMaxColumns(), 40 - sh.getMaxColumns());
+    maxR = sh.getMaxRows();
+    maxC = sh.getMaxColumns();
+    try { sh.getRange(1, 1, maxR, maxC).clearDataValidations(); } catch (eVal2) {}
 
-    var m = hubMono_();
+    var u = hubUi_();
     var items = hubCatalog_(ss);
     var links = hubSourceLinks_();
     var groups = [];
@@ -4459,97 +4444,85 @@ function setupHubHome_() {
       seen[items[i].group].push(items[i]);
     }
 
-    var maxCols = 12;
-    if (sh.getMaxColumns() < 40) sh.insertColumnsAfter(sh.getMaxColumns(), 40 - sh.getMaxColumns());
-    sh.getRange(1, 1, 40, 40)
-      .setBackground(m.bg)
-      .setFontColor(m.fg)
+    sh.getRange(1, 1, 40, 12)
+      .setBackground(u.bg)
+      .setFontColor(u.ink)
       .setFontFamily('Noto Sans JP')
       .setVerticalAlignment('middle')
-      .setBorder(false, false, false, false, false, false);
+      .setBorder(false, false, false, false, false, false)
+      .setFontWeight('normal')
+      .setWrap(false);
 
-    sh.getRange(1, 1).setValue('経堂').setFontSize(14).setFontWeight('bold').setFontColor(m.fg);
-    sh.getRange(1, 2, 1, 7).merge().setValue('☑で開く。外すと、そのシートだけしまう')
-      .setFontSize(11).setFontColor(m.dim);
-    var cb = SpreadsheetApp.newDataValidation().requireCheckbox().setAllowInvalid(false).build();
-    sh.getRange(2, 1).setDataValidation(cb).setValue(false).setHorizontalAlignment('center');
-    sh.getRange(2, HUB_KEY_BASE_ + 1).setValue('CLOSE');
-    sh.getRange(2, 2, 1, 7).merge().setValue('閉じる')
-      .setFontSize(13).setFontWeight('bold').setFontColor(m.fg);
-    sh.setRowHeight(1, 28);
-    sh.setRowHeight(2, 36);
-    sh.setRowHeight(3, 12);
+    sh.getRange(1, 1).setValue('経堂').setFontSize(18).setFontWeight('bold');
+    sh.getRange(1, 2).setValue('カードを押して開く').setFontSize(11).setFontColor(u.mute);
+    sh.getRange(1, 5).setValue('しまう').setFontSize(12).setFontWeight('bold')
+      .setBackground(u.shut).setFontColor('#FFFFFF').setHorizontalAlignment('center');
+    sh.getRange(1, HUB_KEY_BASE_ + 5).setValue('CLOSE');
+    sh.setRowHeight(1, 40);
+    sh.setRowHeight(2, 10);
 
-    var row = 4;
+    var row = 3;
     var g;
+    var solid = SpreadsheetApp.BorderStyle.SOLID;
     for (g = 0; g < groups.length; g++) {
       var group = groups[g];
       var list = seen[group];
-      var blockRows = Math.ceil(list.length / 4) * 2;
-      sh.getRange(row, 1, blockRows, 1).merge()
+      var bandRows = Math.ceil(list.length / 4);
+      sh.getRange(row, 1, bandRows, 1).merge()
         .setValue(group)
         .setFontSize(12)
         .setFontWeight('bold')
-        .setWrap(true)
-        .setBackground(m.cell)
-        .setFontColor(m.fg)
-        .setHorizontalAlignment('center');
-      sh.getRange(row, 1, 1, 9)
-        .setBorder(true, true, false, true, false, false, m.line, SpreadsheetApp.BorderStyle.SOLID);
-      sh.getRange(row + blockRows - 1, 1, 1, 9)
-        .setBorder(false, true, true, true, false, false, m.line, SpreadsheetApp.BorderStyle.SOLID);
-
+        .setHorizontalAlignment('center')
+        .setBackground(u.card)
+        .setBorder(true, true, true, true, false, false, u.line, solid);
       var p;
       for (p = 0; p < list.length; p++) {
         var localRow = Math.floor(p / 4);
         var localCol = p % 4;
-        var titleRow = row + localRow * 2;
-        var blurbRow = titleRow + 1;
-        var col = 2 + localCol * 2;
+        var r0 = row + localRow;
+        var col = 2 + localCol;
         var it = list[p];
-        sh.getRange(titleRow, col).setDataValidation(cb).setValue(false).setHorizontalAlignment('center')
-          .setBackground(m.cell);
-        sh.getRange(titleRow, HUB_KEY_BASE_ + col).setValue('SHEET:' + it.name);
-        sh.getRange(titleRow, col + 1).setValue(it.title).setFontSize(14).setFontWeight('bold')
-          .setBackground(m.cell).setFontColor(m.fg);
-        sh.getRange(blurbRow, col, 1, 2).merge().setValue(it.blurb)
-          .setFontSize(9).setFontColor(m.dim).setWrap(true).setBackground(m.cell)
-          .setVerticalAlignment('top');
-        sh.getRange(titleRow, col, 1, 2)
-          .setBorder(true, true, false, true, false, false, m.line, SpreadsheetApp.BorderStyle.SOLID);
-        sh.getRange(blurbRow, col, 1, 2)
-          .setBorder(false, true, true, true, false, false, m.line, SpreadsheetApp.BorderStyle.SOLID);
-        sh.setRowHeight(titleRow, 34);
-        sh.setRowHeight(blurbRow, 36);
+        sh.getRange(r0, col)
+          .setValue(it.title + '\n' + it.blurb)
+          .setFontSize(12)
+          .setFontWeight('bold')
+          .setWrap(true)
+          .setBackground(u.card)
+          .setFontColor(u.ink)
+          .setHorizontalAlignment('left')
+          .setVerticalAlignment('middle')
+          .setBorder(true, true, true, true, false, false, u.line, solid);
+        sh.getRange(r0, HUB_KEY_BASE_ + col).setValue('SHEET:' + it.name);
+        sh.setRowHeight(r0, 58);
       }
-      row += blockRows + 1;
+      row += bandRows + 1;
     }
 
-    sh.getRange(1, 10).setValue('リンク').setFontSize(11).setFontWeight('bold').setFontColor(m.fg)
-      .setBackground(m.cell);
+    sh.getRange(3, 7).setValue('リンク').setFontSize(11).setFontWeight('bold')
+      .setBackground(u.card).setHorizontalAlignment('center')
+      .setBorder(true, true, true, true, false, false, u.line, solid);
     var c;
     for (c = 0; c < links.length; c++) {
-      sh.getRange(2 + c, 10).setFormula(
-        '=HYPERLINK("' + String(links[c].url).replace(/"/g, '""') + '","' + links[c].title + '")'
-      ).setFontColor(m.fg).setFontSize(11).setBackground(m.cell);
+      sh.getRange(4 + c, 7)
+        .setFormula('=HYPERLINK("' + String(links[c].url).replace(/"/g, '""') + '","' + links[c].title + '")')
+        .setFontColor(u.ink)
+        .setFontSize(11)
+        .setBackground(u.card)
+        .setBorder(true, true, true, true, false, false, u.line, solid);
       sh.setRowHeight(2 + c, 28);
     }
 
     sh.setHiddenGridlines(true);
-    sh.setFrozenRows(2);
-    sh.setColumnWidth(1, 72);
-    var w;
-    for (w = 2; w <= 9; w++) {
-      sh.setColumnWidth(w, w % 2 === 0 ? 34 : 120);
-    }
-    sh.setColumnWidth(10, 92);
-    try { sh.hideColumns(HUB_KEY_BASE_, 20); } catch (eHide) {}
-    try {
-      if (sh.getMaxColumns() > 16) sh.hideColumns(11, 5);
-    } catch (eCols) {}
+    sh.setFrozenRows(1);
+    sh.setColumnWidth(1, 64);
+    for (i = 2; i <= 5; i++) sh.setColumnWidth(i, 168);
+    sh.setColumnWidth(6, 16);
+    sh.setColumnWidth(7, 100);
+    try { sh.hideColumns(8, 8); } catch (eH1) {}
+    try { sh.hideColumns(HUB_KEY_BASE_, 20); } catch (eH2) {}
 
     restyleHubHomeLook_(sh);
-    hubApplyFocus_(ss, '');
+    hubCloseWork_();
     applyHubTabColors_(ss);
     return {
       ok: true,
