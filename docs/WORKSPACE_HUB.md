@@ -79,7 +79,7 @@ https://script.google.com/macros/s/AKfycbzMELimQThNdPUShwo2_KBzJd8kGy9BNdRyOYNgu
 | `未納管理` | 26年度未納管理ドライブ【経堂】（`10vpQRDf…`）の月タブ | B1 で年月（25年8月〜27年12月）を選ぶと A5 の `IMPORTRANGE("'"&B1&"'!A1:AK")` がその月のタブを表示（☑/☐・¥表示）。会員名の右に 入会日・入会区分・未納開始・入会→未納 を差し込み（`経堂_入会` を氏名照合、未納開始月末までの最新入会。2ヶ月以内は赤）。D1:M3 は選択月の集計（支払額ベース。回収は回収金額、空なら右隣3列の「〇〇入金」で支払額を回収扱い）。元ファイルは触らない。API `setupUnpaidView` |
 | `未納管理_推移` | 同上の全月タブ | 1行＝1ヶ月の集計（件数・未納総額・回収額・回収率・カテゴリ別回収率）。数値のまま。`setupUnpaidView` で一緒に作成 |
 | `入会者一覧＋自動メール管理` | 同名 | `IMPORTRANGE`（アンケート等はチェック風表示） |
-| `トップ` | 作業の入口。タイルはシート名そのままで、クリックするとそのシートへ移動。閉じるときはタブを右クリック→非表示 | 値＋`onSelectionChange` |
+| `トップ` | 作業の目次。シート名のリンクを押すとそのシートへ移動（スクリプトで開閉しない）。閉じるときはタブを右クリック→非表示 | 値＋HYPERLINK |
 | `URL一覧` | リンク索引（先頭に口コミ付与アプリ） | 値 |
 | `Tasks` / `WorkspaceSync` | 本 GAS 用 | 自動作成 |
 
@@ -112,7 +112,7 @@ https://script.google.com/macros/s/AKfycbzMELimQThNdPUShwo2_KBzJd8kGy9BNdRyOYNgu
 | `formatJoinList` | 入会者一覧：枠線削除＋チェック列を下まで適用（IMPORTRANGE維持） |
 | `setupUnpaidView` | `未納管理`（ダッシュボード＋月表示＋入会照合4列）と `未納管理_推移` を再作成。B1 の選択月は保持。IMPORTRANGE 許可もスクリプトで付与 |
 | `restyleHubLook` | 経堂マスタ・未納・ミラー・URL一覧の見た目とタブ色だけ再適用。値・数式は書き換えない |
-| `setupHubHome` | `トップ` を作り直す。タイルはシート名。クリックでそのシートへ移動 |
+| `setupHubHome` | `トップ` をシート名リンクの目次にする。開閉スクリプトは使わない |
 | `hubOpen&name=` | 指定シートだけ表示して開く |
 | `hubClose` | トップ以外を隠す |
 | `setupKengakuJoinLive&mode=` | 見学体験申請の入会判定（`joinDate`=K列入会日／`joinLabel`=J列／`emailJoin`=経堂_入会・退会の列拡張／`leaveList`=経堂マスタ D9 今日の退会者） |

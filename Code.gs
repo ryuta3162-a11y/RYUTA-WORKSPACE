@@ -59,7 +59,6 @@ function onOpen() {
     .addItem('受付状況表の数値を更新（入会・退会・OP）', 'refreshReceptionNumbersFromMenu')
     .addItem('前回の更新時刻を確認', 'showReceptionRefreshStatus')
     .addToUi();
-  try { maybeApplyFourColorOnce_(); } catch (eScan) {}
 }
 
 function onEdit(e) {
@@ -74,12 +73,7 @@ function onEdit(e) {
   } catch (err) {}
 }
 
-function onSelectionChange(e) {
-  try {
-    handleHubHomeSelect_(e);
-  } catch (err) {}
-  try { maybeApplyFourColorOnce_(); } catch (eScan) {}
-}
+function onSelectionChange(e) {}
 
 function callReceptionRefreshApi_(api) {
   var res = UrlFetchApp.fetch(
@@ -1993,7 +1987,7 @@ function handleApiGet_(e) {
   try {
     var api = e && e.parameter ? String(e.parameter.api || '') : '';
     if (api === 'status') {
-      return jsonOutput_({ ok: true, service: 'ryuta-workspace-gas', version: 'v2-hub-field' });
+      return jsonOutput_({ ok: true, service: 'ryuta-workspace-gas', version: 'v2-hub-links' });
     }
     if (api === 'listSheets') {
       return jsonOutput_(listWorkspaceSheets_());
@@ -4527,8 +4521,10 @@ function setupHubHome_() {
       for (p = 0; p < list.length; p++) {
         var col = 2 + p;
         var it = list[p];
+        var target = ss.getSheetByName(it.name);
+        if (!target) continue;
         sh.getRange(row, col)
-          .setValue(it.name)
+          .setFormula('=HYPERLINK("#gid=' + target.getSheetId() + '","' + String(it.name).replace(/"/g, '""') + '")')
           .setFontSize(10)
           .setFontWeight('bold')
           .setWrap(true)
@@ -4537,7 +4533,6 @@ function setupHubHome_() {
           .setHorizontalAlignment('center')
           .setVerticalAlignment('middle')
           .setBorder(true, true, true, true, false, false, u.line, solid);
-        hubWriteKey_(sh, row, col, 'SHEET:' + it.name);
       }
       sh.setRowHeight(row, 64);
       row += 1;
@@ -4710,10 +4705,7 @@ function restyleHubLook_() {
     var urlSh = ss.getSheetByName('URL一覧');
     if (urlSh) restyleUrlIndexLook_(urlSh);
     var home = ss.getSheetByName(HUB_HOME_SHEET_);
-    if (home) {
-      restyleHubHomeLook_(home);
-      hubRefreshStatus_(home, ss);
-    }
+    if (home) restyleHubHomeLook_(home);
     var sheets = ss.getSheets();
     var i;
     for (i = 0; i < sheets.length; i++) {
@@ -5010,7 +5002,7 @@ function applyFourColorFromMenu() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var r = applyFourColorLook_();
   try { PropertiesService.getDocumentProperties().setProperty(FOUR_COLOR_PROP_, '1'); } catch (eP) {}
-  ss.toast('シート名で開きます。タブを右クリックで非表示にできます', 'トップ', 8);
+  ss.toast('トップはリンクの目次です。セルを選んでもスクリプトは動きません', 'トップ', 8);
   return r;
 }
 
