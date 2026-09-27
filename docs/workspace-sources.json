@@ -108,7 +108,7 @@
       "sync": "QUERY(IMPORTRANGE(...))",
       "setupApi": "setupSchoolDiscountImport",
       "shareWith": ["r-kusaka@okamoto-group.co.jp"],
-      "notes": "Do not edit the form response book. IMPORTRANGE is read-only; no share-change on the source. 今月の追加販促 stacks 学校関係者割 + 氏名."
+      "notes": "Do not edit the form response book. IMPORTRANGE is read-only. QUERY of A:P with Col2 = JOYFIT24 経堂 has no row cap; new form answers appear automatically. 今月の追加販促 stacks 学校関係者割 + 氏名."
     },
     {
       "key": "review_east",

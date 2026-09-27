@@ -350,6 +350,8 @@ var SCHOOL_FORM_SOURCE_ID_ = '1mmG_xM1WoWFKgpmOl5obsKXo_0GjWLnAnLY9hTGanVg';
 var SCHOOL_FORM_SHEET_ = 'フォームの回答 1';
 var SCHOOL_FORM_COLS_ = 16;
 var SCHOOL_WS_SHEET_ = '販促_学校関係者';
+/** 件数上限ではない。フォームが増えた分を QUERY が全部こぼせる行数 */
+var SCHOOL_MIN_ROWS_ = 3000;
 
 function setupPromoImport_() {
   try {
@@ -4855,6 +4857,9 @@ function setupSchoolDiscountSheet_(ss) {
   if (sh.getMaxColumns() < SCHOOL_FORM_COLS_) {
     sh.insertColumnsAfter(sh.getMaxColumns(), SCHOOL_FORM_COLS_ - sh.getMaxColumns());
   }
+  if (sh.getMaxRows() < SCHOOL_MIN_ROWS_) {
+    sh.insertRowsAfter(sh.getMaxRows(), SCHOOL_MIN_ROWS_ - sh.getMaxRows());
+  }
   sh.setHiddenGridlines(true);
   sh.setFrozenRows(1);
   sh.setTabColor(hubTabColorFor_(SCHOOL_WS_SHEET_));
@@ -4864,7 +4869,7 @@ function setupSchoolDiscountSheet_(ss) {
     .setBackground(t.ink).setFontColor(t.paper).setFontWeight('bold')
     .setHorizontalAlignment('center').setVerticalAlignment('middle')
     .setBorder(false, false, true, false, false, false, t.blood, medium);
-  var bodyRows = Math.min(Math.max(sh.getMaxRows() - 1, 1), 800);
+  var bodyRows = Math.max(sh.getMaxRows() - 1, 1);
   hubType_(sh.getRange(2, 1, bodyRows, SCHOOL_FORM_COLS_))
     .setBackground(t.paper).setFontColor(t.ink)
     .setHorizontalAlignment('center').setVerticalAlignment('middle');
@@ -4914,10 +4919,13 @@ function setupMasterSchoolPanel_(sh) {
     .setHorizontalAlignment('center').setWrap(true);
   hubType_(sh.getRange(3, schoolCol, 1, w));
   sh.setRowHeight(3, 36);
+  if (sh.getMaxRows() < SCHOOL_MIN_ROWS_) {
+    sh.insertRowsAfter(sh.getMaxRows(), SCHOOL_MIN_ROWS_ - sh.getMaxRows());
+  }
   sh.getRange(4, schoolCol).setFormula(
     '=IFERROR(QUERY(\'' + SCHOOL_WS_SHEET_ + '\'!A2:P,"select *",0),"")'
   );
-  var bodyRows = Math.min(Math.max(sh.getMaxRows() - 3, 1), 400);
+  var bodyRows = Math.max(sh.getMaxRows() - 3, 1);
   hubType_(sh.getRange(4, schoolCol, bodyRows, w))
     .setBackground(t.paper).setFontColor(t.ink)
     .setHorizontalAlignment('center').setVerticalAlignment('middle');
@@ -4958,7 +4966,7 @@ function setupSchoolDiscountImport_() {
       destSheet: SCHOOL_WS_SHEET_,
       permit: permit,
       panel: panel,
-      note: '元のフォーム回答ブックは未変更。B列が JOYFIT24 経堂 の行だけ。'
+      note: '元のフォーム回答ブックは未変更。B列が JOYFIT24 経堂 の行は件数制限なしで全部（今後の追加分も含む）。'
     };
   } catch (err) {
     return { ok: false, message: String(err && err.message ? err.message : err) };
