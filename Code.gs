@@ -1981,7 +1981,7 @@ function handleApiGet_(e) {
   try {
     var api = e && e.parameter ? String(e.parameter.api || '') : '';
     if (api === 'status') {
-      return jsonOutput_({ ok: true, service: 'ryuta-workspace-gas', version: 'v2-hub-urls' });
+      return jsonOutput_({ ok: true, service: 'ryuta-workspace-gas', version: 'v2-hub-hide-keys' });
     }
     if (api === 'listSheets') {
       return jsonOutput_(listWorkspaceSheets_());
@@ -4235,7 +4235,35 @@ function hubIsWorkSheet_(name) {
   return !!name && name !== HUB_HOME_SHEET_ && !hubIsAlwaysHidden_(name);
 }
 
-var HUB_KEY_BASE_ = 16;
+var HUB_KEY_BASE_ = 50;
+var HUB_KEY_SPAN_ = 8;
+
+function hubEnsureKeyCols_(sh) {
+  var need = HUB_KEY_BASE_ + HUB_KEY_SPAN_ + 2;
+  if (sh.getMaxColumns() < need) {
+    sh.insertColumnsAfter(sh.getMaxColumns(), need - sh.getMaxColumns());
+  }
+}
+
+function hubHideInternalCols_(sh) {
+  hubEnsureKeyCols_(sh);
+  try { sh.showColumns(1, 8); } catch (eShow) {}
+  var start = 9;
+  var n = sh.getMaxColumns() - start + 1;
+  if (n > 0) {
+    try { sh.hideColumns(start, n); } catch (eHide) {}
+  }
+}
+
+function hubWriteKey_(sh, row, col, value) {
+  sh.getRange(row, HUB_KEY_BASE_ + col)
+    .setValue(value)
+    .setFontColor('#FFFFFF')
+    .setBackground('#FFFFFF')
+    .setFontSize(1)
+    .setFontWeight('normal')
+    .setHorizontalAlignment('left');
+}
 
 function hubUi_() {
   return {
@@ -4419,17 +4447,15 @@ function setupHubHome_() {
     var sh = ss.getSheetByName(HUB_HOME_SHEET_);
     if (!sh) sh = ss.insertSheet(HUB_HOME_SHEET_, 0);
     sh.showSheet();
-    var maxR = Math.max(sh.getMaxRows(), 40);
-    var maxC = Math.max(sh.getMaxColumns(), 40);
+    hubEnsureKeyCols_(sh);
+    var maxR = sh.getMaxRows();
+    var maxC = sh.getMaxColumns();
     try { sh.getRange(1, 1, maxR, maxC).breakApart(); } catch (eBr) {}
     try { sh.getRange(1, 1, maxR, maxC).clearDataValidations(); } catch (eVal) {}
     try { sh.clearConditionalFormatRules(); } catch (e0) {}
     sh.clear();
     ss.setActiveSheet(sh);
     ss.moveActiveSheet(1);
-    if (sh.getMaxColumns() < 40) sh.insertColumnsAfter(sh.getMaxColumns(), 40 - sh.getMaxColumns());
-    maxR = sh.getMaxRows();
-    maxC = sh.getMaxColumns();
     try { sh.getRange(1, 1, maxR, maxC).clearDataValidations(); } catch (eVal2) {}
 
     var u = hubUi_();
@@ -4459,7 +4485,7 @@ function setupHubHome_() {
     sh.getRange(1, 1).setValue('経堂').setFontSize(16).setFontWeight('bold').setFontColor(u.ink);
     sh.getRange(1, 6).setValue('しまう').setFontSize(12).setFontWeight('bold')
       .setBackground(u.shut).setFontColor('#FFFFFF');
-    sh.getRange(1, HUB_KEY_BASE_ + 6).setValue('CLOSE');
+    hubWriteKey_(sh, 1, 6, 'CLOSE');
     sh.setRowHeight(1, 36);
 
     var row = 2;
@@ -4490,7 +4516,7 @@ function setupHubHome_() {
           .setHorizontalAlignment('center')
           .setVerticalAlignment('middle')
           .setBorder(true, true, true, true, false, false, u.line, solid);
-        sh.getRange(row, HUB_KEY_BASE_ + col).setValue('SHEET:' + it.name);
+        hubWriteKey_(sh, row, col, 'SHEET:' + it.name);
       }
       sh.setRowHeight(row, 44);
       row += 1;
@@ -4528,12 +4554,11 @@ function setupHubHome_() {
     for (i = 2; i <= 6; i++) sh.setColumnWidth(i, 118);
     sh.setColumnWidth(7, 28);
     sh.setColumnWidth(8, 280);
-    try { sh.showColumns(7, 2); } catch (eShow) {}
-    try { sh.hideColumns(9, 7); } catch (eH1) {}
-    try { sh.hideColumns(HUB_KEY_BASE_, 20); } catch (eH2) {}
+    hubHideInternalCols_(sh);
 
     restyleHubHomeLook_(sh);
     hubCloseWork_();
+    hubHideInternalCols_(sh);
     applyHubTabColors_(ss);
     return {
       ok: true,
