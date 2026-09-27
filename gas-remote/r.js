@@ -1,4 +1,4 @@
-﻿/**
+/**
  * RYUTA Workspace — サーバ側
  * スプレッドシートIDは 1 本にまとめる想定（日報ブックに WorkspaceSync シートを追加する形を推奨）
  */
@@ -42,6 +42,72 @@ function doGet(e) {
 
 function doPost(e) {
   return handleApiPost_(e);
+}
+
+/** 受付状況表（nippo）の Web API。更新本体は受付状況表側のトリガーで非同期実行される */
+var RECEPTION_REFRESH_URL_ =
+  'https://script.google.com/macros/s/AKfycbyQzrG0awDLjYqoBELKF78nphmcycUJRdEQRNq2i3SCjYulMIIgB5dspSnYRF-jfslK/exec';
+var RECEPTION_REFRESH_TOKEN_ = 'kyodo-ws-refresh-7f3c91';
+
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu('数値更新')
+    .addItem('受付状況表の数値を更新（入会・退会・OP）', 'refreshReceptionNumbersFromMenu')
+    .addItem('前回の更新時刻を確認', 'showReceptionRefreshStatus')
+    .addToUi();
+}
+
+function callReceptionRefreshApi_(api) {
+  var res = UrlFetchApp.fetch(
+    RECEPTION_REFRESH_URL_ + '?api=' + api + '&token=' + encodeURIComponent(RECEPTION_REFRESH_TOKEN_),
+    { muteHttpExceptions: true, followRedirects: true }
+  );
+  try {
+    return JSON.parse(res.getContentText());
+  } catch (e) {
+    return { ok: false, message: 'HTTP ' + res.getResponseCode() };
+  }
+}
+
+function refreshReceptionNumbersFromMenu() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var before = callReceptionRefreshApi_('refreshStatus');
+  var beforeAt = (before && before.lastRefreshed) || '';
+  var r = callReceptionRefreshApi_('refreshNumbers');
+  if (!r || !r.ok) {
+    ss.toast((r && r.message) || '更新を開始できませんでした', '数値更新', 10);
+    return r;
+  }
+  ss.toast('更新中です…（1〜2分）完了したらお知らせします', '数値更新', 150);
+
+  // メニュー実行は最大6分。5分まで完了を待つ
+  var deadline = Date.now() + 5 * 60 * 1000;
+  while (Date.now() < deadline) {
+    Utilities.sleep(10000);
+    var s = callReceptionRefreshApi_('refreshStatus');
+    if (s && s.ok && s.error) {
+      ss.toast('更新でエラーが出ました: ' + s.error, '数値更新', 15);
+      return s;
+    }
+    if (s && s.ok && !s.pending && s.lastRefreshed && s.lastRefreshed !== beforeAt) {
+      SpreadsheetApp.flush();
+      ss.toast('更新が完了しました（' + s.lastRefreshed + '）', '数値更新', 15);
+      return s;
+    }
+  }
+  ss.toast('まだ終わっていません。少ししてから「前回の更新時刻を確認」で見てください。', '数値更新', 15);
+  return r;
+}
+
+function showReceptionRefreshStatus() {
+  var r = callReceptionRefreshApi_('refreshStatus');
+  var msg = !r || !r.ok
+    ? '状態を取得できませんでした'
+    : r.pending
+      ? '更新中です。少しお待ちください。'
+      : '前回の更新: ' + (r.lastRefreshed || '記録なし');
+  SpreadsheetApp.getActiveSpreadsheet().toast(msg, '数値更新', 8);
+  return r;
 }
 
 /**
@@ -432,57 +498,108 @@ function styleImportMirrorSheet_(sheet, sourceId, sourceSheetName, usedCols, hea
 
   var hdrs = headers || [];
   var checkCols = [];
-  var lastBody = Math.min(sheet.getMaxRows(), 1000);
   for (var h = 0; h < hdrs.length; h++) {
     var title = String(hdrs[h] || '');
     if (/リンク|URL|画像|写真/i.test(title)) sheet.setColumnWidth(h + 1, 260);
     if (/日時|申請|入会日|タイムスタンプ/.test(title)) {
       sheet.setColumnWidth(h + 1, 160);
-      try {
-        sheet.getRange(2, h + 1, lastBody - 1, 1).setNumberFormat('yyyy/mm/dd HH:mm');
-      } catch (eFmt) {}
     }
     if (/メールアドレス|mail/i.test(title) && !/レクチャー|アンケート|付与/.test(title)) {
       sheet.setColumnWidth(h + 1, 220);
     }
-    // 口コミのポイント列と同様：チェック用途の列
     if (isCheckboxHeader_(title)) {
       checkCols.push(h + 1);
       sheet.setColumnWidth(h + 1, 120);
     }
   }
 
-  // 見た目だけ整える（値は IMPORTRANGE）
+  // 枠線なし・チェック列は下まで事前適用（行が増えても FALSE 文字に戻らない）
+  formatImportMirrorChrome_(sheet, cols, checkCols, hdrs);
+}
+
+/**
+ * IMPORTRANGE はそのまま。枠線削除＋チェック列は「実データ行＋余裕」だけに適用。
+ * （最大行まで付けると空行にチェックが浮かんで見た目がずれる）
+ */
+function formatImportMirrorChrome_(sheet, cols, checkCols, headers) {
+  cols = Math.max(Number(cols) || Math.max(sheet.getLastColumn(), 1), 1);
+  var maxR = Math.max(sheet.getMaxRows(), 2);
+  var maxC = Math.max(sheet.getMaxColumns(), cols);
+
+  try {
+    sheet.getRange(1, 1, maxR, maxC).setBorder(false, false, false, false, false, false);
+  } catch (eBorder) {}
+  try {
+    sheet.getRange(1, 1, maxR, maxC).clearDataValidations();
+  } catch (eValAll) {}
+  try {
+    sheet.clearConditionalFormatRules();
+  } catch (eRules) {}
+
+  var hdrs = headers;
+  if (!hdrs || !hdrs.length) {
+    try {
+      hdrs = sheet.getRange(1, 1, 1, cols).getDisplayValues()[0];
+    } catch (eH) {
+      hdrs = [];
+    }
+  }
+
+  if (!checkCols || !checkCols.length) {
+    checkCols = [];
+    for (var h = 0; h < hdrs.length; h++) {
+      if (isCheckboxHeader_(hdrs[h])) checkCols.push(h + 1);
+    }
+  }
+
+  var lastData = findImportLastDataRow_(sheet, cols);
+  var buffer = 80; // 新規行がしばらく増えてもカバー
+  var endRow = Math.min(Math.max(lastData + buffer, 2), maxR);
+  var bodyRows = endRow - 1;
+
   try {
     sheet.getRange(1, 1, 1, cols)
-      .setBackground('#111111')
-      .setFontColor('#FFFFFF')
-      .setFontFamily('Roboto Mono')
+      .setBackground('#E8EEF2')
+      .setFontColor('#111111')
+      .setFontFamily('Arial')
       .setFontSize(10)
       .setFontWeight('bold')
+      .setHorizontalAlignment('center')
       .setVerticalAlignment('middle');
     sheet.setRowHeight(1, 32);
-    if (lastBody >= 2) {
-      sheet.getRange(2, 1, lastBody - 1, cols)
-        .setBackground('#FAFAFA')
+    if (bodyRows >= 1) {
+      sheet.getRange(2, 1, bodyRows, cols)
+        .setBackground(null)
         .setFontColor('#111111')
-        .setFontFamily('Roboto Mono')
+        .setFontFamily('Arial')
         .setFontSize(10)
-        .setVerticalAlignment('middle');
+        .setVerticalAlignment('middle')
+        .setHorizontalAlignment('left');
     }
   } catch (eStyle) {}
 
-  // TRUE/FALSE をチェックボックス表示＋付与済みは緑（口コミと同じ考え方）
-  if (checkCols.length && lastBody >= 2) {
+  for (var d = 0; d < hdrs.length; d++) {
+    var title = String(hdrs[d] || '');
+    if (/日時|申請|入会日|タイムスタンプ/.test(title) && bodyRows >= 1) {
+      try {
+        sheet.getRange(2, d + 1, bodyRows, 1).setNumberFormat('yyyy/mm/dd HH:mm');
+      } catch (eFmt) {}
+    }
+  }
+
+  var applied = [];
+  if (checkCols.length && bodyRows >= 1) {
     try {
-      var rules = sheet.getConditionalFormatRules() || [];
+      var rules = [];
       for (var i = 0; i < checkCols.length; i++) {
         var col = checkCols[i];
         var colLetter = columnLetter_(col);
-        var range = sheet.getRange(2, col, lastBody - 1, 1);
+        var range = sheet.getRange(2, col, bodyRows, 1);
         range.setDataValidation(
           SpreadsheetApp.newDataValidation().requireCheckbox().setAllowInvalid(true).build()
         );
+        range.setHorizontalAlignment('center').setVerticalAlignment('middle');
+        sheet.setColumnWidth(col, 140);
         rules.push(
           SpreadsheetApp.newConditionalFormatRule()
             .whenFormulaSatisfied('=$' + colLetter + '2=TRUE')
@@ -490,9 +607,158 @@ function styleImportMirrorSheet_(sheet, sourceId, sourceSheetName, usedCols, hea
             .setRanges([range])
             .build()
         );
+        applied.push({
+          col: col,
+          header: String(hdrs[col - 1] || ''),
+          rows: bodyRows,
+          lastData: lastData
+        });
       }
       sheet.setConditionalFormatRules(rules);
     } catch (eCheck) {}
+  }
+
+  return {
+    ok: true,
+    sheet: sheet.getName(),
+    cols: cols,
+    lastData: lastData,
+    endRow: endRow,
+    bodyRows: bodyRows,
+    checkCols: applied,
+    bordersCleared: true
+  };
+}
+
+/** A〜先頭数列で、表示値がある最終行を返す（ヘッダー=1） */
+function findImportLastDataRow_(sheet, cols) {
+  var scanCols = Math.min(Math.max(Number(cols) || 3, 1), 12);
+  var maxScan = Math.min(Math.max(sheet.getMaxRows(), 2), 3000);
+  var vals = sheet.getRange(1, 1, maxScan, scanCols).getDisplayValues();
+  var last = 1;
+  for (var r = 1; r < vals.length; r++) {
+    var nonempty = false;
+    for (var c = 0; c < vals[r].length; c++) {
+      if (String(vals[r][c] == null ? '' : vals[r][c]).trim() !== '') {
+        nonempty = true;
+        break;
+      }
+    }
+    if (nonempty) last = r + 1;
+  }
+  return last;
+}
+
+/**
+ * 経堂ブロック D/E ＋ FIT365ブロック I/J など、チェック対象列を決める。
+ * ヘッダー判定を優先し、不足時は経堂=D/E・FIT365=I/J を補完。
+ */
+function resolveJoinListCheckCols_(headers, cols) {
+  var out = [];
+  var seen = {};
+  function add(col) {
+    col = Number(col);
+    if (!col || col < 1 || (cols && col > cols) || seen[col]) return;
+    seen[col] = true;
+    out.push(col);
+  }
+  for (var h = 0; h < (headers || []).length; h++) {
+    if (isCheckboxHeader_(headers[h])) add(h + 1);
+  }
+  // 経堂（A1=IMPORTRANGE A:E）
+  add(4);
+  add(5);
+  // FIT365（F1=IMPORTRANGE … → I/J が D/E 相当）
+  if (cols >= 10) {
+    add(9);
+    add(10);
+  }
+  return out;
+}
+
+/** 見た目は触らず、枠線とフィルタだけ掃除（手動整形を維持） */
+function tidyImportMirrorKeepLook_(sheet) {
+  try {
+    var a1 = '';
+    try {
+      a1 = String(sheet.getRange(1, 1).getFormula() || '');
+    } catch (eF) {}
+    var maxR = Math.max(sheet.getMaxRows(), 2);
+    var maxC = Math.max(sheet.getMaxColumns(), 1);
+    try {
+      sheet.getRange(1, 1, maxR, maxC).setBorder(false, false, false, false, false, false);
+    } catch (eB) {}
+    removeSheetFilterSafe_(sheet);
+    return {
+      ok: true,
+      sheet: sheet.getName(),
+      importrange: /IMPORTRANGE/i.test(a1),
+      bordersCleared: true,
+      filterRemoved: true,
+      lookPreserved: true
+    };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
+function removeSheetFilterSafe_(sheet) {
+  try {
+    var f = sheet.getFilter();
+    if (f) f.remove();
+  } catch (e) {}
+}
+
+/** 入会者一覧：IMPORTRANGE 維持のまま枠線削除＋チェック列を整列 */
+function formatJoinListMirrorKeepImport_() {
+  try {
+    var dest = openWorkspaceSpreadsheet_();
+    var sh = dest.getSheetByName(JOIN_LIST_SHEET_);
+    if (!sh) sh = dest.getSheetByName('入会者一覧+自動メール管理');
+    if (!sh) return { ok: false, message: 'sheet not found: ' + JOIN_LIST_SHEET_ };
+
+    var a1 = '';
+    try {
+      a1 = String(sh.getRange(1, 1).getFormula() || '');
+    } catch (eF) {}
+    if (!/IMPORTRANGE/i.test(a1)) {
+      return {
+        ok: false,
+        message: 'A1 が IMPORTRANGE ではありません（値同期シートの可能性）。数式を確認してください。',
+        a1: a1.slice(0, 120)
+      };
+    }
+
+    var cols = Math.max(sh.getLastColumn(), 5);
+    var headers = sh.getRange(1, 1, 1, cols).getDisplayValues()[0];
+    var joinChecks = resolveJoinListCheckCols_(headers, cols);
+    var out = formatImportMirrorChrome_(sh, cols, joinChecks, headers);
+    try {
+      removeSheetFilterSafe_(sh);
+    } catch (eFil) {}
+
+    // マシンレクチャー申込：手直しした見た目を尊重。枠線・変なフィルタだけ掃除（色や列幅は触らない）
+    var lecture = dest.getSheetByName('マシンレクチャー申込');
+    var lectureOut = null;
+    if (lecture) {
+      lectureOut = tidyImportMirrorKeepLook_(lecture);
+    }
+
+    return {
+      ok: true,
+      joinList: out,
+      checkCols: joinChecks,
+      layout: {
+        kyodo: 'A:E（D/E=チェック）',
+        fit365: cols >= 10 ? 'F起点（I/J=チェック＝元D/E）' : '未接続または列不足'
+      },
+      machineLecture: lectureOut,
+      tip:
+        '経堂 D/E と FIT365 I/J を同じチェックボックス表示にしています。' +
+        '値は各 IMPORTRANGE のまま自動更新。操作は元スプシ側。'
+    };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
   }
 }
 
@@ -500,7 +766,7 @@ function isCheckboxHeader_(title) {
   var t = String(title || '');
   if (!t) return false;
   if (/メールアドレス|email/i.test(t) && !/レクチャー|アンケート|付与/.test(t)) return false;
-  return /アンケート|付与済|ポイント付与|レクチャーメール|送信済|済フラグ/.test(t);
+  return /アンケート|付与済|ポイント付与|レクチャーメール|送信済|済フラグ|アンケート済/.test(t);
 }
 
 function stylePromoHubSheet_(sheet, imported) {
@@ -598,6 +864,643 @@ function inspectSpreadsheetBook_(id) {
     return { ok: false, message: String(err && err.message ? err.message : err), id: id };
   }
 }
+
+/**
+ * 制限付き共有でも診断できるように、Workspace 内の IMPORTRANGE 切れと
+ * 既知の元スプシへの openById 可否をまとめて返す。
+ */
+function diagnoseImportsHealth_() {
+  try {
+    var ss = openWorkspaceSpreadsheet_();
+    var myEmail = '';
+    try {
+      myEmail = Session.getEffectiveUser().getEmail();
+    } catch (eMail) {
+      myEmail = '';
+    }
+
+    var targets = [
+      '経堂マスタ',
+      '経営マスタ',
+      '【経堂】会員動向',
+      '見学体験申請',
+      '口コミ_経堂',
+      'マシンレクチャー申込',
+      '入会者一覧＋自動メール管理',
+      '販促_乗り換え',
+      '販促_紹介・ペア入会',
+      '経堂_入会',
+      '経堂_退会',
+      '経堂_OP'
+    ];
+    var sheetReports = [];
+    for (var t = 0; t < targets.length; t++) {
+      var sh = ss.getSheetByName(targets[t]);
+      if (!sh) {
+        sheetReports.push({ name: targets[t], exists: false });
+        continue;
+      }
+      sheetReports.push(inspectSheetImportHealth_(sh));
+    }
+
+    var sources = [
+      { key: 'workspace', id: WS_CONFIG.SPREADSHEET_ID, label: 'RYUTA Workspace' },
+      { key: 'reception', id: '14hxiLBzvGTuIpfZcoVjiHpz8b419OzUrtQAr5788h3w', label: '経堂　受付状況表' },
+      { key: 'kengaku', id: '1RPUw0slNCit9ZwJgINGfv89oc2Hxw8zzAZyMt6g_QuY', label: '経堂　見学・体験フォーム' },
+      { key: 'promo', id: PROMO_SOURCE_ID_, label: 'JOYFIT24経堂追加販促' },
+      { key: 'review', id: REVIEW_SOURCE_ID_, label: 'EAST口コミ回答者' },
+      { key: 'machine', id: MACHINE_SOURCE_ID_, label: 'マシンレクチャー・自動メール' },
+      { key: 'fit365', id: '1BbExBUCfyq1cfNqw4TvlwUriL-AfvghU9XT6McdzGTQ', label: 'FIT365 入会者一覧' }
+    ];
+    var sourceReports = [];
+    for (var s = 0; s < sources.length; s++) {
+      sourceReports.push(probeSourceAccess_(sources[s]));
+    }
+
+    var brokenSheets = [];
+    for (var b = 0; b < sheetReports.length; b++) {
+      var r = sheetReports[b];
+      if (r.exists === false) continue;
+      if (r.refErrorCount > 0 || r.importErrorCount > 0) brokenSheets.push(r.name);
+    }
+    var blockedSources = [];
+    for (var c = 0; c < sourceReports.length; c++) {
+      if (!sourceReports[c].ok) blockedSources.push(sourceReports[c].label || sourceReports[c].id);
+    }
+
+    return {
+      ok: true,
+      executedAs: myEmail,
+      workspaceId: ss.getId(),
+      workspaceUrl: ss.getUrl(),
+      summary: {
+        healthy: brokenSheets.length === 0 && blockedSources.length === 0,
+        brokenSheets: brokenSheets,
+        blockedSources: blockedSources
+      },
+      sheets: sheetReports,
+      sources: sourceReports,
+      tip:
+        '制限付きのままでよい。blockedSources / brokenSheets に出た元スプシへ ' +
+        (myEmail || 'GAS実行アカウント') +
+        ' を閲覧者以上で共有し、Workspace で「アクセスを許可」を押す。'
+    };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
+function inspectSheetImportHealth_(sheet) {
+  var lastRow = Math.max(sheet.getLastRow(), 1);
+  var lastCol = Math.max(sheet.getLastColumn(), 1);
+  var maxRows = Math.min(lastRow, 80);
+  var maxCols = Math.min(lastCol, 30);
+  var formulas = sheet.getRange(1, 1, maxRows, maxCols).getFormulas();
+  var displays = sheet.getRange(1, 1, maxRows, maxCols).getDisplayValues();
+
+  var importFormulas = [];
+  var refErrors = [];
+  var importErrors = [];
+  var sampleValues = [];
+
+  for (var r = 0; r < formulas.length; r++) {
+    for (var c = 0; c < formulas[r].length; c++) {
+      var f = String(formulas[r][c] || '');
+      var d = String(displays[r][c] || '');
+      var a1 = columnLetter_(c + 1) + String(r + 1);
+      if (/IMPORTRANGE/i.test(f)) {
+        if (importFormulas.length < 8) {
+          importFormulas.push({ cell: a1, formula: f.slice(0, 220), display: d.slice(0, 80) });
+        }
+      }
+      if (/#REF!/i.test(d)) {
+        if (refErrors.length < 12) refErrors.push({ cell: a1, display: d, formula: f.slice(0, 180) });
+      }
+      if (/#N\/A|#ERROR!|読み込めません|You don't have permission|アクセス/i.test(d)) {
+        if (importErrors.length < 12) importErrors.push({ cell: a1, display: d, formula: f.slice(0, 180) });
+      }
+    }
+  }
+
+  for (var sr = 0; sr < Math.min(displays.length, 5); sr++) {
+    sampleValues.push(displays[sr].slice(0, 8));
+  }
+
+  return {
+    name: sheet.getName(),
+    exists: true,
+    hidden: sheet.isSheetHidden(),
+    rows: lastRow,
+    cols: lastCol,
+    importrangeCount: importFormulas.length,
+    refErrorCount: refErrors.length,
+    importErrorCount: importErrors.length,
+    importrangeSamples: importFormulas,
+    refErrors: refErrors,
+    importErrors: importErrors,
+    sampleValues: sampleValues
+  };
+}
+
+function probeSourceAccess_(src) {
+  try {
+    var book = SpreadsheetApp.openById(src.id);
+    return {
+      ok: true,
+      key: src.key,
+      id: src.id,
+      label: src.label,
+      title: book.getName(),
+      url: book.getUrl(),
+      sheetCount: book.getSheets().length
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      key: src.key,
+      id: src.id,
+      label: src.label,
+      message: String(err && err.message ? err.message : err)
+    };
+  }
+}
+
+/** 指定シートの値・数式を深掘り（マスタ診断用） */
+function inspectNamedSheetDeep_(name, maxRows, maxCols) {
+  try {
+    name = String(name || '').trim();
+    if (!name) return { ok: false, message: 'name required' };
+    var ss = openWorkspaceSpreadsheet_();
+    var sheet = ss.getSheetByName(name);
+    if (!sheet) return { ok: false, message: 'sheet not found: ' + name };
+    maxRows = Math.max(1, Math.min(Number(maxRows) || 40, 120));
+    maxCols = Math.max(1, Math.min(Number(maxCols) || 20, 40));
+    var lastRow = Math.max(sheet.getLastRow(), 1);
+    var lastCol = Math.max(sheet.getLastColumn(), 1);
+    var rows = Math.min(lastRow, maxRows);
+    var cols = Math.min(lastCol, maxCols);
+    var formulas = sheet.getRange(1, 1, rows, cols).getFormulas();
+    var displays = sheet.getRange(1, 1, rows, cols).getDisplayValues();
+    var values = sheet.getRange(1, 1, rows, cols).getValues();
+
+    var hits = [];
+    var waiting = [];
+    var refs = [];
+    for (var r = 0; r < rows; r++) {
+      for (var c = 0; c < cols; c++) {
+        var d = String(displays[r][c] == null ? '' : displays[r][c]);
+        var f = String(formulas[r][c] || '');
+        var a1 = columnLetter_(c + 1) + String(r + 1);
+        if (/読み込み待ち|#REF!|#N\/A|#ERROR!|読み込めません/i.test(d)) {
+          waiting.push({ cell: a1, display: d, formula: f.slice(0, 240) });
+        }
+        if (/#REF!/i.test(d)) refs.push({ cell: a1, display: d, formula: f.slice(0, 240) });
+        if (/会員動向|IMPORTRANGE|入会計画|入会実績|数値/i.test(f + d)) {
+          if (hits.length < 40) {
+            hits.push({
+              cell: a1,
+              display: d.slice(0, 80),
+              formula: f.slice(0, 220),
+              valueType: typeof values[r][c]
+            });
+          }
+        }
+      }
+    }
+
+    // 会員動向シートがあれば、ヘッダー行と「入会計画」行も返す
+    var trend = null;
+    var trendSheet = ss.getSheetByName('【経堂】会員動向');
+    if (trendSheet) {
+      var tr = Math.min(Math.max(trendSheet.getLastRow(), 1), 30);
+      var tc = Math.min(Math.max(trendSheet.getLastColumn(), 1), 16);
+      trend = {
+        rows: trendSheet.getLastRow(),
+        cols: trendSheet.getLastColumn(),
+        top: trendSheet.getRange(1, 1, tr, tc).getDisplayValues(),
+        formulasTopLeft: trendSheet.getRange(1, 1, Math.min(tr, 5), Math.min(tc, 8)).getFormulas()
+      };
+    }
+
+    return {
+      ok: true,
+      sheet: name,
+      rows: lastRow,
+      cols: lastCol,
+      inspected: { rows: rows, cols: cols },
+      waitingOrErrors: waiting,
+      refErrors: refs,
+      relatedHits: hits,
+      memberTrend: trend
+    };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
+﻿/**
+ * 制限付き共有でもマスタ数値が生きるよう、受付状況表の「日報」を
+ * Workspace 内「経堂_受付ライブ」へ値コピーし、経堂マスタの参照を差し替える。
+ * あわせて入会者一覧の TRUE/FALSE をチェックボックス化する。
+ */
+var RECEPTION_SOURCE_ID_ = '14hxiLBzvGTuIpfZcoVjiHpz8b419OzUrtQAr5788h3w';
+var RECEPTION_LIVE_SHEET_ = '経堂_受付ライブ';
+var JOIN_LIST_SHEET_ = '入会者一覧＋自動メール管理';
+
+function repairRestrictedImports_() {
+  try {
+    var out = {
+      receptionLive: syncReceptionLiveSheet_(),
+      masterPatch: patchMasterReceptionFormulas_(),
+      masterActuals: fixMasterActualFormulas_(),
+      joinMirrors: syncReceptionJoinMirrors_(),
+      joinList: formatJoinListMirrorKeepImport_(),
+      kengakuProbe: probeSourceAccess_({
+        key: 'kengaku',
+        id: '1RPUw0slNCit9ZwJgINGfv89oc2Hxw8zzAZyMt6g_QuY',
+        label: '見学・体験フォーム'
+      })
+    };
+    ensureReceptionLiveTrigger_();
+    return {
+      ok: true,
+      executedAs: (function () {
+        try { return Session.getEffectiveUser().getEmail(); } catch (e) { return ''; }
+      })(),
+      results: out,
+      tip:
+        '経堂マスタの当月実績は「経堂_受付ライブ」（GAS同期）を参照します。' +
+        '見学フォームの #REF! が残る場合は AB6 でアクセス許可を1回押してください。'
+    };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
+/** 受付状況表の「日報」シートを値コピー（IMPORTRANGE 不要） */
+function syncReceptionLiveSheet_() {
+  var srcBook = SpreadsheetApp.openById(RECEPTION_SOURCE_ID_);
+  var src = srcBook.getSheetByName('日報');
+  if (!src) return { ok: false, message: '受付状況表に「日報」シートがありません' };
+
+  var dest = openWorkspaceSpreadsheet_();
+  var live = dest.getSheetByName(RECEPTION_LIVE_SHEET_);
+  if (!live) live = dest.insertSheet(RECEPTION_LIVE_SHEET_);
+  live.clear();
+
+  var lastRow = Math.max(src.getLastRow(), 40);
+  var lastCol = Math.max(src.getLastColumn(), 10);
+  var values = src.getRange(1, 1, lastRow, lastCol).getValues();
+  live.getRange(1, 1, lastRow, lastCol).setValues(values);
+  try { live.hideSheet(); } catch (eHide) {}
+
+  return {
+    ok: true,
+    source: srcBook.getName() + ' / 日報',
+    rows: lastRow,
+    cols: lastCol,
+    sample: {
+      C9: values[8][2],
+      C11: values[10][2],
+      C13: values[12][2],
+      C15: values[14][2],
+      D14: values[13][3]
+    }
+  };
+}
+
+/**
+ * 経堂マスタ内の IMPORTRANGE($AB$1,"日報!…") を
+ * 『経堂_受付ライブ』参照へ置換。
+ */
+function patchMasterReceptionFormulas_() {
+  var dest = openWorkspaceSpreadsheet_();
+  var sh = dest.getSheetByName('経堂マスタ');
+  if (!sh) return { ok: false, message: '経堂マスタなし' };
+
+  var lastRow = Math.max(sh.getLastRow(), 1);
+  var lastCol = Math.max(sh.getLastColumn(), 1);
+  var range = sh.getRange(1, 1, lastRow, lastCol);
+  var formulas = range.getFormulas();
+  var changed = [];
+
+  for (var r = 0; r < formulas.length; r++) {
+    for (var c = 0; c < formulas[r].length; c++) {
+      var f = String(formulas[r][c] || '');
+      if (!f) continue;
+      var next = f;
+
+      next = next.replace(
+        /IMPORTRANGE\(\s*\$AB\$1\s*,\s*"日報!([^"]+)"\s*\)/gi,
+        "'" + RECEPTION_LIVE_SHEET_ + "'!$1"
+      );
+      next = next.replace(
+        /IMPORTRANGE\(\s*\$AB\$1\s*,\s*'日報!([^']+)'\s*\)/gi,
+        "'" + RECEPTION_LIVE_SHEET_ + "'!$1"
+      );
+
+      if (/TEXT\(\$AB\$5,"yymm"\)=TEXT\(TODAY\(\),"yymm"\)/i.test(next) &&
+          /経堂_受付ライブ/.test(next)) {
+        // フォールバックは fixMasterActualFormulas_ で安全に書く
+      }
+
+      if (next !== f) {
+        formulas[r][c] = next;
+        changed.push({
+          cell: columnLetter_(c + 1) + String(r + 1),
+          from: f.slice(0, 160),
+          to: next.slice(0, 160)
+        });
+      }
+    }
+  }
+
+  if (changed.length) range.setFormulas(formulas);
+
+  try {
+    var ab4 = String(sh.getRange('AB4').getFormula() || '');
+    if (/IMPORTRANGE/i.test(ab4) && /日報/i.test(ab4)) {
+      sh.getRange('AB4').setFormula("='" + RECEPTION_LIVE_SHEET_ + "'!B1");
+      changed.push({ cell: 'AB4', to: "='" + RECEPTION_LIVE_SHEET_ + "'!B1" });
+    }
+  } catch (eAb) {}
+
+  // F8 の案内文を更新（固定文字）
+  try {
+    var f8 = String(sh.getRange('F8').getDisplayValue() || '');
+    if (/読み込み待ち/.test(f8)) {
+      sh.getRange('F8').setValue('');
+      changed.push({ cell: 'F8', to: '(cleared waiting label)' });
+    }
+  } catch (eF8) {}
+
+  return { ok: true, changed: changed.length, samples: changed.slice(0, 12) };
+}
+
+function patchCurrentMonthFallback_(formula) {
+  var f = String(formula || '');
+  if (!/IFERROR\(\s*N\([^)]+\)\s*,\s*\)/.test(f)) return f;
+  var idx = f.match(/IFERROR\(\s*(INDEX\(\s*'【経堂】会員動向'[\s\S]*?\))\s*,\s*\)/i);
+  if (!idx) return f;
+  // replace の第2引数では $1/$2 が特殊なので、関数置換を使う
+  var indexExpr = idx[1];
+  return f.replace(/IFERROR\(\s*N\(([^)]+)\)\s*,\s*\)/, function (_m, nExpr) {
+    return 'IFERROR(N(' + nExpr + '),' + indexExpr + ')';
+  });
+}
+
+/** 壊れた F18/F20 を正しい当月ライブ参照へ直す */
+function fixMasterActualFormulas_() {
+  var dest = openWorkspaceSpreadsheet_();
+  var sh = dest.getSheetByName('経堂マスタ');
+  if (!sh) return { ok: false, message: '経堂マスタなし' };
+
+  // 基準月 AB5 と受付ID AB1 を修復
+  try {
+    if (!String(sh.getRange('AB1').getDisplayValue() || '').trim()) {
+      sh.getRange('AB1').setValue(RECEPTION_SOURCE_ID_);
+    }
+  } catch (eAb1) {}
+
+  try {
+    var b2 = String(sh.getRange('B2').getDisplayValue() || '');
+    var a3 = String(sh.getRange('A3').getDisplayValue() || '');
+    var ym = b2 || a3;
+    var m = ym.match(/(\d{4})\s*年\s*(\d{1,2})\s*月/);
+    if (m) {
+      sh.getRange('AB5').setFormula('=DATE(' + m[1] + ',' + m[2] + ',1)');
+    } else {
+      // 今日の月初へフォールバック
+      sh.getRange('AB5').setFormula('=DATE(YEAR(TODAY()),MONTH(TODAY()),1)');
+    }
+  } catch (eAb5) {}
+
+  // 当月実績はライブ優先。失敗時のみ会員動向へ。
+  var f18 =
+    '=IFERROR(N(\'' + RECEPTION_LIVE_SHEET_ + '\'!C13),' +
+    'IFERROR(INDEX(\'【経堂】会員動向\'!$C$2:$N$115,MATCH("入 会  | 実績/見込",\'【経堂】会員動向\'!$B$2:$B$115,0),MATCH(MONTH(EDATE($AB$5,0)),\'【経堂】会員動向\'!$C$1:$N$1,0)),))';
+
+  var f20 =
+    '=IFERROR(N(\'' + RECEPTION_LIVE_SHEET_ + '\'!C15),' +
+    'IFERROR(INDEX(\'【経堂】会員動向\'!$C$2:$N$115,MATCH("解 除  | 実績/見込",\'【経堂】会員動向\'!$B$2:$B$115,0),MATCH(MONTH(EDATE($AB$5,0)),\'【経堂】会員動向\'!$C$1:$N$1,0)),))';
+
+  sh.getRange('F18').setFormula(f18);
+  sh.getRange('F20').setFormula(f20);
+
+  // G17（着地見込）が空なら、当月実績 F18 を見る簡易式を確認
+  try {
+    var g17f = String(sh.getRange('G17').getFormula() || '');
+    var g17v = String(sh.getRange('G17').getDisplayValue() || '');
+    if (!g17f && !g17v) {
+      // 既存レイアウトに合わせ、着地見込=実績（F18）を入れる
+      sh.getRange('G17').setFormula('=IFERROR(F18,)');
+    }
+    var g19f = String(sh.getRange('G19').getFormula() || '');
+    var g19v = String(sh.getRange('G19').getDisplayValue() || '');
+    if (!g19f && !g19v) {
+      sh.getRange('G19').setFormula('=IFERROR(F20,)');
+    }
+  } catch (eG) {}
+
+  return {
+    ok: true,
+    F18: sh.getRange('F18').getDisplayValue(),
+    F20: sh.getRange('F20').getDisplayValue(),
+    liveC13: (function () {
+      var live = dest.getSheetByName(RECEPTION_LIVE_SHEET_);
+      return live ? live.getRange('C13').getDisplayValue() : null;
+    })()
+  };
+}
+
+function peekMasterKeyCells_() {
+  var dest = openWorkspaceSpreadsheet_();
+  var sh = dest.getSheetByName('経堂マスタ');
+  if (!sh) return { ok: false, message: '経堂マスタなし' };
+  var live = dest.getSheetByName(RECEPTION_LIVE_SHEET_);
+  var trend = dest.getSheetByName('【経堂】会員動向');
+  var cells = ['A3', 'B2', 'AB1', 'AB4', 'AB5', 'AB6', 'B5', 'D5', 'F5', 'H5', 'J5', 'F8', 'F17', 'F18', 'F19', 'F20', 'G17', 'G19', 'H18', 'H20'];
+  var out = {};
+  for (var i = 0; i < cells.length; i++) {
+    var a1 = cells[i];
+    out[a1] = {
+      display: sh.getRange(a1).getDisplayValue(),
+      formula: String(sh.getRange(a1).getFormula() || '')
+    };
+  }
+  return {
+    ok: true,
+    cells: out,
+    live: live ? {
+      C9: live.getRange('C9').getDisplayValue(),
+      C11: live.getRange('C11').getDisplayValue(),
+      C13: live.getRange('C13').getDisplayValue(),
+      C15: live.getRange('C15').getDisplayValue(),
+      D14: live.getRange('D14').getDisplayValue()
+    } : null,
+    trendA1: trend ? String(trend.getRange('A1').getFormula() || trend.getRange('A1').getDisplayValue()) : null,
+    trendB5: trend ? trend.getRange('B5').getDisplayValue() : null,
+    trendRowLabels: trend ? trend.getRange('B1:B12').getDisplayValues() : null
+  };
+}
+
+function syncReceptionJoinMirrors_() {
+  var srcBook = SpreadsheetApp.openById(RECEPTION_SOURCE_ID_);
+  var dest = openWorkspaceSpreadsheet_();
+  var specs = [
+    { dest: '経堂_入会', source: '入会・退会_データ', range: 'A1:E' },
+    { dest: '経堂_退会', source: '入会・退会_データ', range: 'G1:L' },
+    { dest: '経堂_OP', source: 'OP集計', range: 'A1:E18' }
+  ];
+  var out = [];
+  for (var i = 0; i < specs.length; i++) {
+    var sp = specs[i];
+    var src = srcBook.getSheetByName(sp.source);
+    if (!src) {
+      out.push({ name: sp.dest, ok: false, message: 'missing source ' + sp.source });
+      continue;
+    }
+    var parsed = parseA1Range_(sp.range);
+    var values = src.getRange(parsed.r1, parsed.c1, parsed.numRows, parsed.numCols).getValues();
+    var sh = dest.getSheetByName(sp.dest);
+    if (!sh) sh = dest.insertSheet(sp.dest);
+    if (/IMPORTRANGE/i.test(String(sh.getRange(1, 1).getFormula() || ''))) {
+      out.push({ name: sp.dest, ok: true, skipped: 'IMPORTRANGE のため上書きしない' });
+      continue;
+    }
+    sh.clear();
+    sh.getRange(1, 1, values.length, values[0].length).setValues(values);
+    try { sh.hideSheet(); } catch (eH) {}
+    out.push({ name: sp.dest, ok: true, rows: values.length, cols: values[0].length });
+  }
+  return { ok: true, sheets: out };
+}
+
+function parseA1Range_(a1) {
+  var m = String(a1 || '').match(/^([A-Z]+)(\d+):([A-Z]+)(\d*)$/i);
+  if (!m) return { r1: 1, c1: 1, numRows: 50, numCols: 5 };
+  var c1 = letterToColumn_(m[1]);
+  var r1 = Number(m[2]);
+  var c2 = letterToColumn_(m[3]);
+  var r2 = m[4] ? Number(m[4]) : Math.max(r1, 500);
+  return {
+    r1: r1,
+    c1: c1,
+    numRows: Math.max(1, r2 - r1 + 1),
+    numCols: Math.max(1, c2 - c1 + 1)
+  };
+}
+
+function letterToColumn_(letters) {
+  var s = String(letters || '').toUpperCase();
+  var n = 0;
+  for (var i = 0; i < s.length; i++) n = n * 26 + (s.charCodeAt(i) - 64);
+  return n;
+}
+
+/**
+ * 入会者一覧を元スプシから値同期し、チェック列をチェックボックス化。
+ * IMPORTRANGE だと入力規則が効かない／切れるため値同期にする。
+ */
+function syncJoinListWithCheckboxes_() {
+  var srcBook = SpreadsheetApp.openById(MACHINE_SOURCE_ID_);
+  var src = srcBook.getSheetByName(JOIN_LIST_SHEET_);
+  if (!src) return { ok: false, message: 'source missing: ' + JOIN_LIST_SHEET_ };
+
+  var lastRow = Math.max(src.getLastRow(), 1);
+  var lastCol = Math.max(src.getLastColumn(), 1);
+  var values = src.getRange(1, 1, lastRow, lastCol).getValues();
+  var headers = values[0];
+
+  var dest = openWorkspaceSpreadsheet_();
+  var sh = dest.getSheetByName(JOIN_LIST_SHEET_);
+  if (!sh) sh = dest.insertSheet(JOIN_LIST_SHEET_);
+  sh.clear();
+  try { sh.clearConditionalFormatRules(); } catch (e0) {}
+  try { sh.getDataRange().clearDataValidations(); } catch (e1) {}
+  sh.getRange(1, 1, values.length, values[0].length).setValues(values);
+
+  sh.getRange(1, 1, 1, lastCol)
+    .setBackground('#111111')
+    .setFontColor('#FFFFFF')
+    .setFontFamily('Roboto Mono')
+    .setFontSize(10)
+    .setFontWeight('bold');
+  if (values.length >= 2) {
+    sh.getRange(2, 1, values.length - 1, lastCol)
+      .setBackground('#FAFAFA')
+      .setFontFamily('Roboto Mono')
+      .setFontSize(10);
+  }
+
+  var checkCols = [];
+  for (var h = 0; h < headers.length; h++) {
+    if (isCheckboxHeader_(headers[h])) checkCols.push(h + 1);
+  }
+  if (!checkCols.length) {
+    if (lastCol >= 4) checkCols.push(4);
+    if (lastCol >= 5) checkCols.push(5);
+  }
+
+  var applied = [];
+  if (values.length >= 2 && checkCols.length) {
+    for (var i = 0; i < checkCols.length; i++) {
+      var col = checkCols[i];
+      var body = [];
+      for (var r = 1; r < values.length; r++) {
+        var raw = values[r][col - 1];
+        if (raw === true || raw === false) body.push([raw]);
+        else {
+          var s = String(raw == null ? '' : raw).trim().toUpperCase();
+          if (s === 'TRUE') body.push([true]);
+          else if (s === 'FALSE' || s === '') body.push([false]);
+          else body.push([false]);
+        }
+      }
+      var range = sh.getRange(2, col, body.length, 1);
+      range.setValues(body);
+      range.setDataValidation(
+        SpreadsheetApp.newDataValidation().requireCheckbox().setAllowInvalid(true).build()
+      );
+      applied.push({ col: col, header: String(headers[col - 1] || ''), rows: body.length });
+    }
+  }
+
+  return {
+    ok: true,
+    rows: values.length,
+    cols: lastCol,
+    checkCols: applied,
+    sourceUrl: srcBook.getUrl()
+  };
+}
+
+function ensureReceptionLiveTrigger_() {
+  try {
+    var exists = false;
+    var triggers = ScriptApp.getProjectTriggers();
+    for (var i = 0; i < triggers.length; i++) {
+      if (triggers[i].getHandlerFunction() === 'syncReceptionLiveTriggered_') {
+        exists = true;
+        break;
+      }
+    }
+    if (!exists) {
+      ScriptApp.newTrigger('syncReceptionLiveTriggered_')
+        .timeBased()
+        .everyHours(1)
+        .create();
+    }
+  } catch (err) {}
+}
+
+function syncReceptionLiveTriggered_() {
+  try { syncReceptionLiveSheet_(); } catch (e1) {}
+  try { syncReceptionJoinMirrors_(); } catch (e2) {}
+  try { formatJoinListMirrorKeepImport_(); } catch (e3) {}
+}
+
+
 
 /** EAST口コミ → Workspace（読み取り専用 / IMPORTRANGE+QUERY） */
 var REVIEW_SOURCE_ID_ = '13_E8m3vQa_61hcoMAPb7XZTyVDVtQ9O7rkVDNtHQvRM';
@@ -1058,10 +1961,107 @@ function handleApiGet_(e) {
   try {
     var api = e && e.parameter ? String(e.parameter.api || '') : '';
     if (api === 'status') {
-      return jsonOutput_({ ok: true, service: 'ryuta-workspace-gas', version: 'v2-vercel' });
+      return jsonOutput_({ ok: true, service: 'ryuta-workspace-gas', version: 'v2-format-joinlist' });
     }
     if (api === 'listSheets') {
       return jsonOutput_(listWorkspaceSheets_());
+    }
+    if (api === 'diagnoseImports') {
+      return jsonOutput_(diagnoseImportsHealth_());
+    }
+    if (api === 'inspectSheet') {
+      return jsonOutput_(
+        inspectNamedSheetDeep_(
+          String((e.parameter && e.parameter.name) || ''),
+          Number((e.parameter && e.parameter.rows) || 40),
+          Number((e.parameter && e.parameter.cols) || 20)
+        )
+      );
+    }
+    if (api === 'setupUnpaidView') {
+      return jsonOutput_(setupUnpaidView_());
+    }
+    if (api === 'peekExternal') {
+      try {
+        var exBook = SpreadsheetApp.openById(String(e.parameter.id || ''));
+        var exName = String(e.parameter.name || '');
+        if (!exName) {
+          return jsonOutput_({
+            ok: true,
+            title: exBook.getName(),
+            sheets: exBook.getSheets().map(function (s) {
+              return { name: s.getName(), rows: s.getLastRow(), cols: s.getLastColumn(), hidden: s.isSheetHidden() };
+            })
+          });
+        }
+        var exSh = exBook.getSheetByName(exName);
+        var exRg = exSh.getRange(String(e.parameter.range || 'A1:Z5'));
+        return jsonOutput_({
+          ok: true,
+          values: exRg.getDisplayValues(),
+          merged: exRg.getMergedRanges().map(function (m) { return m.getA1Notation(); }),
+          frozenRows: exSh.getFrozenRows()
+        });
+      } catch (eEx) {
+        return jsonOutput_({ ok: false, message: String(eEx.message || eEx) });
+      }
+    }
+    if (api === 'peekRows') {
+      return jsonOutput_(peekSheetRows_(
+        String((e.parameter && e.parameter.name) || ''),
+        Number((e.parameter && e.parameter.tail) || 8)
+      ));
+    }
+    if (api === 'readRange') {
+      try {
+        var rrSh = openWorkspaceSpreadsheet_().getSheetByName(String(e.parameter.name || ''));
+        var rr = rrSh.getRange(String(e.parameter.range || 'A1:C3'));
+        return jsonOutput_({
+          ok: true,
+          values: rr.getDisplayValues(),
+          formulas: rr.getFormulas(),
+          merged: rr.getMergedRanges().map(function (m) { return m.getA1Notation(); }),
+          timeZone: rrSh.getParent().getSpreadsheetTimeZone(),
+          maxRows: rrSh.getMaxRows(),
+          maxCols: rrSh.getMaxColumns()
+        });
+      } catch (eRR) {
+        return jsonOutput_({ ok: false, message: String(eRR.message || eRR) });
+      }
+    }
+    if (api === 'listTriggers') {
+      return jsonOutput_({
+        ok: true,
+        triggers: ScriptApp.getProjectTriggers().map(function (t) {
+          return { fn: t.getHandlerFunction(), type: String(t.getEventType()) };
+        })
+      });
+    }
+    if (api === 'styleMembershipMirrors') {
+      return jsonOutput_(styleMembershipMirrors_());
+    }
+    if (api === 'setupKengakuJoinLive') {
+      return jsonOutput_(setupKengakuJoinLive_(String((e.parameter && e.parameter.confirm) || '')));
+    }
+    if (api === 'funnelPreview') {
+      return jsonOutput_(previewTourToJoinFunnel_(Number((e.parameter && e.parameter.days) || 60)));
+    }
+    if (api === 'containerCheck') {
+      var boundSs = null;
+      try { boundSs = SpreadsheetApp.getActiveSpreadsheet(); } catch (eC) {}
+      return jsonOutput_({ ok: true, bound: !!boundSs, id: boundSs ? boundSs.getId() : '' });
+    }
+    if (api === 'formatJoinList') {
+      return jsonOutput_(formatJoinListMirrorKeepImport_());
+    }
+    if (api === 'repairRestrictedImports') {
+      return jsonOutput_(repairRestrictedImports_());
+    }
+    if (api === 'fixMasterActuals') {
+      return jsonOutput_(fixMasterActualFormulas_());
+    }
+    if (api === 'peekMaster') {
+      return jsonOutput_(peekMasterKeyCells_());
     }
     if (api === 'rebuildUrlIndex') {
       return jsonOutput_(rebuildUrlIndexSheet_());
@@ -3146,6 +4146,659 @@ function authorizeWorkspaceAccess() {
   return { ok: true, name: ss.getName() };
 }
 
+var UNPAID_SOURCE_ID_ = '10vpQRDfTdwx_Wb7JaSm3lZCkTk8msLyf8ggAHhI1shI';
+var UNPAID_SHEET_ = '未納管理';
+
+/** 25年8月〜27年12月（新しい順）。元ファイルは月ごとにタブを増やすので先の月も入れておく */
+function unpaidMonthOptions_() {
+  var out = [];
+  for (var y = 2027; y >= 2025; y--) {
+    for (var m = 12; m >= 1; m--) {
+      if (y === 2025 && m < 8) continue;
+      out.push(String(y % 100) + '年' + m + '月');
+    }
+  }
+  return out;
+}
+
+/**
+ * 表示用に変換した IMPORTRANGE。元データは変えず、表示だけ
+ * TRUE/FALSE → ☑/☐、金額列（見出しに 額・当月分・手数料・繰越・支払 を含む列）→ ¥#,##0、
+ * A列の区分（退会後未納貸倒候補・2ヶ月未納など）を下の行まで埋める。
+ * 会員名の右に 入会日・入会区分・未納開始・入会→未納 の4列を差し込む（経堂_入会 を氏名で照合。
+ * 同名が複数なら未納開始月末までで最新の入会）。
+ */
+function unpaidViewFormula_() {
+  var src = 'IMPORTRANGE("' + UNPAID_SOURCE_ID_ + '","\'"&B1&"\'!A1:AK")';
+  return '=IFERROR(LET(d,' + src + ',' +
+    'h,BYCOL(CHOOSEROWS(d,1,2,3),LAMBDA(c,TEXTJOIN("",TRUE,c))),' +
+    'cat,SCAN("",CHOOSECOLS(d,1),LAMBDA(acc,x,IF(x<>"",x,acc))),' +
+    'nc,MATCH(TRUE,ARRAYFORMULA(REGEXMATCH(h,"会員名")),0),' +
+    'mc,IFERROR(MATCH(TRUE,ARRAYFORMULA(REGEXMATCH(h,"未納対象月")),0),0),' +
+    'jd,\'経堂_入会\'!A2:A,jk,\'経堂_入会\'!D2:D,' +
+    'jn,ARRAYFORMULA(REGEXREPLACE(\'経堂_入会\'!B2:B&"","[\\s　]","")),' +
+    'ex,MAKEARRAY(ROWS(d),4,LAMBDA(r,c,LET(nm,TRIM(IFERROR(INDEX(d,r,nc),"")&""),' +
+    'IF(nm="","",IF(nm="会員名",CHOOSE(c,"入会日","入会区分","未納開始","入会→未納"),' +
+    'LET(om,IF(mc=0,"",IFERROR(INDEX(d,r,mc),"")&""),' +
+    'od,IFERROR(DATE(2000+VALUE(REGEXEXTRACT(om,"(\\d+)年")),VALUE(REGEXEXTRACT(om,"年(\\d+)")),1),""),' +
+    'nn,REGEXREPLACE(nm,"[\\s　]",""),' +
+    'lim,IF(od="",TODAY()+1,EOMONTH(od,0)+1),' +
+    'jdt,IFERROR(MAX(FILTER(jd,jn=nn,jd<lim)),0),' +
+    'CHOOSE(c,' +
+    'IF(jdt=0,"該当なし",TEXT(jdt,"yyyy/mm/dd")),' +
+    'IF(jdt=0,"",IFERROR(INDEX(FILTER(jk,jn=nn,jd=jdt),1),"")),' +
+    'IF(od="","",TEXT(od,"yy年m月")),' +
+    'IF(OR(jdt=0,od=""),"",((YEAR(od)-YEAR(jdt))*12+MONTH(od)-MONTH(jdt))&"ヶ月")))))))),' +
+    'IF(AND(ROWS(d)=1,ISERROR(INDEX(d,1,1))),NA(),' +
+    'LET(vw,MAKEARRAY(ROWS(d),COLUMNS(d),LAMBDA(r,c,LET(v,IFERROR(INDEX(d,r,c),""),' +
+    'n,IF(ISNUMBER(v),v,IF(REGEXMATCH(v&"","^-?[0-9,]+(\\.[0-9]+)?$"),VALUE(v),"")),' +
+    'lab,IF(AND(c>=28,r>1),IFERROR(LET(x,ARRAY_CONSTRAIN(CHOOSECOLS(d,c),r-1,1),CHOOSEROWS(FILTER(x,ISTEXT(x)),-1)),""),INDEX(h,1,c)),' +
+    'IF(c=1,IF(INDEX(d,r,3)&INDEX(d,r,4)="",v,INDEX(cat,r,1)),' +
+    'IF(ISLOGICAL(v),IF(v,"☑","☐"),' +
+    'IF(n="",v,' +
+    'IF(REGEXMATCH(lab,"率$"),TEXT(n,"0.0%"),' +
+    'IF(AND(REGEXMATCH(lab,"DL|日$"),n>40000),TEXT(n,"m/d"),' +
+    'IF(REGEXMATCH(lab,"額|当月分|手数料|繰越|支払|回収$"),TEXT(n,"¥#,##0"),v))))))))),' +
+    'HSTACK(CHOOSECOLS(vw,SEQUENCE(1,nc)),ex,CHOOSECOLS(vw,SEQUENCE(1,COLUMNS(vw)-nc,nc+1)))))),' +
+    '"「"&B1&"」のシートは元ファイルにまだありません")';
+}
+
+var UNPAID_TREND_SHEET_ = '未納管理_推移';
+var UNPAID_DATA_ROW_ = 5;
+var UNPAID_COLS_ = 41;
+
+/**
+ * 月タブ1枚分の集計に使う LET 変数（新旧レイアウト両対応。列は見出しの文字で探す）。
+ * ok=会員番号あり・支払額>0 の行、pay=支払額、tot=総額、cat=A列区分の埋め。
+ * rec=回収金額。金額欄が空でも右隣3列に「〇〇入金」があれば支払額を回収済みとみなす（旧レイアウトは金額欄を使っていない）。
+ */
+function unpaidStatsLet_(rangeExpr) {
+  return 'd,IMPORTRANGE("' + UNPAID_SOURCE_ID_ + '",' + rangeExpr + '),' +
+    'h,BYCOL(CHOOSEROWS(d,1,2,3),LAMBDA(c,TEXTJOIN("",TRUE,c))),' +
+    'fc,LAMBDA(re,MATCH(TRUE,REGEXMATCH(h,re),0)),' +
+    'nv,LAMBDA(col,IFERROR(VALUE(REGEXREPLACE(CHOOSECOLS(d,col)&"","[¥,\\s]","")),0)),' +
+    'cat,SCAN("",CHOOSECOLS(d,1),LAMBDA(a,x,IF(x&""<>"",x&"",a))),' +
+    'mem,TRIM(CHOOSECOLS(d,fc("会員番号"))&""),' +
+    'pay,nv(fc("支払額")),tot,nv(fc("総額")),uc,fc("回収金額|入金金額|レジ打ち金額"),recraw,nv(uc),' +
+    'rec,IF(recraw>0,recraw,IF(REGEXMATCH(CHOOSECOLS(d,uc+1)&CHOOSECOLS(d,uc+2)&CHOOSECOLS(d,uc+3)&"","入金"),pay,0)),' +
+    'ok,(mem<>"")*(mem<>"会員番号")*(mem<>"合計")*(pay>0),' +
+    'n,SUM(ok),sp,SUM(ok*pay),st,SUM(ok*tot),sr,SUM(ok*rec),nr,SUM(ok*(rec>0)),' +
+    'kone,ok*REGEXMATCH(cat,"1ヶ月|1ヵ月|1カ月|1か月"),' +
+    'ktwo,ok*REGEXMATCH(cat,"2ヶ月|2ヵ月|2カ月|2か月"),' +
+    'kbad,ok*REGEXMATCH(cat,"貸倒"),' +
+    'kjac,ok*REGEXMATCH(cat,"JACCS"),';
+}
+
+/** 未納管理 D1:M3 のダッシュボード（B1 の月） */
+function unpaidDashboardFormula_() {
+  return '=IFERROR(ARRAYFORMULA(LET(' + unpaidStatsLet_('"\'"&$B$1&"\'!A1:AK"') +
+    'yen,LAMBDA(x,TEXT(x,"¥#,##0")),' +
+    'rt,LAMBDA(k,IF(SUM(k*pay)=0,"-",TEXT(SUM(k*rec)/SUM(k*pay),"0.0%"))),' +
+    'sub,LAMBDA(k,SUM(k)&"件　"&yen(SUM(k*rec))&" / "&yen(SUM(k*pay))),' +
+    'VSTACK({"未納件数","未納総額","回収額","回収率","未回収額","回収済み","1ヶ月未納 回収率","2ヶ月未納 回収率","貸倒候補 回収率","JACCS 回収率"},' +
+    'HSTACK(n&"件",yen(sp),yen(sr),IF(sp=0,"-",TEXT(sr/sp,"0.0%")),yen(sp-sr),nr&"件",rt(kone),rt(ktwo),rt(kbad),rt(kjac)),' +
+    'HSTACK("支払額ベース","手数料込 "&yen(st),"回収金額の合計","回収額÷未納総額","残り "&(n-nr)&"件",' +
+    'IF(n=0,"",TEXT(nr/n,"0%")&"（人数）"),sub(kone),sub(ktwo),sub(kbad),sub(kjac))))),"")';
+}
+
+/** 未納管理_推移 の1行（A列の月）。数値のまま返す */
+function unpaidTrendRowFormula_(row) {
+  return '=IFERROR(ARRAYFORMULA(LET(' + unpaidStatsLet_('"\'"&$A' + row + '&"\'!A1:AK"') +
+    'rq,LAMBDA(k,IF(SUM(k*pay)=0,"",SUM(k*rec)/SUM(k*pay))),' +
+    'HSTACK(n,sp,sr,IF(sp=0,"",sr/sp),sp-sr,nr,rq(kone),rq(ktwo),rq(kbad)))),"")';
+}
+
+function styleUnpaidView_(sh) {
+  var maxR = sh.getMaxRows();
+  var top = UNPAID_DATA_ROW_;
+  var solid = SpreadsheetApp.BorderStyle.SOLID;
+
+  var W = UNPAID_COLS_;
+  var body = sh.getRange(top, 1, maxR - top + 1, W);
+  body.setBackground('#ffffff').setFontColor('#222222').setFontSize(10).setFontWeight('normal')
+    .setVerticalAlignment('middle').setWrap(false).setBorder(false, false, false, false, false, false);
+  sh.getRange(top, 1, 2, W).setFontWeight('bold').setBackground('#111111').setFontColor('#ffffff')
+    .setFontSize(9).setWrap(true).setHorizontalAlignment('center');
+  sh.getRange(top + 2, 1, maxR - top - 1, W)
+    .setBorder(null, null, null, null, null, true, '#e3e3e3', solid);
+  sh.getRange(top + 2, 2, maxR - top - 1, W - 1).setHorizontalAlignment('center');
+  sh.getRange(top + 2, 4, maxR - top - 1, 1).setHorizontalAlignment('left');
+  sh.getRange(top + 2, 1, maxR - top - 1, 1).setFontWeight('bold').setFontSize(9).setWrap(false)
+    .setFontColor('#111111');
+
+  var rng = sh.getRange(top + 2, 1, maxR - top - 1, W);
+  var joinRng = sh.getRange(top + 2, 4, maxR - top - 1, 5);
+  var r0 = top + 2;
+  var rules = sh.getConditionalFormatRules().filter(function (r) {
+    return r.getRanges().every(function (x) { return x.getSheet().getName() !== UNPAID_SHEET_; });
+  });
+  var add = function (formula, bg, color, bold, range) {
+    var b = SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied(formula).setRanges([range || rng]);
+    if (bg) b.setBackground(bg);
+    if (color) b.setFontColor(color);
+    if (bold) b.setBold(true);
+    rules.push(b.build());
+  };
+  add('=OR($B' + r0 + '="会員番号",$C' + r0 + '="会員番号")', '#111111', '#ffffff', true);
+  var bands = [
+    ['REGEXMATCH($A' + r0 + '&"","貸倒")', '#ececec'],
+    ['REGEXMATCH($A' + r0 + '&"","2ヶ月|2ヵ月|2カ月|3ヶ月|3ヵ月|3カ月")', '#f5f5f5'],
+    ['REGEXMATCH($A' + r0 + '&"","JACCS")', '#fafafa'],
+    ['TRUE', null]
+  ];
+  var early = 'IFERROR(VALUE(REGEXEXTRACT(D' + r0 + '&"","^(\\d+)ヶ月$"))<=2,FALSE)';
+  var none = 'D' + r0 + '="該当なし"';
+  bands.forEach(function (b) {
+    add('=AND(' + early + ',' + b[0] + ')', b[1], '#c5221f', true, joinRng);
+    add('=AND(' + none + ',' + b[0] + ')', b[1], '#9e9e9e', false, joinRng);
+  });
+  add('=OR($A' + r0 + '="合計",$B' + r0 + '="合計")', '#d6d6d6', '#111111', true);
+  bands.slice(0, 3).forEach(function (b) { add('=' + b[0], b[1], null, false); });
+  sh.setConditionalFormatRules(rules);
+}
+
+function styleUnpaidDashboard_(sh) {
+  var solid = SpreadsheetApp.BorderStyle.SOLID;
+  sh.getRange(1, 1, 4, 37).setBackground('#ffffff').setFontColor('#111111').setVerticalAlignment('middle');
+  sh.getRange('A1').setFontSize(9).setFontColor('#666666').setHorizontalAlignment('right');
+  sh.getRange('B1:C1').merge().setFontSize(12).setFontWeight('bold').setHorizontalAlignment('center')
+    .setBorder(true, true, true, true, null, null, '#111111', solid);
+  sh.getRange('A2:C2').merge().setFontSize(9).setHorizontalAlignment('left');
+  sh.getRange('A3:C3').merge().setFontSize(9).setHorizontalAlignment('left');
+
+  var card = sh.getRange('D1:M3');
+  card.setBackground('#f3f3f3').setHorizontalAlignment('center').setWrap(true)
+    .setBorder(true, true, true, true, true, false, '#ffffff', SpreadsheetApp.BorderStyle.SOLID_THICK);
+  sh.getRange('D1:M1').setFontSize(8).setFontColor('#666666').setFontWeight('bold');
+  sh.getRange('D2:M2').setFontSize(14).setFontColor('#111111').setFontWeight('bold').setWrap(false);
+  sh.getRange('D3:M3').setFontSize(8).setFontColor('#777777').setFontWeight('normal');
+  sh.getRange('G1:G3').setBackground('#111111').setFontColor('#ffffff');
+  sh.getRange('G1').setFontColor('#bbbbbb');
+  sh.getRange('G3').setFontColor('#bbbbbb');
+
+  sh.setRowHeight(1, 24);
+  sh.setRowHeight(2, 36);
+  sh.setRowHeight(3, 32);
+  sh.setRowHeight(4, 10);
+}
+
+function setupUnpaidTrend_(ss, options) {
+  var tr = ss.getSheetByName(UNPAID_TREND_SHEET_);
+  if (!tr) tr = ss.insertSheet(UNPAID_TREND_SHEET_);
+  var months = options.slice().reverse();
+  var need = months.length + 2;
+  if (tr.getMaxRows() < need) tr.insertRowsAfter(tr.getMaxRows(), need - tr.getMaxRows());
+  if (tr.getMaxColumns() < 11) tr.insertColumnsAfter(tr.getMaxColumns(), 11 - tr.getMaxColumns());
+  tr.clear();
+  tr.getRange(1, 1, 1, 11).setValues([[
+    '年月', '未納件数', '未納総額', '回収額', '回収率', '未回収額', '回収済み件数',
+    '1ヶ月未納 回収率', '2ヶ月未納 回収率', '貸倒候補 回収率', '回収率バー'
+  ]]);
+  tr.getRange(2, 1, 1, 11).setValues([['累計', '', '', '=SUM(D3:D)', '', '', '=SUM(G3:G)', '', '', '', '']]);
+  var rows = months.map(function (m, i) {
+    var r = i + 3;
+    return [m, unpaidTrendRowFormula_(r), '', '', '', '', '', '', '', '',
+      '=IF(E' + r + '="","",SPARKLINE(E' + r + ',{"charttype","bar";"max",1;"color1","#333333"}))'];
+  });
+  tr.getRange(3, 1, rows.length, 1).setNumberFormat('@');
+  tr.getRange(3, 1, rows.length, 11).setValues(rows);
+
+  var solid = SpreadsheetApp.BorderStyle.SOLID;
+  var all = tr.getRange(1, 1, tr.getMaxRows(), 11);
+  all.setBackground('#ffffff').setFontColor('#222222').setFontSize(10).setVerticalAlignment('middle')
+    .setBorder(false, false, false, false, false, false);
+  tr.getRange(3, 1, rows.length, 11).setBorder(null, null, null, null, null, true, '#e3e3e3', solid);
+  tr.getRange(1, 1, 1, 11).setBackground('#111111').setFontColor('#ffffff').setFontWeight('bold')
+    .setFontSize(9).setWrap(true).setHorizontalAlignment('center');
+  tr.getRange(2, 1, 1, 11).setBackground('#e6e6e6').setFontWeight('bold');
+  tr.getRange(3, 1, rows.length, 1).setFontWeight('bold').setHorizontalAlignment('center');
+  tr.getRange(2, 2, rows.length + 1, 9).setHorizontalAlignment('right');
+  tr.getRange(3, 2, rows.length, 1).setNumberFormat('0"件"');
+  tr.getRange(2, 3, rows.length + 1, 2).setNumberFormat('¥#,##0');
+  tr.getRange(3, 5, rows.length, 1).setNumberFormat('0.0%');
+  tr.getRange(3, 6, rows.length, 1).setNumberFormat('¥#,##0');
+  tr.getRange(2, 7, rows.length + 1, 1).setNumberFormat('0"件"');
+  tr.getRange(3, 8, rows.length, 3).setNumberFormat('0.0%');
+  tr.setFrozenRows(2);
+  tr.setColumnWidth(1, 90);
+  tr.setColumnWidths(2, 9, 105);
+  tr.setColumnWidth(11, 180);
+  tr.setRowHeight(1, 36);
+  tr.setHiddenGridlines(true);
+  tr.setTabColor('#111111');
+  return tr;
+}
+
+/**
+ * 未納管理ドライブ【経堂】の月タブを、B1 の年月選択で切り替えて表示するシートを作る。
+ * 1〜3行目＝選択月の集計、5行目〜＝元シートの表示用コピー。別タブ「未納管理_推移」に全月の集計。
+ * 元ファイルには触れない（IMPORTRANGE のみ）。
+ */
+function setupUnpaidView_() {
+  try {
+    var ss = openWorkspaceSpreadsheet_();
+    var sh = ss.getSheetByName(UNPAID_SHEET_);
+    if (!sh) sh = ss.insertSheet(UNPAID_SHEET_);
+    var tz = 'Asia/Tokyo';
+    var now = new Date();
+    var current = Utilities.formatDate(now, tz, 'yy') + '年' + Number(Utilities.formatDate(now, tz, 'M')) + '月';
+    var options = unpaidMonthOptions_();
+    var b1 = String(sh.getRange('B1').getDisplayValue() || '');
+    if (options.indexOf(b1) < 0) b1 = current;
+
+    if (sh.getMaxRows() < 200) sh.insertRowsAfter(sh.getMaxRows(), 200 - sh.getMaxRows());
+    if (sh.getMaxColumns() < UNPAID_COLS_) sh.insertColumnsAfter(sh.getMaxColumns(), UNPAID_COLS_ - sh.getMaxColumns());
+    sh.setFrozenRows(0);
+    var head = sh.getRange(1, 1, UNPAID_DATA_ROW_ + 1, sh.getMaxColumns());
+    head.breakApart();
+    head.clear();
+    head.clearDataValidations();
+
+    var trend = setupUnpaidTrend_(ss, options);
+
+    sh.getRange('A1').setValue('年月');
+    sh.getRange('B1').setNumberFormat('@').setValue(b1)
+      .setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(options, true).setAllowInvalid(false).build());
+    sh.getRange('A2').setFormula('=HYPERLINK("https://docs.google.com/spreadsheets/d/' + UNPAID_SOURCE_ID_ + '/edit","元の未納管理ドライブを開く ↗")');
+    sh.getRange('A3').setFormula('=HYPERLINK("#gid=' + trend.getSheetId() + '","月別の推移を見る ↗")');
+    sh.getRange('D1').setFormula(unpaidDashboardFormula_());
+    sh.getRange(UNPAID_DATA_ROW_, 1).setFormula(unpaidViewFormula_());
+
+    var permit = '';
+    try {
+      var resp = UrlFetchApp.fetch(
+        'https://docs.google.com/spreadsheets/d/' + ss.getId() +
+          '/externaldata/addimportrangepermissions?donorDocId=' + UNPAID_SOURCE_ID_,
+        { method: 'post', headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true }
+      );
+      permit = String(resp.getResponseCode());
+    } catch (eP) {
+      permit = 'error: ' + (eP && eP.message ? eP.message : eP);
+    }
+
+    styleUnpaidView_(sh);
+    styleUnpaidDashboard_(sh);
+    sh.setFrozenRows(UNPAID_DATA_ROW_ + 1);
+    sh.setHiddenGridlines(true);
+    sh.setColumnWidth(1, 130);
+    sh.setColumnWidth(2, 70);
+    sh.setRowHeightsForced(UNPAID_DATA_ROW_ + 2, sh.getMaxRows() - UNPAID_DATA_ROW_ - 1, 22);
+    ss.setActiveSheet(trend);
+    ss.moveActiveSheet(sh.getIndex() + (trend.getIndex() < sh.getIndex() ? 0 : 1));
+    ss.setActiveSheet(sh);
+    sh.setColumnWidth(3, 100);
+    sh.setColumnWidth(4, 130);
+    sh.setColumnWidths(5, 4, 88);
+    sh.setColumnWidths(9, 9, 96);
+    sh.setColumnWidths(18, 13, 64);
+    sh.setColumnWidths(31, UNPAID_COLS_ - 30, 84);
+    sh.setFrozenColumns(4);
+    sh.setTabColor('#111111');
+    SpreadsheetApp.flush();
+    return {
+      ok: true,
+      b1: sh.getRange('B1').getDisplayValue(),
+      permit: permit,
+      dash: sh.getRange('D1:M3').getDisplayValues(),
+      head: sh.getRange(UNPAID_DATA_ROW_, 1, 14, 10).getDisplayValues(),
+      trend: trend.getRange(1, 1, 16, 11).getDisplayValues()
+    };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
+var KENGAKU_SOURCE_ID_ = '1RPUw0slNCit9ZwJgINGfv89oc2Hxw8zzAZyMt6g_QuY';
+var KENGAKU_JOIN_WINDOW_DAYS_ = 180;
+
+/**
+ * 見学体験申請の K 列（入会日）。申込の前日〜180日以内で、氏名かメールが一致する最初の入会日。
+ * 経堂_入会（氏名・メール）と入会者一覧（メール）の早い方。J 列はこの K 列から入会／未入会を出す。
+ */
+function kengakuJoinDateFormula_() {
+  var d = KENGAKU_JOIN_WINDOW_DAYS_;
+  return '={"入会日";ARRAYFORMULA(LET(' +
+    "jd,'経堂_入会'!A2:A," +
+    "jn,REGEXREPLACE('経堂_入会'!B2:B&\"\",\"[\\s　]\",\"\")," +
+    "jm,LOWER(TRIM('経堂_入会'!F2:F&\"\"))," +
+    "ld,'" + JOIN_LIST_SHEET_ + "'!A2:A," +
+    "lm,LOWER(TRIM('" + JOIN_LIST_SHEET_ + "'!C2:C&\"\"))," +
+    'MAP(A2:A,B2:B,C2:C,D2:D,LAMBDA(t,k,n,m,' +
+    'IF(OR(t="",NOT(REGEXMATCH(k&"","見学|体験"))),"",IFERROR(LET(' +
+    'nn,REGEXREPLACE(n&"","[\\s　]",""),mm,LOWER(TRIM(m&"")),lo,INT(t)-1,hi,t+' + d + ',' +
+    'djoin,IFERROR(MIN(FILTER(jd,jd>=lo,jd<=hi,((nn<>"")*(jn=nn)+(mm<>"")*(jm=mm))>0)),0),' +
+    'dlist,IF(mm="",0,IFERROR(MIN(FILTER(ld,ld>=lo,ld<=hi,lm=mm)),0)),' +
+    'IF(djoin+dlist=0,"",IF(djoin=0,dlist,IF(dlist=0,djoin,MIN(djoin,dlist))))),""))))))}';
+}
+
+/** 見学体験申請の J 列（入会／未入会）。K 列に入会日があれば「入会」 */
+function kengakuJoinFormula_() {
+  return '={"入会";ARRAYFORMULA(IF(REGEXMATCH(B2:B&"","見学|体験"),IF(K2:K<>"","入会","未入会"),""))}';
+}
+
+/**
+ * 経堂_入会 / 経堂_退会（受付状況表 入会・退会_データの IMPORTRANGE）を非表示のデータシートとして白黒に整える。
+ * 値・数式には触れない。
+ */
+function styleMembershipMirrors_() {
+  try {
+    var ss = openWorkspaceSpreadsheet_();
+    var out = [];
+    ['経堂_入会', '経堂_退会'].forEach(function (name) {
+      var sh = ss.getSheetByName(name);
+      if (!sh) { out.push({ name: name, ok: false }); return; }
+      if (!/IMPORTRANGE/i.test(String(sh.getRange(1, 1).getFormula() || ''))) {
+        out.push({ name: name, ok: false, message: 'A1 が IMPORTRANGE ではないため未処理' });
+        return;
+      }
+      var maxR = sh.getMaxRows();
+      var cols = Math.max(sh.getLastColumn(), 1);
+      sh.hideSheet();
+      sh.setHiddenGridlines(false);
+      sh.setFrozenRows(1);
+      sh.setTabColor('#111111');
+      sh.getRange(1, 1, maxR, sh.getMaxColumns())
+        .setBorder(false, false, false, false, false, false)
+        .setBackground('#ffffff')
+        .setFontColor('#111111')
+        .setFontFamily('Arial')
+        .setFontSize(10)
+        .setVerticalAlignment('middle');
+      sh.getRange(1, 1, 1, cols)
+        .setBackground('#111111')
+        .setFontColor('#ffffff')
+        .setFontWeight('bold')
+        .setHorizontalAlignment('center');
+      sh.setRowHeight(1, 28);
+      sh.getRange(2, 1, maxR - 1, 1).setNumberFormat('yyyy/mm/dd hh:mm');
+      sh.setColumnWidth(1, 140);
+      sh.setColumnWidth(2, 130);
+      sh.setColumnWidth(3, 95);
+      sh.setColumnWidth(4, 95);
+      if (cols >= 5) sh.setColumnWidth(5, 150);
+      if (cols >= 6) sh.setColumnWidth(6, 100);
+      out.push({ name: name, ok: true, rows: sh.getLastRow() });
+    });
+    return { ok: true, sheets: out };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
+/** 経堂マスタ R4: 今月の見学体験一覧。元フォームの希望日・時刻は文字列なので TO_TEXT で揃える */
+function kengakuMasterListFormula_() {
+  return "=IFERROR(QUERY({'見学体験申請'!A2:C," +
+    "ARRAYFORMULA(SUBSTITUTE(TO_TEXT('見学体験申請'!H2:H),\"-\",\"/\"))," +
+    "ARRAYFORMULA(TO_TEXT('見学体験申請'!I2:I))," +
+    "'見学体験申請'!J2:J}," +
+    "\"select Col1,Col2,Col3,Col4,Col5,Col6 where Col1 >= date '\"&TEXT($AB$5,\"yyyy-mm-dd\")&\"' " +
+    "and Col1 < date '\"&TEXT(EDATE($AB$5,1),\"yyyy-mm-dd\")&\"' order by Col1 desc\",0),\"\")";
+}
+
+/** 経堂マスタ R1: 選択月（AB5）の見学体験 入会数/申込数（率） */
+function kengakuMasterTitleFormula_() {
+  var monthRange =
+    "'見学体験申請'!A2:A,\">=\"&$AB$5,'見学体験申請'!A2:A,\"<\"&EDATE($AB$5,1)";
+  var total =
+    '(COUNTIFS(' + monthRange + ",'見学体験申請'!B2:B,\"見学\")+COUNTIFS(" + monthRange + ",'見学体験申請'!B2:B,\"体験\"))";
+  var joined = 'COUNTIFS(' + monthRange + ",'見学体験申請'!J2:J,\"入会\")";
+  return '="今月の見学体験　入会 "&' + joined + '&"/"&' + total +
+    '&"（"&IFERROR(TEXT(' + joined + '/' + total + ',"0%"),"-")&"）"';
+}
+
+/**
+ * 見学体験申請を元フォームからの IMPORTRANGE に切替え（バックアップ作成）、J列に入会判定、
+ * 経堂マスタ R:W に今月の入会率と○列を出す。confirm=yes のときだけ書き込む。
+ */
+function setupKengakuJoinLive_(confirm) {
+  try {
+    var ss = openWorkspaceSpreadsheet_();
+    var sh = ss.getSheetByName('見学体験申請');
+    var master = ss.getSheetByName('経堂マスタ');
+    if (!sh || !master) return { ok: false, message: 'sheet missing' };
+    var plan = {
+      kengaku: 'A1:I1 見出しは維持 / A2:I の値→ IMPORTRANGE / J列=入会判定',
+      master: 'R1 タイトルに今月の入会率 / R4 の QUERY に入会列を追加（W列に○）/ W3 見出し「入会」'
+    };
+    if (confirm === 'r1only') {
+      master.getRange('R1').setFormula(kengakuMasterTitleFormula_());
+      SpreadsheetApp.flush();
+      return { ok: true, r1: master.getRange('R1').getDisplayValue() };
+    }
+    if (confirm === 'emailJoin') {
+      var joinSh = ss.getSheetByName('経堂_入会');
+      var a1 = joinSh ? String(joinSh.getRange('A1').getFormula() || '') : '';
+      if (a1.indexOf('入会・退会_データ!A1:E"') >= 0) {
+        joinSh.getRange('A1').setFormula(a1.replace('入会・退会_データ!A1:E"', '入会・退会_データ!A1:F"'));
+      }
+      var leaveSh = ss.getSheetByName('経堂_退会');
+      var leaveA1 = leaveSh ? String(leaveSh.getRange('A1').getFormula() || '') : '';
+      if (leaveA1.indexOf('入会・退会_データ!G1:L"') >= 0) {
+        leaveSh.getRange('A1').setFormula(leaveA1.replace('入会・退会_データ!G1:L"', '入会・退会_データ!G1:M"'));
+        leaveSh.setColumnWidth(7, 220);
+      }
+      var beforeJoined = sh.getRange('J2:J').getDisplayValues().filter(function (r) { return r[0] === '○' || r[0] === '入会'; }).length;
+      sh.getRange(1, 10).setFormula(kengakuJoinFormula_());
+      SpreadsheetApp.flush();
+      if (joinSh) joinSh.setColumnWidth(6, 220);
+      return {
+        ok: true,
+        mirrorA1: joinSh ? joinSh.getRange('A1').getFormula() : null,
+        mirrorF1: joinSh ? joinSh.getRange('F1:F3').getDisplayValues() : null,
+        joinedBefore: beforeJoined,
+        joinedAfter: sh.getRange('J2:J').getDisplayValues().filter(function (r) { return r[0] === '入会'; }).length,
+        notJoined: sh.getRange('J2:J').getDisplayValues().filter(function (r) { return r[0] === '未入会'; }).length,
+        r1: master.getRange('R1').getDisplayValue()
+      };
+    }
+    if (confirm === 'leaveList') {
+      var leaveF = "=IFERROR(QUERY('経堂_退会'!A2:F,\"select Col2, Col1 where Col1 >= date '\"&TEXT(TODAY(),\"yyyy-mm-dd\")&\"' " +
+        "and Col1 < date '\"&TEXT(TODAY()+1,\"yyyy-mm-dd\")&\"' and Col6 <> true and Col4 <> '法人会員' " +
+        "and Col3 = '\"&TEXT(TODAY(),\"yyyy年m月\")&\"' order by Col1 desc limit 6\",0),\"\")";
+      var before = master.getRange('D9').getFormula();
+      master.getRange('D9').setFormula(leaveF);
+      SpreadsheetApp.flush();
+      return { ok: true, before: before, list: master.getRange('B9:E14').getDisplayValues() };
+    }
+    if (confirm === 'joinDate') {
+      sh.getRange(1, 11).setFormula(kengakuJoinDateFormula_());
+      sh.getRange(1, 10).setFormula(kengakuJoinFormula_());
+      sh.getRange(2, 11, sh.getMaxRows() - 1, 1).setNumberFormat('yyyy/mm/dd').setHorizontalAlignment('center');
+      try { sh.getRange(1, 10).copyFormatToRange(sh, 11, 11, 1, 1); } catch (eF) {}
+      SpreadsheetApp.flush();
+      var jd = sh.getRange('J2:K').getDisplayValues();
+      return {
+        ok: true,
+        joined: jd.filter(function (r) { return r[0] === '入会'; }).length,
+        notJoined: jd.filter(function (r) { return r[0] === '未入会'; }).length,
+        withDate: jd.filter(function (r) { return r[1]; }).length,
+        k1: sh.getRange('K1').getDisplayValue(),
+        sample: sh.getRange('A185:K192').getDisplayValues().map(function (r) { return [r[0], r[1], r[9], r[10]]; }),
+        r1: master.getRange('R1').getDisplayValue()
+      };
+    }
+    if (confirm === 'joinLabel') {
+      sh.getRange(1, 10).setFormula(kengakuJoinFormula_());
+      master.getRange('R1').setFormula(kengakuMasterTitleFormula_());
+      ['経堂_入会', '経堂_退会'].forEach(function (n) {
+        var m = ss.getSheetByName(n);
+        if (m) m.hideSheet();
+      });
+      SpreadsheetApp.flush();
+      var jv = sh.getRange('J2:J').getDisplayValues();
+      return {
+        ok: true,
+        joined: jv.filter(function (r) { return r[0] === '入会'; }).length,
+        notJoined: jv.filter(function (r) { return r[0] === '未入会'; }).length,
+        circles: jv.filter(function (r) { return r[0] === '○'; }).length,
+        r1: master.getRange('R1').getDisplayValue(),
+        r4: master.getRange('R4:W8').getDisplayValues()
+      };
+    }
+    if (confirm === 'r4fix') {
+      master.getRange('R4').setFormula(kengakuMasterListFormula_());
+      SpreadsheetApp.flush();
+      return { ok: true, rows: master.getRange('R4:W7').getDisplayValues() };
+    }
+    if (confirm !== 'yes') return { ok: true, dryRun: true, plan: plan };
+
+    var stamp = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'MMdd_HHmm');
+    var backup = sh.copyTo(ss).setName('見学体験申請_backup_' + stamp);
+    backup.hideSheet();
+    var masterBackup = master.copyTo(ss).setName('経堂マスタ_backup_' + stamp);
+    masterBackup.hideSheet();
+
+    var lastRow = Math.max(sh.getLastRow(), 2);
+    sh.getRange(2, 1, lastRow - 1, 9).clearContent();
+    sh.getRange(2, 1).setFormula('=IMPORTRANGE("' + KENGAKU_SOURCE_ID_ + '","見学体験申請!A1:I")');
+    sh.getRange(1, 10).setFormula(kengakuJoinFormula_());
+    sh.getRange(1, 10).copyFormatToRange(sh, 10, 10, 1, 1);
+    try { sh.getRange(1, 9).copyFormatToRange(sh, 10, 10, 1, 1); } catch (eFmt) {}
+    sh.getRange(2, 10, sh.getMaxRows() - 1, 1).setHorizontalAlignment('center');
+
+    master.getRange('R1').setFormula(kengakuMasterTitleFormula_());
+    var r4 = master.getRange('R4').getFormula();
+    var r4new = kengakuMasterListFormula_();
+    if (r4new !== r4) master.getRange('R4').setFormula(r4new);
+    master.getRange('V3').copyFormatToRange(master, 23, 23, 3, 3);
+    master.getRange('W3').setValue('入会');
+    master.getRange('V4:V40').copyFormatToRange(master, 23, 23, 4, 40);
+    master.getRange('W4:W40').setHorizontalAlignment('center');
+
+    SpreadsheetApp.flush();
+    return {
+      ok: true,
+      backups: [backup.getName(), masterBackup.getName()],
+      r4Changed: r4new !== r4,
+      r1: master.getRange('R1').getDisplayValue(),
+      j1: sh.getRange('J1').getDisplayValue(),
+      rows: sh.getLastRow()
+    };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
+/**
+ * 読み取り専用の試算: 見学体験申請 → 入会（経堂_入会 の氏名 / 入会者一覧 のメール）
+ * 申込日以降 days 日以内に、名前かメールが一致した入会があれば「入会」とみなす。
+ */
+function previewTourToJoinFunnel_(days) {
+  try {
+    days = Math.max(7, Math.min(Number(days) || 60, 365));
+    var ss = openWorkspaceSpreadsheet_();
+    var norm = function (s) {
+      return String(s || '').replace(/[\s\u3000]/g, '').normalize('NFKC').toLowerCase();
+    };
+    var toDate = function (v) {
+      if (v instanceof Date) return v;
+      var d = new Date(String(v || '').replace(/\//g, '-').replace(' ', 'T'));
+      return isNaN(d.getTime()) ? null : d;
+    };
+
+    var joins = [];
+    var joinSh = ss.getSheetByName('経堂_入会');
+    if (joinSh && joinSh.getLastRow() > 1) {
+      joinSh.getRange(2, 1, joinSh.getLastRow() - 1, 4).getValues().forEach(function (r) {
+        var d = toDate(r[0]);
+        if (d && r[1]) joins.push({ at: d, name: norm(r[1]), email: '', kind: String(r[3] || '') });
+      });
+    }
+    var listSh = ss.getSheetByName(JOIN_LIST_SHEET_);
+    if (listSh && listSh.getLastRow() > 1) {
+      listSh.getRange(2, 1, listSh.getLastRow() - 1, 3).getValues().forEach(function (r) {
+        var d = toDate(r[0]);
+        if (d && (r[1] || r[2])) joins.push({ at: d, name: norm(r[1]), email: norm(r[2]), kind: '' });
+      });
+    }
+
+    var tourSh = ss.getSheetByName('見学体験申請');
+    var tours = tourSh.getRange(2, 1, Math.max(tourSh.getLastRow() - 1, 1), 9).getValues();
+    var byMonth = {};
+    var total = { tours: 0, withName: 0, joined: 0, byName: 0, byEmail: 0, daysSum: 0 };
+    var samples = [];
+    var limitMs = days * 86400000;
+    tours.forEach(function (r) {
+      var at = toDate(r[0]);
+      var kind = String(r[1] || '');
+      if (!at || !/見学|体験/.test(kind)) return;
+      var name = norm(r[2]);
+      var email = norm(r[3]);
+      var ym = Utilities.formatDate(at, 'Asia/Tokyo', 'yyyy/MM');
+      var m = byMonth[ym] || (byMonth[ym] = { tours: 0, joined: 0, 見学: 0, 体験: 0, 見学入会: 0, 体験入会: 0 });
+      m.tours++; m[kind]++; total.tours++;
+      if (!name && !email) return;
+      total.withName++;
+      var hit = null;
+      var how = '';
+      for (var i = 0; i < joins.length; i++) {
+        var j = joins[i];
+        var diff = j.at.getTime() - at.getTime();
+        if (diff < -86400000 || diff > limitMs) continue;
+        if (email && j.email && email === j.email) { hit = j; how = 'email'; break; }
+        if (name && j.name && name === j.name) { hit = j; how = 'name'; }
+      }
+      if (hit) {
+        m.joined++; m[kind + '入会']++; total.joined++;
+        if (how === 'email') total.byEmail++; else total.byName++;
+        var dd = Math.max(0, Math.round((hit.at.getTime() - at.getTime()) / 86400000));
+        total.daysSum += dd;
+        if (samples.length < 8) samples.push({ tour: ym, kind: kind, how: how, days: dd, joinKind: hit.kind });
+      }
+    });
+    return {
+      ok: true,
+      windowDays: days,
+      joinsLoaded: joins.length,
+      total: total,
+      avgDaysToJoin: total.joined ? Math.round(total.daysSum / total.joined * 10) / 10 : null,
+      byMonth: byMonth,
+      samples: samples
+    };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
+/** 読み取り専用: 見出し行・先頭2行・末尾N行と A1/F1 の数式を返す（全体把握用） */
+function peekSheetRows_(name, tail) {
+  try {
+    var ss = openWorkspaceSpreadsheet_();
+    var names = name ? [name] : ss.getSheets().map(function (s) { return s.getName(); });
+    tail = Math.max(1, Math.min(Number(tail) || 8, 40));
+    var out = [];
+    for (var i = 0; i < names.length; i++) {
+      var sh = ss.getSheetByName(names[i]);
+      if (!sh) { out.push({ name: names[i], exists: false }); continue; }
+      var lastRow = sh.getLastRow();
+      var lastCol = Math.min(Math.max(sh.getLastColumn(), 1), 30);
+      var head = lastRow >= 1 ? sh.getRange(1, 1, Math.min(lastRow, 3), lastCol).getDisplayValues() : [];
+      var tailRows = [];
+      if (lastRow > 3) {
+        var start = Math.max(4, lastRow - tail + 1);
+        tailRows = sh.getRange(start, 1, lastRow - start + 1, lastCol).getDisplayValues();
+      }
+      var formulas = {};
+      var topFormulas = sh.getRange(1, 1, 1, lastCol).getFormulas()[0];
+      for (var c = 0; c < topFormulas.length; c++) {
+        if (topFormulas[c]) formulas[columnLetter_(c + 1) + '1'] = String(topFormulas[c]).slice(0, 200);
+      }
+      out.push({
+        name: names[i],
+        hidden: sh.isSheetHidden(),
+        rows: lastRow,
+        cols: sh.getLastColumn(),
+        topFormulas: formulas,
+        head: head,
+        tail: tailRows
+      });
+    }
+    return { ok: true, sheets: out };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
 function openWorkspaceSpreadsheet_() {
   try {
     return SpreadsheetApp.openById(WS_CONFIG.SPREADSHEET_ID);
@@ -3168,6 +4821,7 @@ function openWorkspaceSpreadsheet_() {
 /**
  * Gemini で所感を校閲（敬語・誤字・分量）。
  * スクリプトのプロパティに GEMINI_API_KEY を設定（Google AI Studio で発行可）。
+ * 高負荷・未提供時は候補モデルを順に試す。
  */
 function polishKansouWithGemini(rawText) {
   try {
@@ -3182,47 +4836,70 @@ function polishKansouWithGemini(rawText) {
           'GEMINI_API_KEY が未設定です。プロジェクトの設定 → スクリプトのプロパティ にキーを追加してください。',
       };
     }
-    var url =
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' +
-      encodeURIComponent(key);
-    var body = {
-      contents: [
-        {
-          parts: [
-            {
-              text:
-                '以下はフィットネス施設のスタッフ日報「所感」欄の下書きです。ビジネスメール向けの敬語に整え、誤字脱字を修正し、300文字以内で簡潔にまとめてください。事実と意味は変えないでください。出力は所感の本文のみ（説明・見出し・引用符は不要）。\n\n' +
-                String(rawText),
-            },
-          ],
-        },
-      ],
-    };
-    var res = UrlFetchApp.fetch(url, {
-      method: 'post',
-      contentType: 'application/json',
-      payload: JSON.stringify(body),
-      muteHttpExceptions: true,
-    });
-    var code = res.getResponseCode();
-    var json = JSON.parse(res.getContentText());
-    if (code !== 200) {
-      return {
-        ok: false,
-        message: (json.error && json.error.message) || 'API エラー（コード ' + code + '）',
+    var models = [
+      'gemini-2.0-flash-lite',
+      'gemini-2.0-flash',
+      'gemini-2.5-flash-lite',
+      'gemini-2.5-flash',
+      'gemini-flash-latest',
+      'gemini-1.5-flash',
+    ];
+    var prompt =
+      '以下はフィットネス施設のスタッフ日報「所感」欄の下書きです。ビジネスメール向けの敬語に整え、誤字脱字を修正し、300文字以内で簡潔にまとめてください。事実と意味は変えないでください。出力は所感の本文のみ（説明・見出し・引用符は不要）。\n\n' +
+      String(rawText);
+    var lastMessage = '添削に失敗しました。';
+    for (var i = 0; i < models.length; i++) {
+      var url =
+        'https://generativelanguage.googleapis.com/v1beta/models/' +
+        encodeURIComponent(models[i]) +
+        ':generateContent?key=' +
+        encodeURIComponent(key);
+      var body = {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.4, maxOutputTokens: 1024 },
       };
+      var res = UrlFetchApp.fetch(url, {
+        method: 'post',
+        contentType: 'application/json',
+        payload: JSON.stringify(body),
+        muteHttpExceptions: true,
+      });
+      var code = res.getResponseCode();
+      var json = {};
+      try {
+        json = JSON.parse(res.getContentText());
+      } catch (eParse) {
+        lastMessage = 'Gemini の応答が不正です（' + code + '）';
+        continue;
+      }
+      if (code !== 200) {
+        lastMessage = (json.error && json.error.message) || 'API エラー（コード ' + code + '）';
+        if (
+          code === 429 ||
+          code === 503 ||
+          /high demand|resource.?exhausted|unavailable|try again|not found|not supported/i.test(
+            lastMessage
+          )
+        ) {
+          continue;
+        }
+        return { ok: false, message: lastMessage };
+      }
+      var text =
+        json.candidates &&
+        json.candidates[0] &&
+        json.candidates[0].content &&
+        json.candidates[0].content.parts &&
+        json.candidates[0].content.parts[0] &&
+        json.candidates[0].content.parts[0].text;
+      if (text) return { ok: true, text: String(text).trim(), model: models[i] };
+      lastMessage = '返答を取得できませんでした。';
     }
-    var text =
-      json.candidates &&
-      json.candidates[0] &&
-      json.candidates[0].content &&
-      json.candidates[0].content.parts &&
-      json.candidates[0].content.parts[0] &&
-      json.candidates[0].content.parts[0].text;
-    if (!text) {
-      return { ok: false, message: '返答を取得できませんでした。' };
+    if (/high demand|try again later/i.test(lastMessage)) {
+      lastMessage =
+        'AIが混み合っています。十数秒待ってからもう一度「添削」を押してください。';
     }
-    return { ok: true, text: String(text).trim() };
+    return { ok: false, message: lastMessage };
   } catch (e) {
     console.error(e);
     return { ok: false, message: String(e.message || e) };
