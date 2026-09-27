@@ -54,11 +54,13 @@ function onOpen() {
   ui.createMenu('今日の作業')
     .addItem('しまう', 'hubCloseWork_')
     .addItem('トップを表示', 'hubShowHome_')
+    .addItem('未納一覧を見やすくする', 'applyUnpaidScanFromMenu')
     .addToUi();
   ui.createMenu('数値更新')
     .addItem('受付状況表の数値を更新（入会・退会・OP）', 'refreshReceptionNumbersFromMenu')
     .addItem('前回の更新時刻を確認', 'showReceptionRefreshStatus')
     .addToUi();
+  try { maybeApplyUnpaidScanOnce_(); } catch (eScan) {}
 }
 
 function onEdit(e) {}
@@ -67,6 +69,11 @@ function onSelectionChange(e) {
   try {
     handleHubHomeSelect_(e);
   } catch (err) {}
+  try {
+    if (e && e.range && e.range.getSheet().getName() === UNPAID_SHEET_) {
+      maybeApplyUnpaidScanOnce_(e.range.getSheet());
+    }
+  } catch (eScan) {}
 }
 
 function callReceptionRefreshApi_(api) {
@@ -1981,7 +1988,7 @@ function handleApiGet_(e) {
   try {
     var api = e && e.parameter ? String(e.parameter.api || '') : '';
     if (api === 'status') {
-      return jsonOutput_({ ok: true, service: 'ryuta-workspace-gas', version: 'v2-hub-hide-keys' });
+      return jsonOutput_({ ok: true, service: 'ryuta-workspace-gas', version: 'v2-unpaid-scan' });
     }
     if (api === 'listSheets') {
       return jsonOutput_(listWorkspaceSheets_());
@@ -4775,7 +4782,7 @@ function unpaidViewFormula_() {
     'LET(vw,MAKEARRAY(ROWS(d),COLUMNS(d),LAMBDA(r,c,LET(v,IFERROR(INDEX(d,r,c),""),' +
     'n,IF(ISNUMBER(v),v,IF(REGEXMATCH(v&"","^-?[0-9,]+(\\.[0-9]+)?$"),VALUE(v),"")),' +
     'lab,IF(AND(c>=28,r>1),IFERROR(LET(x,ARRAY_CONSTRAIN(CHOOSECOLS(d,c),r-1,1),CHOOSEROWS(FILTER(x,ISTEXT(x)),-1)),""),INDEX(h,1,c)),' +
-    'IF(c=1,IF(INDEX(d,r,3)&INDEX(d,r,4)="",v,INDEX(cat,r,1)),' +
+    'IF(c=1,IF(INDEX(d,r,3)&INDEX(d,r,4)="",v,LET(cx,INDEX(cat,r,1)&"",' + unpaidShortCatExpr_('cx') + ')),' +
     'IF(ISLOGICAL(v),IF(v,"☑","☐"),' +
     'IF(n="",v,' +
     'IF(REGEXMATCH(lab,"率$"),TEXT(n,"0.0%"),' +
@@ -4788,6 +4795,19 @@ function unpaidViewFormula_() {
 var UNPAID_TREND_SHEET_ = '未納管理_推移';
 var UNPAID_DATA_ROW_ = 5;
 var UNPAID_COLS_ = 41;
+var UNPAID_NAME_COL_ = 4;
+var UNPAID_PAY_COL_ = 14;
+var UNPAID_REC_COL_ = 25;
+
+function unpaidShortCatExpr_(cx) {
+  return 'IFS(' +
+    'REGEXMATCH(' + cx + ',"貸倒|貸し倒"),"貸倒",' +
+    'REGEXMATCH(' + cx + ',"JACCS"),"JACCS",' +
+    'REGEXMATCH(' + cx + ',"1ヶ月|1ヵ月|1カ月|1か月"),"1ヶ月",' +
+    'REGEXMATCH(' + cx + ',"2ヶ月|2ヵ月|2カ月|2か月"),"2ヶ月",' +
+    'REGEXMATCH(' + cx + ',"過年度"),"過年度",' +
+    'TRUE,' + cx + ')';
+}
 
 /**
  * 月タブ1枚分の集計に使う LET 変数（新旧レイアウト両対応。列は見出しの文字で探す）。
@@ -4831,28 +4851,48 @@ function unpaidTrendRowFormula_(row) {
     'HSTACK(n,sp,sr,rate,IF(rate="","",SPARKLINE(rate,{"charttype","bar";"max",1;"color1","#8B1216"})),sp-sr,nr,rq(kone),rq(ktwo),rq(kbad)))),"")';
 }
 
+function unpaidHideNoiseCols_(sh) {
+  var maxC = sh.getMaxColumns();
+  try { sh.showColumns(1, maxC); } catch (eShow) {}
+  try { sh.hideColumns(17, 8); } catch (eProc) {}
+  if (maxC >= 27) {
+    try { sh.hideColumns(27, maxC - 26); } catch (eTail) {}
+  }
+}
+
 function styleUnpaidView_(sh) {
   var maxR = sh.getMaxRows();
   var top = UNPAID_DATA_ROW_;
   var solid = SpreadsheetApp.BorderStyle.SOLID;
-
   var W = UNPAID_COLS_;
   var t = dnTheme_();
+  var r0 = top + 2;
+  var bodyRows = maxR - r0 + 1;
   var body = sh.getRange(top, 1, maxR - top + 1, W);
   body.setBackground(t.paper).setFontColor(t.ink).setFontSize(10).setFontWeight('normal')
     .setVerticalAlignment('middle').setWrap(false).setBorder(false, false, false, false, false, false);
   sh.getRange(top, 1, 2, W).setFontWeight('bold').setBackground(t.ink).setFontColor(t.paper)
     .setFontSize(9).setWrap(true).setHorizontalAlignment('center');
-  sh.getRange(top + 2, 1, maxR - top - 1, W)
+  sh.getRange(r0, 1, bodyRows, W)
     .setBorder(null, null, null, null, null, true, t.line, solid);
-  sh.getRange(top + 2, 2, maxR - top - 1, W - 1).setHorizontalAlignment('center');
-  sh.getRange(top + 2, 4, maxR - top - 1, 1).setHorizontalAlignment('left');
-  sh.getRange(top + 2, 1, maxR - top - 1, 1).setFontWeight('bold').setFontSize(9).setWrap(false)
-    .setFontColor(t.ink);
+  sh.getRange(r0, 2, bodyRows, W - 1).setHorizontalAlignment('center');
+  sh.getRange(r0, UNPAID_NAME_COL_, bodyRows, 1).setHorizontalAlignment('left')
+    .setFontWeight('bold').setFontSize(11);
+  sh.getRange(r0, 1, bodyRows, 1).setFontWeight('bold').setFontSize(10)
+    .setHorizontalAlignment('center').setFontColor(t.ink);
+  sh.getRange(r0, UNPAID_PAY_COL_, bodyRows, 1).setFontSize(11).setFontWeight('bold');
+  sh.getRange(r0, UNPAID_REC_COL_, bodyRows, 1).setFontWeight('bold');
 
-  var rng = sh.getRange(top + 2, 1, maxR - top - 1, W);
-  var joinRng = sh.getRange(top + 2, 4, maxR - top - 1, 5);
-  var r0 = top + 2;
+  var rng = sh.getRange(r0, 1, bodyRows, W);
+  var joinRng = sh.getRange(r0, UNPAID_NAME_COL_, bodyRows, 5);
+  var catRng = sh.getRange(r0, 1, bodyRows, 1);
+  var payRng = sh.getRange(r0, UNPAID_PAY_COL_, bodyRows, 1);
+  var recRng = sh.getRange(r0, UNPAID_REC_COL_, bodyRows, 1);
+  var name = '$D' + r0 + '&""';
+  var hasName = 'AND(' + name + '<>"",' + name + '<>"会員名")';
+  var recovered = 'REGEXMATCH($Y' + r0 + '&"","[1-9]")';
+  var early = 'IFERROR(VALUE(REGEXEXTRACT($H' + r0 + '&"","^(\\d+)ヶ月$"))<=2,FALSE)';
+  var none = '$E' + r0 + '="該当なし"';
   var rules = sh.getConditionalFormatRules().filter(function (r) {
     return r.getRanges().every(function (x) { return x.getSheet().getName() !== UNPAID_SHEET_; });
   });
@@ -4864,26 +4904,82 @@ function styleUnpaidView_(sh) {
     rules.push(b.build());
   };
   add('=OR($B' + r0 + '="会員番号",$C' + r0 + '="会員番号")', t.ink, t.paper, true);
-  var bands = [
-    ['REGEXMATCH($A' + r0 + '&"","貸倒|貸し倒")', '#E4D3B8'],
-    ['REGEXMATCH($A' + r0 + '&"","2ヶ月|2ヵ月|2カ月|3ヶ月|3ヵ月|3カ月")', t.cream],
-    ['REGEXMATCH($A' + r0 + '&"","JACCS")', t.ghost],
-    ['TRUE', null]
-  ];
-  var early = 'IFERROR(VALUE(REGEXEXTRACT($H' + r0 + '&"","^(\\d+)ヶ月$"))<=2,FALSE)';
-  var none = '$E' + r0 + '="該当なし"';
-  bands.forEach(function (b) {
-    add('=AND(' + early + ',' + b[0] + ')', b[1], t.apple, true, joinRng);
-    add('=AND(' + none + ',' + b[0] + ')', b[1], t.ash, false, joinRng);
-  });
   add('=OR($A' + r0 + '="合計",$B' + r0 + '="合計")', t.cream, t.ink, true);
-  bands.slice(0, 3).forEach(function (b) { add('=' + b[0], b[1], null, false); });
+  add('=AND(' + hasName + ',REGEXMATCH($A' + r0 + '&"","^1ヶ月"))', t.blood, t.paper, true, catRng);
+  add('=AND(' + hasName + ',REGEXMATCH($A' + r0 + '&"","^2ヶ月"))', '#5C2218', t.paper, true, catRng);
+  add('=AND(' + hasName + ',REGEXMATCH($A' + r0 + '&"","貸倒"))', '#6B5344', t.paper, true, catRng);
+  add('=AND(' + hasName + ',REGEXMATCH($A' + r0 + '&"","JACCS"))', '#3A3A3A', t.paper, true, catRng);
+  add('=AND(' + hasName + ',REGEXMATCH($A' + r0 + '&"","過年度"))', '#2A2420', t.paper, true, catRng);
+  add('=AND(' + hasName + ',' + recovered + ')', '#D9D3C6', '#4A463E', true, recRng);
+  add('=AND(' + hasName + ',' + recovered + ')', '#EFEBE3', '#8A8478', false);
+  add('=AND(' + hasName + ',NOT(' + recovered + '))', null, t.blood, true, payRng);
+  add('=AND(' + hasName + ',' + early + ')', null, t.apple, true, joinRng);
+  add('=AND(' + hasName + ',' + none + ')', null, t.ash, false, joinRng);
+  add('=AND(' + hasName + ',REGEXMATCH($A' + r0 + '&"","^1ヶ月"))', t.ghost, null, false);
+  add('=AND(' + hasName + ',REGEXMATCH($A' + r0 + '&"","^2ヶ月"))', t.cream, null, false);
+  add('=AND(' + hasName + ',REGEXMATCH($A' + r0 + '&"","貸倒"))', '#E4D3B8', null, false);
+  add('=AND(' + hasName + ',REGEXMATCH($A' + r0 + '&"","JACCS"))', '#E8E4DC', null, false);
   sh.setConditionalFormatRules(rules);
+  unpaidHideNoiseCols_(sh);
+}
+
+var UNPAID_SCAN_PROP_ = 'unpaidScanV2';
+
+function applyUnpaidScanLook_(sh) {
+  if (!sh) return { ok: false };
+  sh.getRange(UNPAID_DATA_ROW_, 1).setFormula(unpaidViewFormula_());
+  styleUnpaidView_(sh);
+  styleUnpaidDashboard_(sh);
+  sh.setColumnWidth(1, 72);
+  sh.setColumnWidth(2, 52);
+  sh.setColumnWidth(3, 100);
+  sh.setColumnWidth(4, 148);
+  sh.setColumnWidths(5, 4, 88);
+  sh.setColumnWidth(9, 110);
+  sh.setColumnWidths(10, 2, 92);
+  sh.setColumnWidths(12, 5, 100);
+  sh.setColumnWidth(25, 104);
+  sh.setColumnWidth(26, 92);
+  try { sh.setRowHeightsForced(UNPAID_DATA_ROW_ + 2, Math.max(sh.getMaxRows() - UNPAID_DATA_ROW_ - 1, 1), 24); } catch (eH) {}
+  unpaidHideNoiseCols_(sh);
+  sh.setFrozenColumns(4);
+  sh.setFrozenRows(UNPAID_DATA_ROW_ + 1);
+  sh.setHiddenGridlines(true);
+  return { ok: true };
+}
+
+function maybeApplyUnpaidScanOnce_(optSheet) {
+  var props = PropertiesService.getDocumentProperties();
+  if (props.getProperty(UNPAID_SCAN_PROP_) === '1') return { ok: true, skipped: true };
+  var ss = SpreadsheetApp.getActiveSpreadsheet() || openWorkspaceSpreadsheet_();
+  var sh = optSheet && optSheet.getName() === UNPAID_SHEET_
+    ? optSheet
+    : ss.getSheetByName(UNPAID_SHEET_);
+  if (!sh) return { ok: false };
+  applyUnpaidScanLook_(sh);
+  props.setProperty(UNPAID_SCAN_PROP_, '1');
+  return { ok: true };
+}
+
+function applyUnpaidScanFromMenu() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName(UNPAID_SHEET_);
+  if (!sh) {
+    ss.toast('未納管理がありません', '未納', 8);
+    return { ok: false };
+  }
+  var r = applyUnpaidScanLook_(sh);
+  try { PropertiesService.getDocumentProperties().setProperty(UNPAID_SCAN_PROP_, '1'); } catch (eP) {}
+  ss.toast('区分・金額・回収済みが見やすくなりました', '未納', 8);
+  return r;
 }
 
 function styleUnpaidDashboard_(sh) {
   var t = dnTheme_();
   var solid = SpreadsheetApp.BorderStyle.SOLID;
+  try { sh.getRange('B1:C1').breakApart(); } catch (e0) {}
+  try { sh.getRange('A2:C3').breakApart(); } catch (e1) {}
+  try { sh.getRange('A4:C4').breakApart(); } catch (e2) {}
   sh.getRange(1, 1, 4, 37).setBackground(t.paper).setFontColor(t.ink).setVerticalAlignment('middle');
   sh.getRange('A1').setFontSize(9).setFontColor(t.ash).setHorizontalAlignment('right');
   sh.getRange('B1:C1').merge().setFontSize(12).setFontWeight('bold').setHorizontalAlignment('center')
@@ -4900,11 +4996,14 @@ function styleUnpaidDashboard_(sh) {
   sh.getRange('G1:G3').setBackground(t.blood).setFontColor(t.paper);
   sh.getRange('G1').setFontColor(t.cream);
   sh.getRange('G3').setFontColor(t.cream);
+  sh.getRange('A4:C4').merge().setValue('左の区分 → 名前 → 赤い支払額が未回収。回収済みは薄く。対応チェックは右に隠してある。')
+    .setFontSize(8).setFontColor(t.ash).setHorizontalAlignment('left').setFontWeight('normal')
+    .setBackground(t.paper);
 
   sh.setRowHeight(1, 24);
   sh.setRowHeight(2, 36);
   sh.setRowHeight(3, 32);
-  sh.setRowHeight(4, 10);
+  sh.setRowHeight(4, 20);
 }
 
 function setupUnpaidTrend_(ss, options) {
@@ -4956,7 +5055,7 @@ function setupUnpaidTrend_(ss, options) {
 }
 
 function applyUnpaidNotes_(sh, tr) {
-  sh.getRange('A1').setNote('☑☐ は表示だけです。クリックしても元ファイルは変わりません。操作は「元の未納管理ドライブ」で。');
+    sh.getRange('A1').setNote('☑☐ は表示だけです。クリックしても元ファイルは変わりません。操作は「元の未納管理ドライブ」で。対応チェック列は右に隠してあります。');
   sh.getRange('B1').setNote('元ファイルの月タブ名です。いまの月が一番上、あとは新しい順です。');
   sh.getRange('D1').setNote('会員番号があり、支払額が1円以上の行の件数。');
   sh.getRange('E1').setNote('支払額の合計（手数料は含まない）。');
@@ -5025,21 +5124,26 @@ function setupUnpaidView_() {
     applyUnpaidNotes_(sh, trend);
     sh.setFrozenRows(UNPAID_DATA_ROW_ + 1);
     sh.setHiddenGridlines(true);
-    sh.setColumnWidth(1, 130);
-    sh.setColumnWidth(2, 70);
-    sh.setRowHeightsForced(UNPAID_DATA_ROW_ + 2, sh.getMaxRows() - UNPAID_DATA_ROW_ - 1, 22);
+    try { sh.showSheet(); } catch (eShowU) {}
+    sh.setColumnWidth(1, 72);
+    sh.setColumnWidth(2, 52);
+    sh.setRowHeightsForced(UNPAID_DATA_ROW_ + 2, sh.getMaxRows() - UNPAID_DATA_ROW_ - 1, 24);
     ss.setActiveSheet(trend);
     ss.moveActiveSheet(sh.getIndex() + (trend.getIndex() < sh.getIndex() ? 0 : 1));
     ss.setActiveSheet(sh);
     sh.setColumnWidth(3, 100);
-    sh.setColumnWidth(4, 130);
+    sh.setColumnWidth(4, 148);
     sh.setColumnWidths(5, 4, 88);
-    sh.setColumnWidths(9, 9, 96);
-    sh.setColumnWidths(18, 13, 64);
-    sh.setColumnWidths(31, UNPAID_COLS_ - 30, 84);
+    sh.setColumnWidth(9, 110);
+    sh.setColumnWidths(10, 2, 92);
+    sh.setColumnWidths(12, 5, 100);
+    sh.setColumnWidth(25, 104);
+    sh.setColumnWidth(26, 92);
+    unpaidHideNoiseCols_(sh);
     sh.setFrozenColumns(4);
     sh.setTabColor(dnTheme_().blood);
     applyHubTabColors_(ss);
+    try { PropertiesService.getDocumentProperties().setProperty(UNPAID_SCAN_PROP_, '1'); } catch (eProp) {}
     SpreadsheetApp.flush();
     return {
       ok: true,
