@@ -59,19 +59,13 @@ function onOpen() {
     .addItem('受付状況表の数値を更新（入会・退会・OP）', 'refreshReceptionNumbersFromMenu')
     .addItem('前回の更新時刻を確認', 'showReceptionRefreshStatus')
     .addToUi();
+  try {
+    var unpaid = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(UNPAID_SHEET_);
+    if (unpaid) unpaid.showRows(1, unpaid.getMaxRows());
+  } catch (eShow) {}
 }
 
-function onEdit(e) {
-  try {
-    if (!e || !e.range) return;
-    var sh = e.range.getSheet();
-    if (sh.getName() !== UNPAID_SHEET_) return;
-    if (e.range.getRow() === 1 && e.range.getColumn() <= 3) {
-      Utilities.sleep(1500);
-      unpaidTrimBelowTotal_(sh);
-    }
-  } catch (err) {}
-}
+function onEdit(e) {}
 
 function onSelectionChange(e) {}
 
@@ -4922,32 +4916,6 @@ function styleUnpaidView_(sh) {
   unpaidHideNoiseCols_(sh);
 }
 
-function unpaidFindTotalRow_(sh) {
-  var start = UNPAID_DATA_ROW_;
-  var last = Math.max(sh.getLastRow(), start);
-  var n = last - start + 1;
-  if (n < 1) return 0;
-  var vals = sh.getRange(start, 1, n, 2).getDisplayValues();
-  var i;
-  for (i = 0; i < vals.length; i++) {
-    var a = String(vals[i][0] || '').replace(/[\s　]/g, '');
-    var b = String(vals[i][1] || '').replace(/[\s　]/g, '');
-    if (a === '合計' || b === '合計') return start + i;
-  }
-  return 0;
-}
-
-function unpaidTrimBelowTotal_(sh) {
-  var maxR = sh.getMaxRows();
-  try { sh.showRows(1, maxR); } catch (e0) {}
-  SpreadsheetApp.flush();
-  var cut = unpaidFindTotalRow_(sh);
-  if (cut > 0 && cut < maxR) {
-    try { sh.hideRows(cut + 1, maxR - cut); } catch (e1) {}
-  }
-  return { ok: true, totalRow: cut };
-}
-
 var UNPAID_SCAN_PROP_ = 'unpaidScanV2';
 var FOUR_COLOR_PROP_ = 'hubFieldV1';
 
@@ -4974,11 +4942,10 @@ function applyUnpaidScanLook_(sh) {
   sh.setColumnWidth(26, 92);
   try { sh.setRowHeightsForced(UNPAID_DATA_ROW_ + 2, Math.max(sh.getMaxRows() - UNPAID_DATA_ROW_ - 1, 1), 24); } catch (eH) {}
   unpaidHideNoiseCols_(sh);
-  unpaidTrimBelowTotal_(sh);
   sh.setFrozenColumns(4);
   sh.setFrozenRows(UNPAID_DATA_ROW_ + 1);
   sh.setHiddenGridlines(true);
-  return { ok: true, totalRow: unpaidFindTotalRow_(sh) };
+  return { ok: true };
 }
 
 function maybeApplyFourColorOnce_() {
@@ -5036,7 +5003,7 @@ function styleUnpaidDashboard_(sh) {
   sh.getRange('G1:G3').setBackground(t.blood).setFontColor(t.paper);
   sh.getRange('G1').setFontColor(t.paper);
   sh.getRange('G3').setFontColor(t.paper);
-  sh.getRange('A4:C4').merge().setValue('未回収の支払額が赤。回収済みは灰。合計より下のメモは隠してある。')
+  sh.getRange('A4:C4').merge().setValue('未回収の支払額が赤。回収済みは灰。')
     .setFontSize(8).setFontColor(t.ash).setHorizontalAlignment('left').setFontWeight('normal')
     .setBackground(t.paper);
 
@@ -5180,7 +5147,6 @@ function setupUnpaidView_() {
     sh.setColumnWidth(25, 104);
     sh.setColumnWidth(26, 92);
     unpaidHideNoiseCols_(sh);
-    unpaidTrimBelowTotal_(sh);
     sh.setFrozenColumns(4);
     sh.setTabColor(dnTheme_().blood);
     applyHubTabColors_(ss);
@@ -5191,7 +5157,6 @@ function setupUnpaidView_() {
       ok: true,
       b1: sh.getRange('B1').getDisplayValue(),
       permit: permit,
-      totalRow: unpaidFindTotalRow_(sh),
       dash: sh.getRange('D1:M3').getDisplayValues(),
       head: sh.getRange(UNPAID_DATA_ROW_, 1, 14, 10).getDisplayValues(),
       trend: trend.getRange(1, 1, 16, 11).getDisplayValues()
