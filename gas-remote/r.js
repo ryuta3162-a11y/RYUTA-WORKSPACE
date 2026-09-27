@@ -435,12 +435,13 @@ function stylePromoSheetKeepValues_(sheet) {
   headerRange
     .setBackground(dn.ink)
     .setFontColor(dn.paper)
-    .setFontFamily('Meiryo')
+    .setFontFamily('Noto Sans JP').setFontStyle('italic')
     .setFontSize(10)
     .setFontWeight('bold')
     .setVerticalAlignment('middle')
-    .setHorizontalAlignment('left')
-    .setWrap(true);
+    .setHorizontalAlignment('center')
+    .setWrap(true)
+    .setBorder(false, false, true, false, false, false, dn.blood, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
   sheet.setRowHeight(1, 32);
 
   if (usedRows >= 2) {
@@ -448,7 +449,7 @@ function stylePromoSheetKeepValues_(sheet) {
     body
       .setBackground(dn.paper)
       .setFontColor(dn.ink)
-      .setFontFamily('Meiryo')
+      .setFontFamily('Noto Sans JP').setFontStyle('italic')
       .setFontSize(10)
       .setVerticalAlignment('middle');
   }
@@ -575,20 +576,21 @@ function formatImportMirrorChrome_(sheet, cols, checkCols, headers) {
     sheet.getRange(1, 1, 1, cols)
       .setBackground(dnChrome.ink)
       .setFontColor(dnChrome.paper)
-      .setFontFamily('Meiryo')
+      .setFontFamily('Noto Sans JP').setFontStyle('italic')
       .setFontSize(10)
       .setFontWeight('bold')
       .setHorizontalAlignment('center')
-      .setVerticalAlignment('middle');
+      .setVerticalAlignment('middle')
+      .setBorder(false, false, true, false, false, false, dnChrome.blood, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
     sheet.setRowHeight(1, 32);
     if (bodyRows >= 1) {
       sheet.getRange(2, 1, bodyRows, cols)
         .setBackground(dnChrome.paper)
         .setFontColor(dnChrome.ink)
-        .setFontFamily('Meiryo')
+        .setFontFamily('Noto Sans JP').setFontStyle('italic')
         .setFontSize(10)
         .setVerticalAlignment('middle')
-        .setHorizontalAlignment('left');
+        .setHorizontalAlignment('center');
     }
   } catch (eStyle) {}
 
@@ -632,6 +634,7 @@ function formatImportMirrorChrome_(sheet, cols, checkCols, headers) {
     } catch (eCheck) {}
   }
 
+  hubStampType_(sheet, endRow, cols);
   return {
     ok: true,
     sheet: sheet.getName(),
@@ -805,14 +808,14 @@ function stylePromoHubSheet_(sheet, imported) {
   sheet.getRange(1, 1, 1, 6)
     .setBackground(dn.ink)
     .setFontColor(dn.paper)
-    .setFontFamily('Meiryo')
+    .setFontFamily('Noto Sans JP').setFontStyle('italic')
     .setFontSize(10)
     .setFontWeight('bold');
   if (rows.length > 1) {
     sheet.getRange(2, 1, rows.length - 1, 6)
       .setBackground(dn.paper)
       .setFontColor(dn.ink)
-      .setFontFamily('Meiryo')
+      .setFontFamily('Noto Sans JP').setFontStyle('italic')
       .setFontSize(10);
   }
   sheet.setColumnWidth(1, 40);
@@ -1439,15 +1442,18 @@ function syncJoinListWithCheckboxes_() {
   sh.getRange(1, 1, 1, lastCol)
     .setBackground(dnJoin.ink)
     .setFontColor(dnJoin.paper)
-    .setFontFamily('Meiryo')
+    .setFontFamily('Noto Sans JP').setFontStyle('italic')
     .setFontSize(10)
-    .setFontWeight('bold');
+    .setFontWeight('bold')
+    .setHorizontalAlignment('center')
+    .setBorder(false, false, true, false, false, false, dnJoin.blood, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
   if (values.length >= 2) {
     sh.getRange(2, 1, values.length - 1, lastCol)
       .setBackground(dnJoin.paper)
       .setFontColor(dnJoin.ink)
-      .setFontFamily('Meiryo')
-      .setFontSize(10);
+      .setFontFamily('Noto Sans JP').setFontStyle('italic')
+      .setFontSize(10)
+      .setHorizontalAlignment('center');
   }
 
   var checkCols = [];
@@ -1582,7 +1588,7 @@ function setupReviewImport_() {
       mirror.getRange(1, 1, 1, cols)
         .setBackground(dnRev.ink)
         .setFontColor(dnRev.paper)
-        .setFontFamily('Meiryo')
+        .setFontFamily('Noto Sans JP').setFontStyle('italic')
         .setFontSize(10)
         .setFontWeight('bold');
       mirror.setRowHeight(1, 32);
@@ -1591,7 +1597,7 @@ function setupReviewImport_() {
         mirror.getRange(2, 1, lastBody - 1, cols)
           .setBackground(dnRev.paper)
           .setFontColor(dnRev.ink)
-          .setFontFamily('Meiryo')
+          .setFontFamily('Noto Sans JP').setFontStyle('italic')
           .setFontSize(10)
           .setVerticalAlignment('middle');
         mirror.getRange('A2:A' + lastBody).setNumberFormat('yyyy/mm/dd HH:mm');
@@ -1665,7 +1671,7 @@ function upsertReviewGrantUrlIndexTop_(ss) {
       sh.getRange(1, 1, 1, 4)
         .setBackground(dnUrlHead.ink)
         .setFontColor(dnUrlHead.paper)
-        .setFontFamily('Meiryo')
+        .setFontFamily('Noto Sans JP').setFontStyle('italic')
         .setFontSize(10)
         .setFontWeight('bold');
     }
@@ -1682,7 +1688,7 @@ function upsertReviewGrantUrlIndexTop_(ss) {
     sh.getRange(2, 1, 1, 4)
       .setBackground(dnUrlRow.paper)
       .setFontColor(dnUrlRow.ink)
-      .setFontFamily('Meiryo')
+      .setFontFamily('Noto Sans JP').setFontStyle('italic')
       .setFontSize(10)
       .setVerticalAlignment('middle');
     sh.getRange(2, 4).setFontColor(dnUrlRow.blood);
@@ -1783,7 +1789,7 @@ function styleUrlIndexSheet_(sheet, links) {
   sheet.getRange(1, 1, 1, 4)
     .setBackground(dn.ink)
     .setFontColor(dn.paper)
-    .setFontFamily('Meiryo')
+    .setFontFamily('Noto Sans JP').setFontStyle('italic')
     .setFontSize(10)
     .setFontWeight('bold')
     .setHorizontalAlignment('left');
@@ -1806,7 +1812,7 @@ function styleUrlIndexSheet_(sheet, links) {
   body
     .setBackground(dn.paper)
     .setFontColor(dn.ink)
-    .setFontFamily('Meiryo')
+    .setFontFamily('Noto Sans JP').setFontStyle('italic')
     .setFontSize(10)
     .setVerticalAlignment('middle');
 
@@ -4196,6 +4202,24 @@ function dnTheme_() {
   };
 }
 
+function hubFontFamily_() {
+  return 'Noto Sans JP';
+}
+
+function hubType_(range) {
+  return range.setFontFamily(hubFontFamily_()).setFontStyle('italic');
+}
+
+/** 空セルも含めて斜体にしておく。あとに入力した文字も同じ書体になる */
+function hubStampType_(sh, rows, cols) {
+  if (!sh) return;
+  var maxR = sh.getMaxRows();
+  var maxC = sh.getMaxColumns();
+  var r = Math.min(Math.max(Number(rows) || Math.max(sh.getLastRow(), 80) + 80, 2), maxR);
+  var c = Math.min(Math.max(Number(cols) || Math.max(sh.getLastColumn(), 8), 1), Math.min(maxC, 40));
+  try { hubType_(sh.getRange(1, 1, r, c)); } catch (e0) {}
+}
+
 function hubTabColorFor_(name) {
   var t = dnTheme_();
   if (name.indexOf('未納') === 0) return t.blood;
@@ -4337,14 +4361,15 @@ function hubPaintOpenSourceCell_(sh, row, col, cols, src) {
   var rng = sh.getRange(row, col, 1, cols);
   if (cols > 1) rng = rng.merge();
   rng.setFormula('=HYPERLINK("' + String(src.url).replace(/"/g, '""') + '","' + String(src.label).replace(/"/g, '""') + '")')
-    .setBackground(t.ash)
+    .setBackground(t.ink)
     .setFontColor(t.paper)
-    .setFontFamily('Noto Sans JP')
+    .setFontFamily(hubFontFamily_())
+    .setFontStyle('italic')
     .setFontSize(10)
     .setFontWeight('bold')
-    .setHorizontalAlignment('left')
+    .setHorizontalAlignment('center')
     .setVerticalAlignment('middle')
-    .setBorder(true, true, true, true, false, false, t.ink, solid);
+    .setBorder(false, false, true, false, false, false, t.blood, solid);
   sh.setRowHeight(row, 28);
 }
 
@@ -4511,6 +4536,23 @@ function handleHubHomeSelect_(e) {
 
 function handleHubHomeEdit_(e) {}
 
+function hubPaintHomeTitle_(sh) {
+  var u = hubUi_();
+  var t = dnTheme_();
+  var medium = SpreadsheetApp.BorderStyle.SOLID_MEDIUM;
+  try { sh.getRange(1, 1, 1, 6).breakApart(); } catch (e0) {}
+  hubType_(sh.getRange(1, 1, 1, 6).merge())
+    .setValue('経堂')
+    .setFontSize(22)
+    .setFontWeight('bold')
+    .setFontColor(u.ink)
+    .setBackground(u.bg)
+    .setHorizontalAlignment('center')
+    .setVerticalAlignment('middle')
+    .setBorder(false, false, true, false, false, false, t.blood, medium);
+  sh.setRowHeight(1, 48);
+}
+
 function restyleHubHomeLook_(sh) {
   var u = hubUi_();
   var t = dnTheme_();
@@ -4518,7 +4560,7 @@ function restyleHubHomeLook_(sh) {
   sh.setTabColor(t.ink);
   var last = Math.max(sh.getLastRow(), 24);
   var rows = Math.min(last, 40);
-  sh.getRange(1, 1, rows, 8).setFontFamily('Noto Sans JP');
+  hubType_(sh.getRange(1, 1, rows, 8)).setHorizontalAlignment('center').setVerticalAlignment('middle');
   sh.getRange(1, 1, rows, 7).setBackground(u.bg).setFontColor(u.ink);
   sh.getRange(1, 8, rows, 1).setBackground(u.rail).setFontColor(u.bg);
   var vals = sh.getRange(1, 1, rows, 8).getDisplayValues();
@@ -4527,33 +4569,43 @@ function restyleHubHomeLook_(sh) {
   var r;
   var c;
   for (r = 0; r < vals.length; r++) {
-    if (groups[String(vals[r][0] || '')]) {
-      sh.getRange(r + 1, 1).setBackground(u.ink).setFontColor(u.bg).setFontWeight('bold');
+    var g = String(vals[r][0] || '');
+    if (groups[g]) {
+      sh.getRange(r + 1, 1)
+        .setBackground(g === '未納' ? t.blood : u.ink)
+        .setFontColor(u.bg)
+        .setFontWeight('bold')
+        .setHorizontalAlignment('center');
     }
     for (c = 1; c <= 5; c++) {
       var f = String(forms[r][c] || '');
       var v = String(vals[r][c] || '');
       var prev = r > 0 ? String(forms[r - 1][c] || '') + String(vals[r - 1][c] || '') : '';
       if (/元のシートを開く|元の未納管理ドライブ/.test(f + v)) {
+        var prevName = r > 0 ? String(vals[r - 1][c] || '') : '';
         sh.getRange(r + 1, c + 1)
-          .setBackground(t.ash)
+          .setBackground(/未納/.test(prevName) ? t.blood : t.ash)
           .setFontColor(t.paper)
           .setFontWeight('bold')
           .setFontSize(9)
+          .setHorizontalAlignment('center')
           .setBorder(false, true, false, true, false, false, t.ink, medium);
       } else if (/#gid=/.test(f)) {
         sh.getRange(r + 1, c + 1)
           .setBackground(u.card)
           .setFontColor(u.ink)
           .setFontWeight('bold')
+          .setHorizontalAlignment('center')
           .setBorder(true, true, false, true, false, false, t.ink, medium);
       } else if (!v && !f && /元のシートを開く|元の未納管理ドライブ/.test(prev)) {
         sh.getRange(r + 1, c + 1).setBackground(t.ink).setFontColor(t.ink)
-          .setBorder(false, true, true, true, false, false, t.ink, medium);
+          .setBorder(false, true, true, true, false, false, t.blood, medium);
       }
     }
   }
-  sh.getRange(1, 8).setBackground(u.rail).setFontColor(u.bg);
+  hubPaintHomeTitle_(sh);
+  sh.getRange(1, 8).setBackground(u.rail).setFontColor(u.bg).setFontWeight('bold')
+    .setHorizontalAlignment('center');
 }
 
 function setupHubHome_() {
@@ -4574,6 +4626,7 @@ function setupHubHome_() {
     try { sh.getRange(1, 1, maxR, maxC).clearDataValidations(); } catch (eVal2) {}
 
     var u = hubUi_();
+    var t = dnTheme_();
     var items = hubCatalog_(ss);
     var links = hubSourceLinks_();
     var groups = [];
@@ -4587,24 +4640,21 @@ function setupHubHome_() {
       seen[items[i].group].push(items[i]);
     }
 
-    sh.getRange(1, 1, 40, 8)
+    hubType_(sh.getRange(1, 1, 40, 8))
       .setBackground(u.bg)
       .setFontColor(u.ink)
-      .setFontFamily('Noto Sans JP')
       .setVerticalAlignment('middle')
       .setHorizontalAlignment('center')
       .setBorder(false, false, false, false, false, false)
       .setFontWeight('normal')
       .setWrap(true);
 
-    sh.getRange(1, 1).setValue('経堂').setFontSize(16).setFontWeight('bold').setFontColor(u.ink);
-    sh.setRowHeight(1, 36);
+    hubPaintHomeTitle_(sh);
 
     var row = 2;
     var g;
     var solid = SpreadsheetApp.BorderStyle.SOLID;
     var medium = SpreadsheetApp.BorderStyle.SOLID_MEDIUM;
-    var t = dnTheme_();
     for (g = 0; g < groups.length; g++) {
       var group = groups[g];
       var list = seen[group];
@@ -4617,9 +4667,10 @@ function setupHubHome_() {
         .setValue(group)
         .setFontSize(12)
         .setFontWeight('bold')
+        .setFontStyle('italic')
         .setHorizontalAlignment('center')
         .setVerticalAlignment('middle')
-        .setBackground(u.ink)
+        .setBackground(group === '未納' ? t.blood : u.ink)
         .setFontColor(u.bg)
         .setBorder(true, true, true, true, false, false, t.ink, medium);
       var p;
@@ -4632,6 +4683,7 @@ function setupHubHome_() {
           .setFormula('=HYPERLINK("#gid=' + target.getSheetId() + '","' + String(it.name).replace(/"/g, '""') + '")')
           .setFontSize(11)
           .setFontWeight('bold')
+          .setFontStyle('italic')
           .setWrap(true)
           .setBackground(u.card)
           .setFontColor(u.ink)
@@ -4645,8 +4697,9 @@ function setupHubHome_() {
             .setFormula('=HYPERLINK("' + String(src.url).replace(/"/g, '""') + '","元のシートを開く ↗")')
             .setFontSize(9)
             .setFontWeight('bold')
+            .setFontStyle('italic')
             .setWrap(false)
-            .setBackground(t.ash)
+            .setBackground(it.group === '未納' ? t.blood : t.ash)
             .setFontColor(t.paper)
             .setHorizontalAlignment('center')
             .setVerticalAlignment('middle')
@@ -4656,7 +4709,7 @@ function setupHubHome_() {
         sh.getRange(shadowRow, col)
           .setBackground(t.ink)
           .setFontColor(t.ink)
-          .setBorder(false, true, true, true, false, false, t.ink, medium);
+          .setBorder(false, true, true, true, false, false, t.blood, medium);
         hubWriteKey_(sh, shadowRow, col, 'SHADOW');
       }
       sh.setRowHeight(nameRow, 52);
@@ -4668,9 +4721,9 @@ function setupHubHome_() {
     }
 
     sh.getRange(1, 7, 40, 1).setBackground(u.bg).setBorder(false, false, false, false, false, false);
-    sh.getRange(1, 8).setValue('引用元').setFontSize(11).setFontWeight('bold')
+    sh.getRange(1, 8).setValue('引用元').setFontSize(11).setFontWeight('bold').setFontStyle('italic')
       .setBackground(u.rail).setFontColor(u.bg).setHorizontalAlignment('center')
-      .setBorder(true, true, true, true, false, false, u.line, solid);
+      .setBorder(false, false, true, false, false, false, t.blood, medium);
     var c;
     for (c = 0; c < links.length; c++) {
       var lr = 2 + c;
@@ -4681,11 +4734,12 @@ function setupHubHome_() {
         .setFontColor(u.bg)
         .setFontSize(10)
         .setFontWeight('bold')
-        .setHorizontalAlignment('left')
+        .setFontStyle('italic')
+        .setHorizontalAlignment('center')
         .setVerticalAlignment('middle')
         .setWrap(true)
         .setBackground(u.rail)
-        .setBorder(true, true, true, true, false, false, u.line, solid);
+        .setBorder(false, false, true, false, false, false, t.ash, solid);
     }
 
     try {
@@ -4722,17 +4776,22 @@ function restyleHeaderBody_(sh) {
   var f1 = String(sh.getRange(1, 1).getFormula() || '');
   var d1 = String(sh.getRange(1, 1).getDisplayValue() || '');
   var headerRow = /元のシートを開く|元の未納管理ドライブ/.test(f1 + d1) ? 2 : 1;
-  sh.getRange(headerRow, 1, 1, cols)
+  var medium = SpreadsheetApp.BorderStyle.SOLID_MEDIUM;
+  hubType_(sh.getRange(headerRow, 1, 1, cols))
     .setBackground(t.ink)
     .setFontColor(t.paper)
     .setFontWeight('bold')
-    .setFontFamily('Meiryo');
+    .setHorizontalAlignment('center')
+    .setVerticalAlignment('middle')
+    .setBorder(false, false, true, false, false, false, t.blood, medium);
   if (last > headerRow) {
-    sh.getRange(headerRow + 1, 1, last - headerRow, cols)
+    hubType_(sh.getRange(headerRow + 1, 1, last - headerRow, cols))
       .setBackground(t.paper)
       .setFontColor(t.ink)
-      .setFontFamily('Meiryo');
+      .setHorizontalAlignment('center')
+      .setVerticalAlignment('middle');
   }
+  hubStampType_(sh, last + 80, cols);
 }
 
 function restyleKyodoMasterLook_(sh) {
@@ -4747,17 +4806,24 @@ function restyleKyodoMasterLook_(sh) {
   }
   var start = headerRow + 1;
   var bodyRows = Math.max(last - headerRow, 1);
-  sh.getRange(1, 1, last, 11).setFontFamily('Meiryo').setFontColor(t.ink);
-  sh.getRange(1, 1, 1, 11).setBackground(t.ink).setFontColor(t.paper).setFontWeight('bold');
+  var medium = SpreadsheetApp.BorderStyle.SOLID_MEDIUM;
+  hubType_(sh.getRange(1, 1, last, 11))
+    .setFontColor(t.ink)
+    .setHorizontalAlignment('center')
+    .setVerticalAlignment('middle');
+  sh.getRange(1, 1, 1, 11).setBackground(t.ink).setFontColor(t.paper).setFontWeight('bold')
+    .setBorder(false, false, true, false, false, false, t.blood, medium);
   sh.getRange(2, 1, Math.max(headerRow - 2, 1), 11).setBackground(t.paper);
-  sh.getRange(headerRow, 1, 1, 10).setBackground(t.ink).setFontColor(t.paper).setFontWeight('bold');
+  sh.getRange(headerRow, 1, 1, 10).setBackground(t.ink).setFontColor(t.paper).setFontWeight('bold')
+    .setHorizontalAlignment('center')
+    .setBorder(false, false, true, false, false, false, t.blood, medium);
   sh.getRange(start, 1, bodyRows, 10).setBackground(t.ghost).setFontColor(t.ink);
   sh.getRange(start, 1, bodyRows, 1).setBackground(t.cream);
   sh.getRange(start, 6, bodyRows, 1).setBackground(t.cream);
   sh.getRange(start, 7, bodyRows, 1).setBackground(t.cream);
   try {
     sh.getRange('F7:K14').setBackground(t.ghost).setFontColor(t.ink);
-    sh.getRange('F7').setBackground(t.ink).setFontColor(t.paper);
+    sh.getRange('F7').setBackground(t.blood).setFontColor(t.paper);
   } catch (eBrief) {}
   try {
     sh.getRange('L1:N1').setBackground(t.ink).setFontColor(t.paper);
@@ -4770,14 +4836,17 @@ function restyleKyodoMasterLook_(sh) {
     sh.getRange('R3:V3').setBackground(t.ink).setFontColor(t.paper);
     sh.getRange('X3:AA3').setBackground(t.ink).setFontColor(t.paper);
   } catch (eSide) {}
+  hubStampType_(sh);
   sh.setTabColor(t.ink);
 }
 
 function restyleUnpaidTrendLook_(tr) {
   var t = dnTheme_();
   var last = Math.max(tr.getLastRow(), 3);
-  tr.getRange(1, 1, last, 11).setBackground(t.paper).setFontColor(t.ink).setFontFamily('Meiryo');
-  tr.getRange(1, 1, 1, 11).setBackground(t.ink).setFontColor(t.paper).setFontWeight('bold');
+  tr.getRange(1, 1, last, 11).setBackground(t.paper).setFontColor(t.ink).setFontFamily('Noto Sans JP').setFontStyle('italic')
+    .setHorizontalAlignment('center');
+  tr.getRange(1, 1, 1, 11).setBackground(t.ink).setFontColor(t.paper).setFontWeight('bold')
+    .setBorder(false, false, true, false, false, false, t.blood, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
   tr.getRange(2, 1, 1, 11).setBackground(t.cream).setFontWeight('bold');
   tr.getRange(1, 6, 1, 1).setBackground(t.blood).setFontColor(t.paper);
   tr.setTabColor(t.blood);
@@ -4805,13 +4874,15 @@ function restyleUrlIndexLook_(sh) {
   sh.getRange(1, 1, 1, cols)
     .setBackground(t.ink)
     .setFontColor(t.paper)
-    .setFontFamily('Meiryo')
-    .setFontWeight('bold');
+    .setFontFamily('Noto Sans JP').setFontStyle('italic')
+    .setFontWeight('bold')
+    .setHorizontalAlignment('center')
+    .setBorder(false, false, true, false, false, false, t.blood, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
   if (last >= 2) {
     sh.getRange(2, 1, last - 1, cols)
       .setBackground(t.paper)
       .setFontColor(t.ink)
-      .setFontFamily('Meiryo');
+      .setFontFamily('Noto Sans JP').setFontStyle('italic');
     var i;
     for (i = 0; i < last - 1; i++) {
       if (i % 2 === 1) sh.getRange(i + 2, 1, 1, cols).setBackground(t.cream);
@@ -4838,8 +4909,14 @@ function restyleHubLook_() {
     if (urlSh) restyleUrlIndexLook_(urlSh);
     if (master) hubEnsureSourceBanner_(master);
     if (trend) hubEnsureSourceBanner_(trend);
+    if (master) hubStampType_(master);
+    if (unpaid) hubStampType_(unpaid, Math.max(unpaid.getLastRow(), 80) + 80, 16);
+    if (trend) hubStampType_(trend);
     var home = ss.getSheetByName(HUB_HOME_SHEET_);
-    if (home) restyleHubHomeLook_(home);
+    if (home) {
+      restyleHubHomeLook_(home);
+      hubStampType_(home, 40, 8);
+    }
     var sheets = ss.getSheets();
     var i;
     for (i = 0; i < sheets.length; i++) {
@@ -5007,10 +5084,11 @@ function styleUnpaidView_(sh) {
   var r0 = top + 2;
   var bodyRows = maxR - r0 + 1;
   var body = sh.getRange(top, 1, maxR - top + 1, W);
-  body.setBackground(t.paper).setFontColor(t.ink).setFontSize(10).setFontWeight('normal')
+  hubType_(body).setBackground(t.paper).setFontColor(t.ink).setFontSize(10).setFontWeight('normal')
     .setVerticalAlignment('middle').setWrap(false).setBorder(false, false, false, false, false, false);
-  sh.getRange(top, 1, 2, W).setFontWeight('bold').setBackground(t.ink).setFontColor(t.paper)
-    .setFontSize(9).setWrap(true).setHorizontalAlignment('center');
+  hubType_(sh.getRange(top, 1, 2, W)).setFontWeight('bold').setBackground(t.ink).setFontColor(t.paper)
+    .setFontSize(9).setWrap(true).setHorizontalAlignment('center')
+    .setBorder(false, false, true, false, false, false, t.blood, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
   sh.getRange(r0, 1, bodyRows, W)
     .setBorder(null, null, null, null, null, true, t.line, solid);
   sh.getRange(r0, 2, bodyRows, W - 1).setHorizontalAlignment('center');
@@ -5110,7 +5188,7 @@ function applyFourColorFromMenu() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var r = applyFourColorLook_();
   try { PropertiesService.getDocumentProperties().setProperty(FOUR_COLOR_PROP_, '1'); } catch (eP) {}
-  ss.toast('トップはリンクの目次です。セルを選んでもスクリプトは動きません', 'トップ', 8);
+  ss.toast('見出しは中央、文字は斜体です。空セルに打った文字も斜体になります', '経堂', 8);
   return r;
 }
 
@@ -5129,8 +5207,9 @@ function styleUnpaidDashboard_(sh) {
   try { sh.getRange('A2:C3').breakApart(); } catch (e1) {}
   try { sh.getRange('A4:C4').breakApart(); } catch (e2) {}
   sh.getRange(1, 1, 4, 37).setBackground(t.paper).setFontColor(t.ink).setVerticalAlignment('middle');
-  sh.getRange('A1').setFontSize(9).setFontColor(t.ash).setHorizontalAlignment('right');
-  sh.getRange('B1:C1').merge().setFontSize(12).setFontWeight('bold').setHorizontalAlignment('center')
+  hubType_(sh.getRange(1, 1, 4, 13));
+  sh.getRange('A1').setFontSize(9).setFontColor(t.ash).setHorizontalAlignment('center');
+  sh.getRange('B1:C1').merge().setFontSize(12).setFontWeight('bold').setFontStyle('italic').setHorizontalAlignment('center')
     .setBorder(true, true, true, true, null, null, t.blood, solid);
   var unpaidSrc = hubSourceForName_(UNPAID_SHEET_);
   if (unpaidSrc) {
@@ -5138,7 +5217,7 @@ function styleUnpaidDashboard_(sh) {
   } else {
     sh.getRange('A2:C2').merge().setFontSize(9).setHorizontalAlignment('left');
   }
-  sh.getRange('A3:C3').merge().setFontSize(9).setHorizontalAlignment('left')
+  sh.getRange('A3:C3').merge().setFontSize(9).setHorizontalAlignment('center').setFontStyle('italic')
     .setBackground(t.paper).setFontColor(t.ash).setFontWeight('bold');
 
   var card = sh.getRange('D1:M3');
@@ -5367,7 +5446,7 @@ function styleMembershipMirrors_() {
         .setBorder(false, false, false, false, false, false)
         .setBackground(dnMem.paper)
         .setFontColor(dnMem.ink)
-        .setFontFamily('Meiryo')
+        .setFontFamily('Noto Sans JP').setFontStyle('italic')
         .setFontSize(10)
         .setVerticalAlignment('middle');
       sh.getRange(1, 1, 1, cols)
