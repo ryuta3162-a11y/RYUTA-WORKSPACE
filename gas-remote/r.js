@@ -4990,13 +4990,22 @@ function masterMonthQ_(rangeA1, selectCols, monthA1) {
   return 'QUERY(' + rangeA1 + ',"select ' + selectCols + ' where ' + masterMonthWhere_(monthA1) + ' order by Col1 desc",0)';
 }
 
+function masterMonthIfChain_(sel, pairs, fallback) {
+  var s = fallback;
+  var i;
+  for (i = pairs.length - 2; i >= 0; i -= 2) {
+    s = 'IF(' + sel + '=' + pairs[i] + ',' + pairs[i + 1] + ',' + s + ')';
+  }
+  return s;
+}
+
 function masterMonthStackFormula_(monthA1) {
   var w = masterMonthWhere_(monthA1);
   var blank = '{"","","",""}';
   var q = function (rng, sel) {
     return 'IFERROR(QUERY(' + rng + ',"select ' + sel + ' where ' + w + '",0),' + blank + ')';
   };
-  var inner = [
+  var parts = [
     q("'見学体験申請'!A2:D", "Col1,'見学体験',Col3,Col4"),
     q("'販促_紹介・ペア入会'!A3:G", "Col1,'紹介',Col6,Col7"),
     q("'学割'!A2:D", "Col1,'学割',Col3,Col4"),
@@ -5008,8 +5017,8 @@ function masterMonthStackFormula_(monthA1) {
     q("'入会者一覧＋自動メール管理'!A3:C", "Col1,'入会メール',Col2,Col3"),
     q("'経堂_入会'!A2:F", "Col1,'入会',Col2,Col6"),
     q("'経堂_退会'!A2:C", "Col1,'退会',Col2,Col3")
-  ].join(';');
-  return 'QUERY({' + inner + '},"select Col1,Col2,Col3,Col4 where Col1 is not null order by Col1 desc",0)';
+  ].join(',');
+  return 'IFERROR(QUERY(VSTACK(' + parts + '),"select Col1,Col2,Col3,Col4 where Col1 is not null order by Col1 desc",0),"")';
 }
 
 function masterMonthQueryFormula_(monthA1, selA1) {
@@ -5017,37 +5026,37 @@ function masterMonthQueryFormula_(monthA1, selA1) {
   var q = function (inner) {
     return 'IFERROR(' + inner + ',"")';
   };
-  return '=SWITCH(' + sel + ',' +
-    '"見学体験",' + q(masterMonthQ_("'見学体験申請'!A2:J", 'Col1,Col2,Col3,Col4,Col5,Col8,Col9,Col10', monthA1)) + ',' +
-    '"紹介",' + q(masterMonthQ_("'販促_紹介・ペア入会'!A3:G", 'Col1,Col2,Col3,Col5,Col6,Col7', monthA1)) + ',' +
-    '"学割",' + q(masterMonthQ_("'学割'!A2:P", '*', monthA1)) + ',' +
-    '"ラグビー割",' + q(masterMonthQ_("'販促_ラグビー割'!A3:F", 'Col1,Col3,Col4,Col5,Col6', monthA1)) + ',' +
-    '"乗り換え",' + q(masterMonthQ_("'販促_乗り換え'!A3:E", 'Col1,Col3,Col4,Col5', monthA1)) + ',' +
-    '"6ヶ月",' + q(masterMonthQ_("'販促_6ヶ月継続'!A3:D", 'Col1,Col3,Col4', monthA1)) + ',' +
-    '"レクチャー",' + q(masterMonthQ_("'マシンレクチャー申込'!A3:G", 'Col1,Col2,Col3,Col4,Col5,Col6,Col7', monthA1)) + ',' +
-    '"口コミ",' + q(masterMonthQ_("'口コミ_経堂'!A3:W", 'Col1,Col5,Col6,Col9,Col10,Col22', monthA1)) + ',' +
-    '"入会メール",' + q(masterMonthQ_("'入会者一覧＋自動メール管理'!A3:E", 'Col1,Col2,Col3,Col4,Col5', monthA1)) + ',' +
-    '"入会",' + q(masterMonthQ_("'経堂_入会'!A2:F", 'Col1,Col2,Col3,Col4,Col6', monthA1)) + ',' +
-    '"退会",' + q(masterMonthQ_("'経堂_退会'!A2:D", 'Col1,Col2,Col3,Col4', monthA1)) + ',' +
-    q(masterMonthStackFormula_(monthA1)) + ')';
+  return '=' + masterMonthIfChain_(sel, [
+    '"見学体験"', q(masterMonthQ_("'見学体験申請'!A2:J", 'Col1,Col2,Col3,Col4,Col5,Col8,Col9,Col10', monthA1)),
+    '"紹介"', q(masterMonthQ_("'販促_紹介・ペア入会'!A3:G", 'Col1,Col2,Col3,Col5,Col6,Col7', monthA1)),
+    '"学割"', q(masterMonthQ_("'学割'!A2:P", '*', monthA1)),
+    '"ラグビー割"', q(masterMonthQ_("'販促_ラグビー割'!A3:F", 'Col1,Col3,Col4,Col5,Col6', monthA1)),
+    '"乗り換え"', q(masterMonthQ_("'販促_乗り換え'!A3:E", 'Col1,Col3,Col4,Col5', monthA1)),
+    '"6ヶ月"', q(masterMonthQ_("'販促_6ヶ月継続'!A3:D", 'Col1,Col3,Col4', monthA1)),
+    '"レクチャー"', q(masterMonthQ_("'マシンレクチャー申込'!A3:G", 'Col1,Col2,Col3,Col4,Col5,Col6,Col7', monthA1)),
+    '"口コミ"', q(masterMonthQ_("'口コミ_経堂'!A3:W", 'Col1,Col5,Col6,Col9,Col10,Col22', monthA1)),
+    '"入会メール"', q(masterMonthQ_("'入会者一覧＋自動メール管理'!A3:E", 'Col1,Col2,Col3,Col4,Col5', monthA1)),
+    '"入会"', q(masterMonthQ_("'経堂_入会'!A2:F", 'Col1,Col2,Col3,Col4,Col6', monthA1)),
+    '"退会"', q(masterMonthQ_("'経堂_退会'!A2:D", 'Col1,Col2,Col3,Col4', monthA1))
+  ], masterMonthStackFormula_(monthA1));
 }
 
 function masterMonthHeaderFormula_(selA1) {
   var sel = '$' + selA1;
   var school = '{"' + schoolDiscountHeaders_().join('","') + '"}';
-  return '=SWITCH(' + sel + ',' +
-    '"見学体験",{"日時","区分","名前","メール","電話","希望日","時刻","入会"},' +
-    '"紹介",{"日時","種別","紹介者","紹介者電話","被紹介者","被紹介者電話"},' +
-    '"学割",' + school + ',' +
-    '"ラグビー割",{"日時","名前","フリガナ","電話","メール"},' +
-    '"乗り換え",{"日時","名前","移籍元","地名"},' +
-    '"6ヶ月",{"日時","名前","同意"},' +
-    '"レクチャー",{"日時","名前","年齢","メール","希望","予約日","予約時間"},' +
-    '"口コミ",{"日時","氏名","会員番号","メール","来店日","付与"},' +
-    '"入会メール",{"入会日","名前","メール","アンケート","レクチャーメール"},' +
-    '"入会",{"日時","氏名","入会月","区分","メール"},' +
-    '"退会",{"日時","氏名","退会月","区分"},' +
-    '{"日時","種別","名前","連絡先"})';
+  return '=' + masterMonthIfChain_(sel, [
+    '"見学体験"', '{"日時","区分","名前","メール","電話","希望日","時刻","入会"}',
+    '"紹介"', '{"日時","種別","紹介者","紹介者電話","被紹介者","被紹介者電話"}',
+    '"学割"', school,
+    '"ラグビー割"', '{"日時","名前","フリガナ","電話","メール"}',
+    '"乗り換え"', '{"日時","名前","移籍元","地名"}',
+    '"6ヶ月"', '{"日時","名前","同意"}',
+    '"レクチャー"', '{"日時","名前","年齢","メール","希望","予約日","予約時間"}',
+    '"口コミ"', '{"日時","氏名","会員番号","メール","来店日","付与"}',
+    '"入会メール"', '{"入会日","名前","メール","アンケート","レクチャーメール"}',
+    '"入会"', '{"日時","氏名","入会月","区分","メール"}',
+    '"退会"', '{"日時","氏名","退会月","区分"}'
+  ], '{"日時","種別","名前","連絡先"}');
 }
 
 function masterMonthLinkFormula_(ss, selA1) {
@@ -5055,19 +5064,19 @@ function masterMonthLinkFormula_(ss, selA1) {
   var gid = function (name) {
     return hubSheetGidUrl_(ss, name);
   };
-  return '=SWITCH(' + sel + ',' +
-    '"学割",HYPERLINK("' + gid('学割') + '","学割シートを開く ↗"),' +
-    '"見学体験",HYPERLINK("' + gid('見学体験申請') + '","見学体験申請を開く ↗"),' +
-    '"紹介",HYPERLINK("' + gid('販促_紹介・ペア入会') + '","紹介シートを開く ↗"),' +
-    '"ラグビー割",HYPERLINK("' + gid('販促_ラグビー割') + '","ラグビー割を開く ↗"),' +
-    '"乗り換え",HYPERLINK("' + gid('販促_乗り換え') + '","乗り換えを開く ↗"),' +
-    '"6ヶ月",HYPERLINK("' + gid('販促_6ヶ月継続') + '","6ヶ月継続を開く ↗"),' +
-    '"レクチャー",HYPERLINK("' + gid('マシンレクチャー申込') + '","レクチャーを開く ↗"),' +
-    '"口コミ",HYPERLINK("' + REVIEW_GRANT_APP_URL_ + '","口コミ付与アプリ"),' +
-    '"入会メール",HYPERLINK("' + gid('入会者一覧＋自動メール管理') + '","入会メールを開く ↗"),' +
-    '"入会",HYPERLINK("' + gid('経堂_入会') + '","入会シートを開く ↗"),' +
-    '"退会",HYPERLINK("' + gid('経堂_退会') + '","退会シートを開く ↗"),' +
-    'HYPERLINK("' + hubBookUrl_(ss.getId()) + '#gid=989823202","トップでシートを探す ↗"))';
+  return '=' + masterMonthIfChain_(sel, [
+    '"学割"', 'HYPERLINK("' + gid('学割') + '","学割シートを開く ↗")',
+    '"見学体験"', 'HYPERLINK("' + gid('見学体験申請') + '","見学体験申請を開く ↗")',
+    '"紹介"', 'HYPERLINK("' + gid('販促_紹介・ペア入会') + '","紹介シートを開く ↗")',
+    '"ラグビー割"', 'HYPERLINK("' + gid('販促_ラグビー割') + '","ラグビー割を開く ↗")',
+    '"乗り換え"', 'HYPERLINK("' + gid('販促_乗り換え') + '","乗り換えを開く ↗")',
+    '"6ヶ月"', 'HYPERLINK("' + gid('販促_6ヶ月継続') + '","6ヶ月継続を開く ↗")',
+    '"レクチャー"', 'HYPERLINK("' + gid('マシンレクチャー申込') + '","レクチャーを開く ↗")',
+    '"口コミ"', 'HYPERLINK("' + REVIEW_GRANT_APP_URL_ + '","口コミ付与アプリ")',
+    '"入会メール"', 'HYPERLINK("' + gid('入会者一覧＋自動メール管理') + '","入会メールを開く ↗")',
+    '"入会"', 'HYPERLINK("' + gid('経堂_入会') + '","入会シートを開く ↗")',
+    '"退会"', 'HYPERLINK("' + gid('経堂_退会') + '","退会シートを開く ↗")'
+  ], 'HYPERLINK("' + hubBookUrl_(ss.getId()) + '#gid=989823202","トップでシートを探す ↗")');
 }
 
 function masterMonthTabSelect_(e) {
@@ -5134,6 +5143,7 @@ function setupMasterMonthPanel_(sh) {
     helperCol = sh.getRange(monthA1).getColumn();
   }
   var width = helperCol > start ? helperCol - start : need;
+  try { sh.showColumns(start, Math.max(width, 1)); } catch (eShow) {}
   var prev = '';
   try { prev = String(sh.getRange(2, start).getDisplayValue() || ''); } catch (ePrev) {}
   try { sh.getRange(1, start, 3, width).breakApart(); } catch (e0) {}
@@ -5161,8 +5171,8 @@ function setupMasterMonthPanel_(sh) {
   var rule = SpreadsheetApp.newDataValidation().requireValueInList(tabs, true).setAllowInvalid(false).build();
   sh.getRange(2, start).setDataValidation(rule);
   hubType_(sh.getRange(2, start))
-    .setFontSize(10).setFontWeight('bold')
-    .setBackground(t.ink).setFontColor(t.paper)
+    .setFontSize(9).setFontWeight('bold')
+    .setBackground(t.cream).setFontColor(t.ink)
     .setHorizontalAlignment('center').setVerticalAlignment('middle');
   masterPaintMonthTabs_(sh, start);
   sh.setRowHeight(2, 32);
@@ -5456,6 +5466,7 @@ function restyleKyodoMasterLook_(sh) {
       try { masterPaintMonthTabs_(sh, sideStart); } catch (eTab) {}
       var helperCol = sh.getRange(masterMonthCellA1_(sh)).getColumn();
       var sideW = helperCol > sideStart ? helperCol - sideStart : 16;
+      try { sh.showColumns(sideStart, Math.max(sideW, 1)); } catch (eShowSide) {}
       sh.getRange(1, sideStart, 1, Math.max(sideW - 1, 1)).setBackground(t.ink).setFontColor(t.paper);
       sh.getRange(3, sideStart, 1, sideW).setBackground(t.ink).setFontColor(t.paper);
       var body = Math.min(Math.max(Math.max(sh.getLastRow(), 24) - 3, 1), 400);
@@ -5625,10 +5636,11 @@ function unpaidMonthOptions_() {
  */
 function unpaidViewFormula_() {
   var src = 'IMPORTRANGE("' + UNPAID_SOURCE_ID_ + '","\'"&B1&"\'!A1:AK")';
-  return '=IFERROR(LET(d,' + src + ',' +
+  return '=LET(d,' + src + ',' +
+    'IFERROR(LET(' +
     'h,BYCOL(CHOOSEROWS(d,1,2,3),LAMBDA(c,TEXTJOIN("",TRUE,c))),' +
     'cat,SCAN("",CHOOSECOLS(d,1),LAMBDA(acc,x,IF(x<>"",x,acc))),' +
-    'nc,MATCH(TRUE,ARRAYFORMULA(REGEXMATCH(h,"会員名")),0),' +
+    'nc,IFERROR(MATCH(TRUE,ARRAYFORMULA(REGEXMATCH(h,"会員名")),0),4),' +
     'mc,IFERROR(MATCH(TRUE,ARRAYFORMULA(REGEXMATCH(h,"未納対象月")),0),0),' +
     'jd,\'経堂_入会\'!A2:A,jk,\'経堂_入会\'!D2:D,' +
     'jn,ARRAYFORMULA(REGEXREPLACE(\'経堂_入会\'!B2:B&"","[\\s　]","")),' +
@@ -5644,8 +5656,7 @@ function unpaidViewFormula_() {
     'IF(jdt=0,"",IFERROR(INDEX(FILTER(jk,jn=nn,jd=jdt),1),"")),' +
     'IF(od="","",TEXT(od,"yy年m月")),' +
     'IF(OR(jdt=0,od=""),"",((YEAR(od)-YEAR(jdt))*12+MONTH(od)-MONTH(jdt))&"ヶ月")))))))),' +
-    'IF(AND(ROWS(d)=1,ISERROR(INDEX(d,1,1))),NA(),' +
-    'LET(vw,MAKEARRAY(ROWS(d),COLUMNS(d),LAMBDA(r,c,LET(v,IFERROR(INDEX(d,r,c),""),' +
+    'vw,MAKEARRAY(ROWS(d),COLUMNS(d),LAMBDA(r,c,LET(v,IFERROR(INDEX(d,r,c),""),' +
     'n,IF(ISNUMBER(v),v,IF(REGEXMATCH(v&"","^-?[0-9,]+(\\.[0-9]+)?$"),VALUE(v),"")),' +
     'lab,IF(AND(c>=28,r>1),IFERROR(LET(x,ARRAY_CONSTRAIN(CHOOSECOLS(d,c),r-1,1),CHOOSEROWS(FILTER(x,ISTEXT(x)),-1)),""),INDEX(h,1,c)),' +
     'IF(c=1,IF(INDEX(d,r,3)&INDEX(d,r,4)="",v,LET(cx,INDEX(cat,r,1)&"",' + unpaidShortCatExpr_('cx') + ')),' +
@@ -5654,8 +5665,8 @@ function unpaidViewFormula_() {
     'IF(REGEXMATCH(lab,"率$"),TEXT(n,"0.0%"),' +
     'IF(AND(REGEXMATCH(lab,"DL|日$"),n>40000),TEXT(n,"m/d"),' +
     'IF(REGEXMATCH(lab,"額|当月分|手数料|繰越|支払|回収$"),TEXT(n,"¥#,##0"),v))))))))),' +
-    'HSTACK(CHOOSECOLS(vw,SEQUENCE(1,nc)),ex,CHOOSECOLS(vw,SEQUENCE(1,COLUMNS(vw)-nc,nc+1)))))),' +
-    '"「"&B1&"」のシートは元ファイルにまだありません")';
+    'HSTACK(CHOOSECOLS(vw,SEQUENCE(1,nc)),ex,CHOOSECOLS(vw,SEQUENCE(1,COLUMNS(vw)-nc,nc+1)))),' +
+    'd))';
 }
 
 var UNPAID_TREND_SHEET_ = '未納管理_推移';
@@ -5699,14 +5710,14 @@ function unpaidStatsLet_(rangeExpr) {
 
 /** 未納管理 D1:M3 のダッシュボード（B1 の月） */
 function unpaidDashboardFormula_() {
-  return '=IFERROR(ARRAYFORMULA(LET(' + unpaidStatsLet_('"\'"&$B$1&"\'!A1:AK"') +
+  return '=ARRAYFORMULA(LET(' + unpaidStatsLet_('"\'"&$B$1&"\'!A1:AK"') +
     'yen,LAMBDA(x,TEXT(x,"¥#,##0")),' +
     'rt,LAMBDA(k,IF(SUM(k)=0,"対象なし",IF(SUM(k*pay)=0,"対象なし",TEXT(SUM(k*rec)/SUM(k*pay),"0.0%")))),' +
     'sub,LAMBDA(k,SUM(k)&"件　"&yen(SUM(k*rec))&" / "&yen(SUM(k*pay))),' +
     'VSTACK({"未納件数","未納総額","回収額","回収率","未回収額","回収済み","1ヶ月未納 回収率","2ヶ月未納 回収率","貸倒候補 回収率","JACCS 回収率"},' +
     'HSTACK(n&"件",yen(sp),yen(sr),IF(sp=0,"-",TEXT(sr/sp,"0.0%")),yen(sp-sr),nr&"件",rt(kone),rt(ktwo),rt(kbad),rt(kjac)),' +
     'HSTACK("支払額ベース","手数料込 "&yen(st),"回収金額の合計","回収額÷未納総額","残り "&(n-nr)&"件",' +
-    'IF(n=0,"",TEXT(nr/n,"0%")&"（人数）"),sub(kone),sub(ktwo),sub(kbad),sub(kjac))))),"")';
+    'IF(n=0,"",TEXT(nr/n,"0%")&"（人数）"),sub(kone),sub(ktwo),sub(kbad),sub(kjac)))))';
 }
 
 /** 未納管理_推移 の1行（A列の月）。数値のまま返す */
@@ -5796,7 +5807,9 @@ function applyUnpaidScanLook_(sh) {
   if (sh.getMaxColumns() < UNPAID_COLS_) {
     sh.insertColumnsAfter(sh.getMaxColumns(), UNPAID_COLS_ - sh.getMaxColumns());
   }
+  try { permitImportRange_(sh.getParent(), UNPAID_SOURCE_ID_); } catch (eP) {}
   sh.getRange(UNPAID_DATA_ROW_, 1).setFormula(unpaidViewFormula_());
+  sh.getRange('D1').setFormula(unpaidDashboardFormula_());
   SpreadsheetApp.flush();
   styleUnpaidView_(sh);
   styleUnpaidDashboard_(sh);
@@ -5831,8 +5844,6 @@ function applyFourColorLook_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet() || openWorkspaceSpreadsheet_();
   try { setupSchoolDiscountSheet_(ss); } catch (eSch) {}
   setupHubHome_();
-  var unpaid = ss.getSheetByName(UNPAID_SHEET_);
-  if (unpaid) applyUnpaidScanLook_(unpaid);
   return restyleHubLook_();
 }
 
