@@ -1981,7 +1981,7 @@ function handleApiGet_(e) {
   try {
     var api = e && e.parameter ? String(e.parameter.api || '') : '';
     if (api === 'status') {
-      return jsonOutput_({ ok: true, service: 'ryuta-workspace-gas', version: 'v2-hub-tiles' });
+      return jsonOutput_({ ok: true, service: 'ryuta-workspace-gas', version: 'v2-hub-tiles2' });
     }
     if (api === 'listSheets') {
       return jsonOutput_(listWorkspaceSheets_());
@@ -4198,7 +4198,7 @@ function dnTheme_() {
 
 function hubTabColorFor_(name) {
   var t = dnTheme_();
-  if (name === HUB_HOME_SHEET_) return '#333333';
+  if (name === HUB_HOME_SHEET_) return '#8B1216';
   if (name === '経堂マスタ') return t.ink;
   if (name.indexOf('未納') === 0) return t.blood;
   if (name.indexOf('見学体験') === 0 && name.indexOf('backup') === -1) return '#6B3A1F';
@@ -4239,35 +4239,34 @@ var HUB_KEY_BASE_ = 16;
 
 function hubUi_() {
   return {
-    bg: '#EDEDED',
-    card: '#FFFFFF',
-    ink: '#111111',
-    mute: '#5C5C5C',
-    line: '#111111',
-    onBg: '#111111',
-    onFg: '#FFFFFF',
+    bg: '#F4ECD9',
+    card: '#E9DCC6',
+    ink: '#140C0C',
+    mute: '#5C5346',
+    line: '#140C0C',
+    onBg: '#140C0C',
+    onFg: '#F4ECD9',
     shut: '#8B1216'
   };
 }
 
 function hubCatalog_(ss) {
   var items = [
-    { group: '数字', name: '経堂マスタ', title: 'マスタ', blurb: '当日入会・着地' },
-    { group: '数字', name: '【経堂】会員動向', title: '動向', blurb: '在籍の動き' },
-    { group: '未納', name: '未納管理', title: '今月', blurb: '一覧と回収率' },
-    { group: '未納', name: '未納管理_推移', title: '推移', blurb: '月ごとの回収' },
-    { group: '現場', name: '見学体験申請', title: '見学', blurb: '申込と入会' },
-    { group: '現場', name: '口コミ_経堂', title: '口コミ', blurb: '経堂の口コミ' },
-    { group: '現場', name: 'マシンレクチャー申込', title: 'レクチャー', blurb: '20分申込' },
-    { group: '現場', name: '入会者一覧＋自動メール管理', title: '入会者', blurb: 'メール管理' }
+    { group: '数字', name: '経堂マスタ', title: 'マスタ' },
+    { group: '数字', name: '【経堂】会員動向', title: '動向' },
+    { group: '未納', name: '未納管理', title: '今月' },
+    { group: '未納', name: '未納管理_推移', title: '推移' },
+    { group: '現場', name: '見学体験申請', title: '見学' },
+    { group: '現場', name: '口コミ_経堂', title: '口コミ' },
+    { group: '現場', name: 'マシンレクチャー申込', title: 'レクチャー' },
+    { group: '現場', name: '入会者一覧＋自動メール管理', title: '入会者' }
   ];
   var sheets = ss.getSheets();
   var i;
   for (i = 0; i < sheets.length; i++) {
     var n = sheets[i].getName();
     if (/^販促_/.test(n) && n.indexOf('backup') === -1) {
-      var title = n.replace(/^販促_/, '');
-      items.push({ group: '販促', name: n, title: title, blurb: hubPromoBlurb_(title) });
+      items.push({ group: '販促', name: n, title: hubShortTitle_(n.replace(/^販促_/, '')) });
     }
   }
   return items.filter(function (it) {
@@ -4275,13 +4274,13 @@ function hubCatalog_(ss) {
   });
 }
 
-function hubPromoBlurb_(title) {
-  if (/乗換/.test(title)) return '他社からの乗換';
-  if (/紹介|ペア/.test(title)) return '紹介・ペア';
-  if (/学校/.test(title)) return '学校関係者';
-  if (/ラグビー/.test(title)) return 'ラグビー割';
-  if (/6ヶ月|6カ月/.test(title)) return '6ヶ月継続';
-  return '販促';
+function hubShortTitle_(title) {
+  if (/乗換/.test(title)) return '乗り換え';
+  if (/紹介|ペア/.test(title)) return '紹介';
+  if (/学校/.test(title)) return '学校';
+  if (/ラグビー/.test(title)) return 'ラグビー';
+  if (/6ヶ月|6カ月/.test(title)) return '6ヶ月';
+  return title;
 }
 
 function hubSourceLinks_() {
@@ -4408,7 +4407,7 @@ function handleHubHomeSelect_(e) {
 function handleHubHomeEdit_(e) {}
 
 function restyleHubHomeLook_(sh) {
-  sh.setTabColor('#111111');
+  sh.setTabColor('#8B1216');
 }
 
 function setupHubHome_() {
@@ -4444,81 +4443,77 @@ function setupHubHome_() {
       seen[items[i].group].push(items[i]);
     }
 
-    sh.getRange(1, 1, 40, 12)
+    sh.getRange(1, 1, 12, 8)
       .setBackground(u.bg)
       .setFontColor(u.ink)
       .setFontFamily('Noto Sans JP')
       .setVerticalAlignment('middle')
+      .setHorizontalAlignment('center')
       .setBorder(false, false, false, false, false, false)
       .setFontWeight('normal')
       .setWrap(false);
 
-    sh.getRange(1, 1).setValue('経堂').setFontSize(18).setFontWeight('bold');
-    sh.getRange(1, 2).setValue('カードを押して開く').setFontSize(11).setFontColor(u.mute);
-    sh.getRange(1, 5).setValue('しまう').setFontSize(12).setFontWeight('bold')
-      .setBackground(u.shut).setFontColor('#FFFFFF').setHorizontalAlignment('center');
-    sh.getRange(1, HUB_KEY_BASE_ + 5).setValue('CLOSE');
-    sh.setRowHeight(1, 40);
-    sh.setRowHeight(2, 10);
+    sh.getRange(1, 1).setValue('経堂').setFontSize(16).setFontWeight('bold').setFontColor(u.ink);
+    sh.getRange(1, 6).setValue('しまう').setFontSize(12).setFontWeight('bold')
+      .setBackground(u.shut).setFontColor('#F4ECD9');
+    sh.getRange(1, HUB_KEY_BASE_ + 6).setValue('CLOSE');
+    sh.setRowHeight(1, 36);
 
-    var row = 3;
+    var row = 2;
     var g;
     var solid = SpreadsheetApp.BorderStyle.SOLID;
     for (g = 0; g < groups.length; g++) {
       var group = groups[g];
       var list = seen[group];
-      var bandRows = Math.ceil(list.length / 4);
-      sh.getRange(row, 1, bandRows, 1).merge()
+      sh.getRange(row, 1)
         .setValue(group)
+        .setFontSize(12)
+        .setFontWeight('bold')
+        .setHorizontalAlignment('center')
+        .setBackground(u.ink)
+        .setFontColor(u.bg)
+        .setBorder(true, true, true, true, false, false, u.line, solid);
+      var p;
+      for (p = 0; p < list.length; p++) {
+        var col = 2 + p;
+        var it = list[p];
+        sh.getRange(row, col)
+          .setValue(it.title)
+          .setFontSize(13)
+          .setFontWeight('bold')
+          .setWrap(false)
+          .setBackground(u.card)
+          .setFontColor(u.ink)
+          .setHorizontalAlignment('center')
+          .setVerticalAlignment('middle')
+          .setBorder(true, true, true, true, false, false, u.line, solid);
+        sh.getRange(row, HUB_KEY_BASE_ + col).setValue('SHEET:' + it.name);
+      }
+      sh.setRowHeight(row, 42);
+      row += 1;
+    }
+
+    sh.getRange(row, 1).setValue('リンク').setFontSize(12).setFontWeight('bold')
+      .setBackground(u.ink).setFontColor(u.bg).setHorizontalAlignment('center')
+      .setBorder(true, true, true, true, false, false, u.line, solid);
+    var c;
+    for (c = 0; c < links.length; c++) {
+      sh.getRange(row, 2 + c)
+        .setFormula('=HYPERLINK("' + String(links[c].url).replace(/"/g, '""') + '","' + links[c].title + '")')
+        .setFontColor(u.ink)
         .setFontSize(12)
         .setFontWeight('bold')
         .setHorizontalAlignment('center')
         .setBackground(u.card)
         .setBorder(true, true, true, true, false, false, u.line, solid);
-      var p;
-      for (p = 0; p < list.length; p++) {
-        var localRow = Math.floor(p / 4);
-        var localCol = p % 4;
-        var r0 = row + localRow;
-        var col = 2 + localCol;
-        var it = list[p];
-        sh.getRange(r0, col)
-          .setValue(it.title + '\n' + it.blurb)
-          .setFontSize(12)
-          .setFontWeight('bold')
-          .setWrap(true)
-          .setBackground(u.card)
-          .setFontColor(u.ink)
-          .setHorizontalAlignment('left')
-          .setVerticalAlignment('middle')
-          .setBorder(true, true, true, true, false, false, u.line, solid);
-        sh.getRange(r0, HUB_KEY_BASE_ + col).setValue('SHEET:' + it.name);
-        sh.setRowHeight(r0, 58);
-      }
-      row += bandRows + 1;
     }
-
-    sh.getRange(3, 7).setValue('リンク').setFontSize(11).setFontWeight('bold')
-      .setBackground(u.card).setHorizontalAlignment('center')
-      .setBorder(true, true, true, true, false, false, u.line, solid);
-    var c;
-    for (c = 0; c < links.length; c++) {
-      sh.getRange(4 + c, 7)
-        .setFormula('=HYPERLINK("' + String(links[c].url).replace(/"/g, '""') + '","' + links[c].title + '")')
-        .setFontColor(u.ink)
-        .setFontSize(11)
-        .setBackground(u.card)
-        .setBorder(true, true, true, true, false, false, u.line, solid);
-      sh.setRowHeight(2 + c, 28);
-    }
+    sh.setRowHeight(row, 42);
 
     sh.setHiddenGridlines(true);
     sh.setFrozenRows(1);
-    sh.setColumnWidth(1, 64);
-    for (i = 2; i <= 5; i++) sh.setColumnWidth(i, 168);
-    sh.setColumnWidth(6, 16);
-    sh.setColumnWidth(7, 100);
-    try { sh.hideColumns(8, 8); } catch (eH1) {}
+    sh.setColumnWidth(1, 72);
+    for (i = 2; i <= 6; i++) sh.setColumnWidth(i, 128);
+    try { sh.hideColumns(7, 9); } catch (eH1) {}
     try { sh.hideColumns(HUB_KEY_BASE_, 20); } catch (eH2) {}
 
     restyleHubHomeLook_(sh);
