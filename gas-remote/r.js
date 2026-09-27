@@ -4149,16 +4149,28 @@ function authorizeWorkspaceAccess() {
 var UNPAID_SOURCE_ID_ = '10vpQRDfTdwx_Wb7JaSm3lZCkTk8msLyf8ggAHhI1shI';
 var UNPAID_SHEET_ = '未納管理';
 
-/** 25年8月〜27年12月（新しい順）。元ファイルは月ごとにタブを増やすので先の月も入れておく */
-function unpaidMonthOptions_() {
+/** 25年8月〜27年12月（古い順。推移シート用） */
+function unpaidMonthListChrono_() {
   var out = [];
-  for (var y = 2027; y >= 2025; y--) {
-    for (var m = 12; m >= 1; m--) {
+  var y;
+  var m;
+  for (y = 2025; y <= 2027; y++) {
+    for (m = 1; m <= 12; m++) {
       if (y === 2025 && m < 8) continue;
       out.push(String(y % 100) + '年' + m + '月');
     }
   }
   return out;
+}
+
+/** ドロップダウン用。いまの月を一番上、あとは新しい順 */
+function unpaidMonthOptions_() {
+  var now = new Date();
+  var cur = Utilities.formatDate(now, 'Asia/Tokyo', 'yy') + '年' +
+    Number(Utilities.formatDate(now, 'Asia/Tokyo', 'M')) + '月';
+  var items = unpaidMonthListChrono_().slice().reverse();
+  var rest = items.filter(function (x) { return x !== cur; });
+  return items.indexOf(cur) >= 0 ? [cur].concat(rest) : items;
 }
 
 /**
@@ -4178,7 +4190,7 @@ function unpaidViewFormula_() {
     'jd,\'経堂_入会\'!A2:A,jk,\'経堂_入会\'!D2:D,' +
     'jn,ARRAYFORMULA(REGEXREPLACE(\'経堂_入会\'!B2:B&"","[\\s　]","")),' +
     'ex,MAKEARRAY(ROWS(d),4,LAMBDA(r,c,LET(nm,TRIM(IFERROR(INDEX(d,r,nc),"")&""),' +
-    'IF(nm="","",IF(nm="会員名",CHOOSE(c,"入会日","入会区分","未納開始","入会→未納"),' +
+    'IF(nm="","",IF(nm="会員名",CHOOSE(c,"入会日","入会区分","未納開始","入会から未納"),' +
     'LET(om,IF(mc=0,"",IFERROR(INDEX(d,r,mc),"")&""),' +
     'od,IFERROR(DATE(2000+VALUE(REGEXEXTRACT(om,"(\\d+)年")),VALUE(REGEXEXTRACT(om,"年(\\d+)")),1),""),' +
     'nn,REGEXREPLACE(nm,"[\\s　]",""),' +
@@ -4225,7 +4237,7 @@ function unpaidStatsLet_(rangeExpr) {
     'n,SUM(ok),sp,SUM(ok*pay),st,SUM(ok*tot),sr,SUM(ok*rec),nr,SUM(ok*(rec>0)),' +
     'kone,ok*REGEXMATCH(cat,"1ヶ月|1ヵ月|1カ月|1か月"),' +
     'ktwo,ok*REGEXMATCH(cat,"2ヶ月|2ヵ月|2カ月|2か月"),' +
-    'kbad,ok*REGEXMATCH(cat,"貸倒"),' +
+    'kbad,ok*REGEXMATCH(cat,"貸倒|貸し倒"),' +
     'kjac,ok*REGEXMATCH(cat,"JACCS"),';
 }
 
@@ -4233,7 +4245,7 @@ function unpaidStatsLet_(rangeExpr) {
 function unpaidDashboardFormula_() {
   return '=IFERROR(ARRAYFORMULA(LET(' + unpaidStatsLet_('"\'"&$B$1&"\'!A1:AK"') +
     'yen,LAMBDA(x,TEXT(x,"¥#,##0")),' +
-    'rt,LAMBDA(k,IF(SUM(k*pay)=0,"-",TEXT(SUM(k*rec)/SUM(k*pay),"0.0%"))),' +
+    'rt,LAMBDA(k,IF(SUM(k)=0,"対象なし",IF(SUM(k*pay)=0,"対象なし",TEXT(SUM(k*rec)/SUM(k*pay),"0.0%")))),' +
     'sub,LAMBDA(k,SUM(k)&"件　"&yen(SUM(k*rec))&" / "&yen(SUM(k*pay))),' +
     'VSTACK({"未納件数","未納総額","回収額","回収率","未回収額","回収済み","1ヶ月未納 回収率","2ヶ月未納 回収率","貸倒候補 回収率","JACCS 回収率"},' +
     'HSTACK(n&"件",yen(sp),yen(sr),IF(sp=0,"-",TEXT(sr/sp,"0.0%")),yen(sp-sr),nr&"件",rt(kone),rt(ktwo),rt(kbad),rt(kjac)),' +
@@ -4244,8 +4256,9 @@ function unpaidDashboardFormula_() {
 /** 未納管理_推移 の1行（A列の月）。数値のまま返す */
 function unpaidTrendRowFormula_(row) {
   return '=IFERROR(ARRAYFORMULA(LET(' + unpaidStatsLet_('"\'"&$A' + row + '&"\'!A1:AK"') +
-    'rq,LAMBDA(k,IF(SUM(k*pay)=0,"",SUM(k*rec)/SUM(k*pay))),' +
-    'HSTACK(n,sp,sr,IF(sp=0,"",sr/sp),sp-sr,nr,rq(kone),rq(ktwo),rq(kbad)))),"")';
+    'rq,LAMBDA(k,IF(SUM(k)=0,"対象なし",IF(SUM(k*pay)=0,"対象なし",SUM(k*rec)/SUM(k*pay)))),' +
+    'rate,IF(sp=0,"",sr/sp),' +
+    'HSTACK(n,sp,sr,rate,IF(rate="","",SPARKLINE(rate,{"charttype","bar";"max",1;"color1","#333333"})),sp-sr,nr,rq(kone),rq(ktwo),rq(kbad)))),"")';
 }
 
 function styleUnpaidView_(sh) {
@@ -4281,13 +4294,13 @@ function styleUnpaidView_(sh) {
   };
   add('=OR($B' + r0 + '="会員番号",$C' + r0 + '="会員番号")', '#111111', '#ffffff', true);
   var bands = [
-    ['REGEXMATCH($A' + r0 + '&"","貸倒")', '#ececec'],
+    ['REGEXMATCH($A' + r0 + '&"","貸倒|貸し倒")', '#ececec'],
     ['REGEXMATCH($A' + r0 + '&"","2ヶ月|2ヵ月|2カ月|3ヶ月|3ヵ月|3カ月")', '#f5f5f5'],
     ['REGEXMATCH($A' + r0 + '&"","JACCS")', '#fafafa'],
     ['TRUE', null]
   ];
-  var early = 'IFERROR(VALUE(REGEXEXTRACT(D' + r0 + '&"","^(\\d+)ヶ月$"))<=2,FALSE)';
-  var none = 'D' + r0 + '="該当なし"';
+  var early = 'IFERROR(VALUE(REGEXEXTRACT($H' + r0 + '&"","^(\\d+)ヶ月$"))<=2,FALSE)';
+  var none = '$E' + r0 + '="該当なし"';
   bands.forEach(function (b) {
     add('=AND(' + early + ',' + b[0] + ')', b[1], '#c5221f', true, joinRng);
     add('=AND(' + none + ',' + b[0] + ')', b[1], '#9e9e9e', false, joinRng);
@@ -4325,23 +4338,21 @@ function styleUnpaidDashboard_(sh) {
 function setupUnpaidTrend_(ss, options) {
   var tr = ss.getSheetByName(UNPAID_TREND_SHEET_);
   if (!tr) tr = ss.insertSheet(UNPAID_TREND_SHEET_);
-  var months = options.slice().reverse();
+  var months = unpaidMonthListChrono_();
   var need = months.length + 2;
   if (tr.getMaxRows() < need) tr.insertRowsAfter(tr.getMaxRows(), need - tr.getMaxRows());
   if (tr.getMaxColumns() < 11) tr.insertColumnsAfter(tr.getMaxColumns(), 11 - tr.getMaxColumns());
   tr.clear();
   tr.getRange(1, 1, 1, 11).setValues([[
-    '年月', '未納件数', '未納総額', '回収額', '回収率', '未回収額', '回収済み件数',
-    '1ヶ月未納 回収率', '2ヶ月未納 回収率', '貸倒候補 回収率', '回収率バー'
+    '年月', '未納件数', '未納総額', '回収額', '回収率', '全体回収率バー', '未回収額', '回収済み件数',
+    '1ヶ月未納 回収率', '2ヶ月未納 回収率', '貸倒候補 回収率'
   ]]);
-  tr.getRange(2, 1, 1, 11).setValues([['累計', '', '', '=SUM(D3:D)', '', '', '=SUM(G3:G)', '', '', '', '']]);
+  tr.getRange(2, 1, 1, 11).setValues([['累計', '', '', '=SUM(D3:D)', '', '', '', '=SUM(H3:H)', '', '', '']]);
   var rows = months.map(function (m, i) {
-    var r = i + 3;
-    return [m, unpaidTrendRowFormula_(r), '', '', '', '', '', '', '', '',
-      '=IF(E' + r + '="","",SPARKLINE(E' + r + ',{"charttype","bar";"max",1;"color1","#333333"}))'];
+    return [m, unpaidTrendRowFormula_(i + 3)];
   });
   tr.getRange(3, 1, rows.length, 1).setNumberFormat('@');
-  tr.getRange(3, 1, rows.length, 11).setValues(rows);
+  tr.getRange(3, 1, rows.length, 2).setValues(rows);
 
   var solid = SpreadsheetApp.BorderStyle.SOLID;
   var all = tr.getRange(1, 1, tr.getMaxRows(), 11);
@@ -4352,21 +4363,40 @@ function setupUnpaidTrend_(ss, options) {
     .setFontSize(9).setWrap(true).setHorizontalAlignment('center');
   tr.getRange(2, 1, 1, 11).setBackground('#e6e6e6').setFontWeight('bold');
   tr.getRange(3, 1, rows.length, 1).setFontWeight('bold').setHorizontalAlignment('center');
-  tr.getRange(2, 2, rows.length + 1, 9).setHorizontalAlignment('right');
+  tr.getRange(2, 2, rows.length + 1, 10).setHorizontalAlignment('right');
   tr.getRange(3, 2, rows.length, 1).setNumberFormat('0"件"');
   tr.getRange(2, 3, rows.length + 1, 2).setNumberFormat('¥#,##0');
   tr.getRange(3, 5, rows.length, 1).setNumberFormat('0.0%');
-  tr.getRange(3, 6, rows.length, 1).setNumberFormat('¥#,##0');
-  tr.getRange(2, 7, rows.length + 1, 1).setNumberFormat('0"件"');
-  tr.getRange(3, 8, rows.length, 3).setNumberFormat('0.0%');
+  tr.getRange(3, 7, rows.length, 1).setNumberFormat('¥#,##0');
+  tr.getRange(2, 8, rows.length + 1, 1).setNumberFormat('0"件"');
+  tr.getRange(3, 9, rows.length, 3).setNumberFormat('0.0%');
   tr.setFrozenRows(2);
   tr.setColumnWidth(1, 90);
-  tr.setColumnWidths(2, 9, 105);
-  tr.setColumnWidth(11, 180);
+  tr.setColumnWidths(2, 4, 105);
+  tr.setColumnWidth(6, 180);
+  tr.setColumnWidths(7, 5, 105);
   tr.setRowHeight(1, 36);
   tr.setHiddenGridlines(true);
   tr.setTabColor('#111111');
   return tr;
+}
+
+function applyUnpaidNotes_(sh, tr) {
+  sh.getRange('A1').setNote('☑☐ は表示だけです。クリックしても元ファイルは変わりません。操作は「元の未納管理ドライブ」で。');
+  sh.getRange('B1').setNote('元ファイルの月タブ名です。いまの月が一番上、あとは新しい順です。');
+  sh.getRange('D1').setNote('会員番号があり、支払額が1円以上の行の件数。');
+  sh.getRange('E1').setNote('支払額の合計（手数料は含まない）。');
+  sh.getRange('F1').setNote('回収金額の合計。空でも右隣に「〇〇入金」があれば支払額を回収済みとみなす。');
+  sh.getRange('G1').setNote('回収額÷未納総額（支払額ベース）。このシート上部で黒反転している数字。');
+  sh.getRange('J1').setNote('A列区分が「1ヶ月未納」の行だけを集計した回収率。');
+  sh.getRange('K1').setNote('A列区分が「2ヶ月未納」の行だけを集計した回収率。');
+  sh.getRange('L1').setNote('A列に「貸倒」または「貸し倒れ」を含む行の回収率。該当者がいなければ対象なし。');
+  sh.getRange('E6').setNote('経堂_入会を氏名（空白なし）で照合。未納開始月末までの最新入会。見つからない場合は該当なし（他店・改姓・2023/10以前など）。');
+  sh.getRange('H6').setNote('入会日から未納開始月までの経過月数。2ヶ月以内は赤字。元の未納管理ファイルは触っていません。');
+  tr.getRange('E1').setNote('その月全体の回収率（回収額÷未納総額＝支払額ベース）。右のバーと同じ数字です。');
+  tr.getRange('F1').setNote('左の「回収率」を0〜100%の横棒にしたもの。貸倒や1ヶ月未納の率ではありません。');
+  tr.getRange('K1').setNote('A列が貸倒／貸し倒れの行の回収率。該当者がいなければ「対象なし」。25年11月のように表記が「貸し倒れ」でも集計します。');
+  tr.getRange('A2').setNote('各月の回収額の単純合計。繰越があると二重計上の可能性があります。');
 }
 
 /**
@@ -4418,6 +4448,7 @@ function setupUnpaidView_() {
 
     styleUnpaidView_(sh);
     styleUnpaidDashboard_(sh);
+    applyUnpaidNotes_(sh, trend);
     sh.setFrozenRows(UNPAID_DATA_ROW_ + 1);
     sh.setHiddenGridlines(true);
     sh.setColumnWidth(1, 130);
