@@ -50,11 +50,21 @@ var RECEPTION_REFRESH_URL_ =
 var RECEPTION_REFRESH_TOKEN_ = 'kyodo-ws-refresh-7f3c91';
 
 function onOpen() {
-  SpreadsheetApp.getUi()
-    .createMenu('数値更新')
+  var ui = SpreadsheetApp.getUi();
+  ui.createMenu('今日の作業')
+    .addItem('トップへ戻る（他シートを隠す）', 'hubCloseWork_')
+    .addItem('トップを表示', 'hubShowHome_')
+    .addToUi();
+  ui.createMenu('数値更新')
     .addItem('受付状況表の数値を更新（入会・退会・OP）', 'refreshReceptionNumbersFromMenu')
     .addItem('前回の更新時刻を確認', 'showReceptionRefreshStatus')
     .addToUi();
+}
+
+function onEdit(e) {
+  try {
+    handleHubHomeEdit_(e);
+  } catch (err) {}
 }
 
 function callReceptionRefreshApi_(api) {
@@ -1969,7 +1979,7 @@ function handleApiGet_(e) {
   try {
     var api = e && e.parameter ? String(e.parameter.api || '') : '';
     if (api === 'status') {
-      return jsonOutput_({ ok: true, service: 'ryuta-workspace-gas', version: 'v2-deathnote-look' });
+      return jsonOutput_({ ok: true, service: 'ryuta-workspace-gas', version: 'v2-hub-home' });
     }
     if (api === 'listSheets') {
       return jsonOutput_(listWorkspaceSheets_());
@@ -1991,6 +2001,15 @@ function handleApiGet_(e) {
     }
     if (api === 'restyleHubLook') {
       return jsonOutput_(restyleHubLook_());
+    }
+    if (api === 'setupHubHome') {
+      return jsonOutput_(setupHubHome_());
+    }
+    if (api === 'hubOpen') {
+      return jsonOutput_(hubOpenNamed_(String((e.parameter && e.parameter.name) || '')));
+    }
+    if (api === 'hubClose') {
+      return jsonOutput_(hubCloseWork_());
     }
     if (api === 'peekExternal') {
       try {
@@ -4159,6 +4178,7 @@ function authorizeWorkspaceAccess() {
 
 var UNPAID_SOURCE_ID_ = '10vpQRDfTdwx_Wb7JaSm3lZCkTk8msLyf8ggAHhI1shI';
 var UNPAID_SHEET_ = '未納管理';
+var HUB_HOME_SHEET_ = 'トップ';
 
 /** デスノート寄りの配色。クリーム紙・墨・血赤。大きくは変えない */
 function dnTheme_() {
@@ -4176,6 +4196,7 @@ function dnTheme_() {
 
 function hubTabColorFor_(name) {
   var t = dnTheme_();
+  if (name === HUB_HOME_SHEET_) return t.blood;
   if (name === '経堂マスタ') return t.ink;
   if (name.indexOf('未納') === 0) return t.blood;
   if (name.indexOf('見学体験') === 0 && name.indexOf('backup') === -1) return '#6B3A1F';
@@ -4196,6 +4217,310 @@ function applyHubTabColors_(ss) {
   var i;
   for (i = 0; i < sheets.length; i++) {
     try { sheets[i].setTabColor(hubTabColorFor_(sheets[i].getName())); } catch (e0) {}
+  }
+}
+
+function hubIsAlwaysHidden_(name) {
+  if (name === HUB_HOME_SHEET_) return false;
+  if (/^経堂_/.test(name)) return true;
+  if (/backup/i.test(name)) return true;
+  if (/^シート\d+$/.test(name)) return true;
+  if (name === 'Tasks' || name === 'WorkspaceSync') return true;
+  return false;
+}
+
+function hubIsWorkSheet_(name) {
+  return !!name && name !== HUB_HOME_SHEET_ && !hubIsAlwaysHidden_(name);
+}
+
+function hubCatalog_(ss) {
+  var items = [
+    { kind: 'sheet', group: '今日の数字', name: '経堂マスタ', title: '経堂マスタ', blurb: '当日入会・着地・今日の動き' },
+    { kind: 'sheet', group: '今日の数字', name: '【経堂】会員動向', title: '会員動向', blurb: '在籍の動き' },
+    { kind: 'sheet', group: '未納・回収', name: '未納管理', title: '未納管理', blurb: '今月の未納一覧と回収率' },
+    { kind: 'sheet', group: '未納・回収', name: '未納管理_推移', title: '未納の推移', blurb: '月ごとの回収率バー' },
+    { kind: 'sheet', group: '来店・販促', name: '見学体験申請', title: '見学・体験', blurb: '申込と入会判定' },
+    { kind: 'sheet', group: '来店・販促', name: '口コミ_経堂', title: '口コミ', blurb: '経堂の口コミと付与' },
+    { kind: 'sheet', group: '来店・販促', name: 'マシンレクチャー申込', title: 'マシンレクチャー', blurb: '20分レクチャー申込' },
+    { kind: 'sheet', group: '来店・販促', name: '入会者一覧＋自動メール管理', title: '入会者一覧', blurb: '自動メール・アンケート' },
+    { kind: 'sheet', group: '索引', name: 'URL一覧', title: 'URL一覧', blurb: 'よく使うリンク' }
+  ];
+  var sheets = ss.getSheets();
+  var i;
+  for (i = 0; i < sheets.length; i++) {
+    var n = sheets[i].getName();
+    if (/^販促_/.test(n) && n.indexOf('backup') === -1) {
+      items.push({
+        kind: 'sheet',
+        group: '来店・販促',
+        name: n,
+        title: n.replace(/^販促_/, ''),
+        blurb: '販促入力のミラー'
+      });
+    }
+  }
+  items.push(
+    { kind: 'url', group: '入力元（外のファイル）', title: '受付状況表', blurb: '入会・退会・日報の入力', url: 'https://docs.google.com/spreadsheets/d/14hxiLBzvGTuIpfZcoVjiHpz8b419OzUrtQAr5788h3w/edit' },
+    { kind: 'url', group: '入力元（外のファイル）', title: '未納管理ドライブ', blurb: '☑の操作はこちら', url: 'https://docs.google.com/spreadsheets/d/' + UNPAID_SOURCE_ID_ + '/edit' },
+    { kind: 'url', group: '入力元（外のファイル）', title: '見学・体験フォーム', blurb: '申込の元データ', url: 'https://docs.google.com/spreadsheets/d/1RPUw0slNCit9ZwJgINGfv89oc2Hxw8zzAZyMt6g_QuY/edit' },
+    { kind: 'url', group: '入力元（外のファイル）', title: '追加販促', blurb: 'スタッフ入力の元', url: 'https://docs.google.com/spreadsheets/d/1w7ExndmZn7t2_z55CvxRDMZy4QAcuEyNhIuj-6sUy3E/edit' },
+    { kind: 'url', group: '入力元（外のファイル）', title: '口コミ付与アプリ', blurb: 'EASTの付与操作', url: REVIEW_GRANT_APP_URL_ }
+  );
+  return items.filter(function (it) {
+    if (it.kind !== 'sheet') return true;
+    return !!ss.getSheetByName(it.name);
+  });
+}
+
+function hubApplyFocus_(ss, sheetName) {
+  var home = ss.getSheetByName(HUB_HOME_SHEET_);
+  if (home) {
+    try { home.showSheet(); } catch (e0) {}
+  }
+  var sheets = ss.getSheets();
+  var i;
+  var opened = '';
+  for (i = 0; i < sheets.length; i++) {
+    var sh = sheets[i];
+    var n = sh.getName();
+    if (n === HUB_HOME_SHEET_) continue;
+    if (sheetName && n === sheetName) {
+      try { sh.showSheet(); } catch (e1) {}
+      opened = n;
+      continue;
+    }
+    try { sh.hideSheet(); } catch (e2) {}
+  }
+  if (opened) {
+    var target = ss.getSheetByName(opened);
+    if (target) {
+      ss.setActiveSheet(target);
+      try { target.activate(); } catch (e3) {}
+    }
+  } else if (home) {
+    ss.setActiveSheet(home);
+    try { home.activate(); } catch (e4) {}
+  }
+  if (home) hubRefreshStatus_(home, ss);
+  SpreadsheetApp.flush();
+  return {
+    ok: true,
+    open: opened || HUB_HOME_SHEET_,
+    visible: ss.getSheets().filter(function (s) { return !s.isSheetHidden(); }).map(function (s) { return s.getName(); })
+  };
+}
+
+function hubCloseWork_() {
+  return hubApplyFocus_(openWorkspaceSpreadsheet_(), '');
+}
+
+function hubShowHome_() {
+  var ss = openWorkspaceSpreadsheet_();
+  var home = ss.getSheetByName(HUB_HOME_SHEET_);
+  if (!home) return setupHubHome_();
+  try { home.showSheet(); } catch (e0) {}
+  ss.setActiveSheet(home);
+  hubRefreshStatus_(home, ss);
+  return { ok: true, open: HUB_HOME_SHEET_ };
+}
+
+function hubOpenNamed_(name) {
+  var ss = openWorkspaceSpreadsheet_();
+  var n = String(name || '').trim();
+  if (!n) return { ok: false, message: 'name が空です' };
+  if (!ss.getSheetByName(n)) return { ok: false, message: 'シートがありません: ' + n };
+  return hubApplyFocus_(ss, n);
+}
+
+function hubRefreshStatus_(home, ss) {
+  var last = home.getLastRow();
+  if (last < 4) return;
+  var keys = home.getRange(4, 7, last - 3, 1).getDisplayValues();
+  var status = [];
+  var colors = [];
+  var t = dnTheme_();
+  var i;
+  for (i = 0; i < keys.length; i++) {
+    var key = String(keys[i][0] || '');
+    if (key.indexOf('SHEET:') === 0) {
+      var sh = ss.getSheetByName(key.slice(6));
+      var on = sh && !sh.isSheetHidden();
+      status.push([on ? '表示中' : '隠す']);
+      colors.push([on ? t.blood : t.ash]);
+    } else {
+      status.push(['']);
+      colors.push([t.ash]);
+    }
+  }
+  home.getRange(4, 4, status.length, 1).setValues(status).setFontColor(t.ash);
+  for (i = 0; i < colors.length; i++) {
+    if (status[i][0] === '表示中') {
+      home.getRange(i + 4, 4).setFontColor(colors[i][0]).setFontWeight('bold');
+    }
+  }
+}
+
+function handleHubHomeEdit_(e) {
+  if (!e || !e.range) return;
+  var sh = e.range.getSheet();
+  if (sh.getName() !== HUB_HOME_SHEET_) return;
+  if (e.range.getColumn() !== 1) return;
+  var v = e.range.getValue();
+  var on = v === true || v === 'TRUE' || v === '✓';
+  if (!on) return;
+  e.range.setValue(false);
+  var row = e.range.getRow();
+  var key = String(sh.getRange(row, 7).getDisplayValue() || '');
+  var ss = sh.getParent();
+  if (key === 'CLOSE') {
+    hubApplyFocus_(ss, '');
+    ss.toast('トップ以外を隠しました', '今日の作業', 5);
+    return;
+  }
+  if (key.indexOf('SHEET:') === 0) {
+    var name = key.slice(6);
+    hubApplyFocus_(ss, name);
+    ss.toast(name + ' を開きました。終わったらトップの「作業終了」を☑', '今日の作業', 8);
+  }
+}
+
+function restyleHubHomeLook_(sh) {
+  var t = dnTheme_();
+  var last = Math.max(sh.getLastRow(), 3);
+  var cols = 6;
+  sh.getRange(1, 1, last, cols).setFontFamily('Meiryo').setFontColor(t.ink);
+  sh.getRange(1, 1, 1, cols).setBackground(t.ink).setFontColor(t.paper).setFontWeight('bold');
+  sh.getRange(2, 1, 1, cols).setBackground(t.cream).setFontColor(t.ash);
+  sh.getRange(3, 1, 1, cols).setBackground(t.blood).setFontColor(t.paper).setFontWeight('bold');
+  if (last >= 4) sh.getRange(4, 1, last - 3, cols).setBackground(t.paper);
+  if (last >= 3) {
+    var keys = sh.getRange(3, 7, last - 2, 1).getDisplayValues();
+    var titles = sh.getRange(3, 2, last - 2, 1).getDisplayValues();
+    var i;
+    for (i = 0; i < keys.length; i++) {
+      var row = i + 3;
+      var k = String(keys[i][0] || '');
+      if (!k && String(titles[i][0] || '')) {
+        sh.getRange(row, 1, 1, cols).setBackground(t.ink).setFontColor(t.paper).setFontWeight('bold');
+      }
+      if (k.indexOf('URL:') === 0) {
+        sh.getRange(row, 2).setFontColor(t.blood);
+      }
+    }
+  }
+  sh.getRange(3, 1, 1, cols).setBackground(t.blood).setFontColor(t.paper).setFontWeight('bold');
+  sh.setTabColor(t.blood);
+}
+
+function setupHubHome_() {
+  try {
+    var ss = openWorkspaceSpreadsheet_();
+    var sh = ss.getSheetByName(HUB_HOME_SHEET_);
+    if (!sh) sh = ss.insertSheet(HUB_HOME_SHEET_, 0);
+    sh.clear();
+    try { sh.clearConditionalFormatRules(); } catch (e0) {}
+    try { sh.getDataRange().clearDataValidations(); } catch (e1) {}
+    sh.showSheet();
+    ss.setActiveSheet(sh);
+    ss.moveActiveSheet(1);
+
+    var t = dnTheme_();
+    var items = hubCatalog_(ss);
+    var rows = [];
+    var keys = [];
+
+    sh.getRange('A1').setValue('RYUTA Workspace');
+    sh.getRange('A2').setValue('やりたいことを☑すると、そのシートだけが出ます。終わったら下の作業終了。');
+    sh.getRange(3, 1, 1, 6).setValues([[false, '作業終了', 'トップ以外のシートを隠す', '', '', '']]);
+    sh.getRange('G3').setValue('CLOSE');
+
+    var lastGroup = '';
+    var r;
+    for (r = 0; r < items.length; r++) {
+      var it = items[r];
+      if (it.group !== lastGroup) {
+        lastGroup = it.group;
+        rows.push(['', it.group, '', '', '', '']);
+        keys.push('');
+      }
+      if (it.kind === 'sheet') {
+        rows.push([false, it.title, it.blurb, '', it.name, '']);
+        keys.push('SHEET:' + it.name);
+      } else {
+        rows.push(['', it.title, it.blurb, '', '', '']);
+        keys.push('URL:' + it.url);
+      }
+    }
+
+    var start = 4;
+    if (rows.length) {
+      sh.getRange(start, 1, rows.length, 6).setValues(rows);
+      var keyCol = keys.map(function (k) { return [k]; });
+      sh.getRange(start, 7, keyCol.length, 1).setValues(keyCol);
+    }
+
+    var last = sh.getLastRow();
+    var checkRows = [];
+    var urlRows = [];
+    var sectionRows = [];
+    var allKeys = sh.getRange(3, 7, last - 2, 1).getDisplayValues();
+    var labels = sh.getRange(3, 2, last - 2, 2).getDisplayValues();
+    var i;
+    for (i = 0; i < allKeys.length; i++) {
+      var row = i + 3;
+      var k = String(allKeys[i][0] || '');
+      if (k === 'CLOSE' || k.indexOf('SHEET:') === 0) checkRows.push(row);
+      else if (k.indexOf('URL:') === 0) urlRows.push(row);
+      else if (String(labels[i][0] || '') && !k) sectionRows.push(row);
+    }
+
+    var cb = SpreadsheetApp.newDataValidation().requireCheckbox().setAllowInvalid(false).build();
+    for (i = 0; i < checkRows.length; i++) {
+      sh.getRange(checkRows[i], 1).setDataValidation(cb).setValue(false).setHorizontalAlignment('center');
+    }
+    for (i = 0; i < urlRows.length; i++) {
+      var urow = urlRows[i];
+      var u = String(sh.getRange(urow, 7).getDisplayValue() || '').slice(4);
+      var title = String(sh.getRange(urow, 2).getDisplayValue() || '開く');
+      sh.getRange(urow, 2).setFormula('=HYPERLINK("' + u.replace(/"/g, '""') + '","↗ ' + title.replace(/"/g, '""') + '")');
+      sh.getRange(urow, 2).setFontColor(t.blood);
+    }
+    for (i = 0; i < sectionRows.length; i++) {
+      sh.getRange(sectionRows[i], 1, 1, 6).setBackground(t.ink).setFontColor(t.paper).setFontWeight('bold');
+    }
+
+    sh.setHiddenGridlines(true);
+    sh.setFrozenRows(3);
+    sh.setColumnWidth(1, 44);
+    sh.setColumnWidth(2, 220);
+    sh.setColumnWidth(3, 280);
+    sh.setColumnWidth(4, 72);
+    sh.setColumnWidth(5, 200);
+    sh.setColumnWidth(6, 24);
+    try { sh.hideColumns(7); } catch (eHide) {}
+    sh.setRowHeight(1, 40);
+    sh.setRowHeight(2, 28);
+    sh.setRowHeight(3, 36);
+    if (last >= 4) sh.setRowHeights(4, last - 3, 28);
+    try {
+      var maxCols = sh.getMaxColumns();
+      if (maxCols > 7) sh.hideColumns(8, maxCols - 7);
+    } catch (eCols) {}
+
+    sh.getRange('A1:F1').merge().setFontSize(22).setFontWeight('bold').setVerticalAlignment('middle');
+    sh.getRange('A2:F2').merge().setFontSize(11);
+    sh.getRange('B3:C3').merge().setFontSize(14);
+    restyleHubHomeLook_(sh);
+    hubApplyFocus_(ss, '');
+    applyHubTabColors_(ss);
+    return {
+      ok: true,
+      sheet: HUB_HOME_SHEET_,
+      items: items.length,
+      visible: ss.getSheets().filter(function (s) { return !s.isSheetHidden(); }).map(function (s) { return s.getName(); })
+    };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
   }
 }
 
@@ -4318,12 +4643,17 @@ function restyleHubLook_() {
     if (master) restyleKyodoMasterLook_(master);
     var urlSh = ss.getSheetByName('URL一覧');
     if (urlSh) restyleUrlIndexLook_(urlSh);
+    var home = ss.getSheetByName(HUB_HOME_SHEET_);
+    if (home) {
+      restyleHubHomeLook_(home);
+      hubRefreshStatus_(home, ss);
+    }
     var sheets = ss.getSheets();
     var i;
     for (i = 0; i < sheets.length; i++) {
       var sh = sheets[i];
       var n = sh.getName();
-      if (n === '経堂マスタ' || n === UNPAID_SHEET_ || n === UNPAID_TREND_SHEET_ || n === 'URL一覧') continue;
+      if (n === HUB_HOME_SHEET_ || n === '経堂マスタ' || n === UNPAID_SHEET_ || n === UNPAID_TREND_SHEET_ || n === 'URL一覧') continue;
       if (/backup|シート\d+/.test(n)) continue;
       if (/^販促_/.test(n) || n === 'マシンレクチャー申込' || n === '入会者一覧＋自動メール管理' ||
           n === '口コミ_経堂' || n === '【経堂】会員動向' || n === '見学体験申請' ||
