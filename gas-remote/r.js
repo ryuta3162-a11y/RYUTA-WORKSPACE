@@ -2013,6 +2013,9 @@ function handleApiGet_(e) {
     if (api === 'setupHubHome') {
       return jsonOutput_(setupHubHome_());
     }
+    if (api === 'setupMasterIntroKpi') {
+      return jsonOutput_(setupMasterIntroKpi_());
+    }
     if (api === 'hubOpen') {
       return jsonOutput_(hubOpenNamed_(String((e.parameter && e.parameter.name) || '')));
     }
@@ -4376,19 +4379,15 @@ function hubPaintOpenSourceCell_(sh, row, col, cols, src) {
 function hubEnsureSourceBanner_(sh) {
   if (!sh) return;
   var n = sh.getName();
-  if (n === HUB_HOME_SHEET_ || n === UNPAID_SHEET_) return;
+  if (n === HUB_HOME_SHEET_ || n === UNPAID_SHEET_ || n === '経堂マスタ') return;
   if (hubIsAlwaysHidden_(n) && n !== UNPAID_TREND_SHEET_) return;
   var src = hubSourceForName_(n);
   if (!src) return;
   var f1 = String(sh.getRange(1, 1).getFormula() || '');
   var d1 = String(sh.getRange(1, 1).getDisplayValue() || '');
   if (/元のシートを開く|元の未納管理ドライブ/.test(f1 + d1)) {
-    var span = n === '経堂マスタ' ? 3 : Math.min(Math.max(sh.getLastColumn(), 4), 6);
+    var span = Math.min(Math.max(sh.getLastColumn(), 4), 6);
     hubPaintOpenSourceCell_(sh, 1, 1, span, src);
-    return;
-  }
-  if (n === '経堂マスタ') {
-    hubPaintOpenSourceCell_(sh, 1, 1, 3, src);
     return;
   }
   if (n === UNPAID_TREND_SHEET_) {
@@ -4794,6 +4793,121 @@ function restyleHeaderBody_(sh) {
   hubStampType_(sh, last + 80, cols);
 }
 
+function masterFindRowLabel_(sh, row, needle) {
+  var last = Math.max(sh.getLastColumn(), 20);
+  var vals = sh.getRange(row, 1, 1, last).getDisplayValues()[0];
+  var i;
+  for (i = 0; i < vals.length; i++) {
+    if (String(vals[i] || '').indexOf(needle) !== -1) return i + 1;
+  }
+  return 0;
+}
+
+function masterMonthCellA1_(sh) {
+  var hits = ['AB5', 'AD5', 'AF5'];
+  var i;
+  for (i = 0; i < hits.length; i++) {
+    var f = String(sh.getRange(hits[i]).getFormula() || '');
+    if (/DATE\(VALUE\(LEFT\(\$B\$2|DATE\(YEAR\(TODAY/.test(f)) return hits[i];
+  }
+  var last = Math.max(sh.getLastColumn(), 28);
+  var start = 20;
+  var forms = sh.getRange(5, start, 1, last - start + 1).getFormulas()[0];
+  for (i = 0; i < forms.length; i++) {
+    if (/DATE\(VALUE\(LEFT\(\$B\$2/.test(String(forms[i] || ''))) return columnLetter_(start + i) + '5';
+  }
+  return 'AB5';
+}
+
+function masterPromoListFormula_(monthA1) {
+  return '=IFERROR(QUERY({\'販促_乗り換え\'!A2:C;' +
+    '{\'販促_紹介・ペア入会\'!A2:A,\'販促_紹介・ペア入会\'!B2:B,\'販促_紹介・ペア入会\'!F2:F};' +
+    '\'販促_ラグビー割\'!A2:C;\'販促_6ヶ月継続\'!A2:C},' +
+    '"select Col1,Col2,Col3 where Col1 >= date \'"&TEXT($' + monthA1 +
+    ',"yyyy-mm-dd")&"\' and Col1 < date \'"&TEXT(EDATE($' + monthA1 +
+    ',1),"yyyy-mm-dd")&"\' order by Col1 desc",0),"")';
+}
+
+function masterIntroCountFormula_(monthA1) {
+  return '=IFERROR(COUNTIFS(\'販促_紹介・ペア入会\'!A2:A,">="&$' + monthA1 +
+    ',\'販促_紹介・ペア入会\'!A2:A,"<"&EDATE($' + monthA1 + ',1)),)';
+}
+
+/** 経堂マスタの当月移籍の右に、紹介・ペア入会の当月件数を出す */
+function setupMasterIntroKpi_() {
+  try {
+    var ss = openWorkspaceSpreadsheet_();
+    var sh = ss.getSheetByName('経堂マスタ');
+    if (!sh) return { ok: false, message: '経堂マスタなし' };
+    if (!ss.getSheetByName('販促_紹介・ペア入会')) {
+      return { ok: false, message: '販促_紹介・ペア入会 がありません' };
+    }
+    var moveCol = masterFindRowLabel_(sh, 4, '当月移籍');
+    var introCol = masterFindRowLabel_(sh, 4, '当月紹介');
+    var inserted = false;
+    if (!introCol) {
+      if (!moveCol) return { ok: false, message: '当月移籍の位置が見つかりません' };
+      sh.insertColumnsAfter(moveCol + 1, 2);
+      inserted = true;
+      introCol = moveCol + 2;
+    }
+    var monthA1 = masterMonthCellA1_(sh);
+    try { sh.getRange(4, introCol, 3, 2).breakApart(); } catch (eBr) {}
+    if (moveCol) {
+      try {
+        sh.getRange(4, moveCol, 3, 2).copyTo(
+          sh.getRange(4, introCol, 3, 2),
+          SpreadsheetApp.CopyPasteType.PASTE_FORMAT,
+          false
+        );
+      } catch (eFmt) {}
+    }
+    sh.getRange(4, introCol, 1, 2).merge().setValue('当月紹介')
+      .setFontWeight('bold')
+      .setHorizontalAlignment('center')
+      .setVerticalAlignment('middle');
+    sh.getRange(5, introCol, 2, 2).merge()
+      .setFormula(masterIntroCountFormula_(monthA1))
+      .setNumberFormat('0" 件"')
+      .setHorizontalAlignment('center')
+      .setVerticalAlignment('middle')
+      .setFontWeight('bold');
+    if (moveCol) {
+      try {
+        sh.setColumnWidth(introCol, sh.getColumnWidth(moveCol));
+        sh.setColumnWidth(introCol + 1, sh.getColumnWidth(moveCol + 1));
+      } catch (eW) {}
+    }
+    var titleEnd = introCol + 1;
+    var title = String(sh.getRange(1, 1).getDisplayValue() || '');
+    if (!title || /元のシート/.test(title)) title = 'JOYFIT24経堂マスタ';
+    try { sh.getRange(1, 1, 1, titleEnd).breakApart(); } catch (eT) {}
+    sh.getRange(1, 1, 1, titleEnd).merge().setValue(title)
+      .setHorizontalAlignment('center').setFontWeight('bold');
+
+    var last = Math.max(sh.getLastColumn(), 20);
+    var row4f = sh.getRange(4, 1, 1, last).getFormulas()[0];
+    var p;
+    for (p = 0; p < row4f.length; p++) {
+      if (/販促_乗り換え/.test(String(row4f[p] || ''))) {
+        sh.getRange(4, p + 1).setFormula(masterPromoListFormula_(monthA1));
+        break;
+      }
+    }
+    restyleKyodoMasterLook_(sh);
+    SpreadsheetApp.flush();
+    return {
+      ok: true,
+      inserted: inserted,
+      introCol: introCol,
+      monthCell: monthA1,
+      count: sh.getRange(5, introCol).getDisplayValue()
+    };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
 function restyleKyodoMasterLook_(sh) {
   var t = dnTheme_();
   var last = Math.max(sh.getLastRow(), 24);
@@ -4807,17 +4921,19 @@ function restyleKyodoMasterLook_(sh) {
   var start = headerRow + 1;
   var bodyRows = Math.max(last - headerRow, 1);
   var medium = SpreadsheetApp.BorderStyle.SOLID_MEDIUM;
-  hubType_(sh.getRange(1, 1, last, 11))
+  var introCol = masterFindRowLabel_(sh, 4, '当月紹介');
+  var kpiCols = introCol ? introCol + 1 : 11;
+  hubType_(sh.getRange(1, 1, last, kpiCols))
     .setFontColor(t.ink)
     .setHorizontalAlignment('center')
     .setVerticalAlignment('middle');
-  sh.getRange(1, 1, 1, 11).setBackground(t.ink).setFontColor(t.paper).setFontWeight('bold')
+  sh.getRange(1, 1, 1, kpiCols).setBackground(t.ink).setFontColor(t.paper).setFontWeight('bold')
     .setBorder(false, false, true, false, false, false, t.blood, medium);
-  sh.getRange(2, 1, Math.max(headerRow - 2, 1), 11).setBackground(t.paper);
-  sh.getRange(headerRow, 1, 1, 10).setBackground(t.ink).setFontColor(t.paper).setFontWeight('bold')
+  sh.getRange(2, 1, Math.max(headerRow - 2, 1), kpiCols).setBackground(t.paper);
+  sh.getRange(headerRow, 1, 1, Math.min(kpiCols, 10)).setBackground(t.ink).setFontColor(t.paper).setFontWeight('bold')
     .setHorizontalAlignment('center')
     .setBorder(false, false, true, false, false, false, t.blood, medium);
-  sh.getRange(start, 1, bodyRows, 10).setBackground(t.ghost).setFontColor(t.ink);
+  sh.getRange(start, 1, bodyRows, Math.min(kpiCols, 10)).setBackground(t.ghost).setFontColor(t.ink);
   sh.getRange(start, 1, bodyRows, 1).setBackground(t.cream);
   sh.getRange(start, 6, bodyRows, 1).setBackground(t.cream);
   sh.getRange(start, 7, bodyRows, 1).setBackground(t.cream);
@@ -4826,16 +4942,28 @@ function restyleKyodoMasterLook_(sh) {
     sh.getRange('F7').setBackground(t.blood).setFontColor(t.paper);
   } catch (eBrief) {}
   try {
-    sh.getRange('L1:N1').setBackground(t.ink).setFontColor(t.paper);
-    sh.getRange('R1:V1').setBackground(t.ink).setFontColor(t.paper);
-    sh.getRange('X1:AA1').setBackground(t.ink).setFontColor(t.paper);
-    sh.getRange('L2:N2').setBackground(t.cream).setFontColor(t.ink);
-    sh.getRange('R2:V2').setBackground(t.cream).setFontColor(t.ink);
-    sh.getRange('X2:AA2').setBackground(t.cream).setFontColor(t.ink);
-    sh.getRange('L3:N3').setBackground(t.ink).setFontColor(t.paper);
-    sh.getRange('R3:V3').setBackground(t.ink).setFontColor(t.paper);
-    sh.getRange('X3:AA3').setBackground(t.ink).setFontColor(t.paper);
+    var side = [
+      { needle: '今月の追加販促', cols: 3 },
+      { needle: '今月の見学体験', cols: 5 },
+      { needle: '今月の口コミ', cols: 4 }
+    ];
+    var s;
+    for (s = 0; s < side.length; s++) {
+      var c = masterFindRowLabel_(sh, 1, side[s].needle);
+      if (!c) continue;
+      var w = side[s].cols;
+      sh.getRange(1, c, 1, w).setBackground(t.ink).setFontColor(t.paper);
+      sh.getRange(2, c, 1, w).setBackground(t.cream).setFontColor(t.ink);
+      sh.getRange(3, c, 1, w).setBackground(t.ink).setFontColor(t.paper);
+    }
   } catch (eSide) {}
+  if (introCol) {
+    try {
+      hubType_(sh.getRange(4, introCol, 1, 2)).setFontWeight('bold').setFontSize(11);
+      hubType_(sh.getRange(5, introCol, 2, 2)).setFontWeight('bold').setFontSize(18)
+        .setNumberFormat('0" 件"');
+    } catch (eIntroStyle) {}
+  }
   hubStampType_(sh);
   sh.setTabColor(t.ink);
 }
@@ -4904,7 +5032,10 @@ function restyleHubLook_() {
     }
     if (trend) restyleUnpaidTrendLook_(trend);
     var master = ss.getSheetByName('経堂マスタ');
-    if (master) restyleKyodoMasterLook_(master);
+    if (master) {
+      try { setupMasterIntroKpi_(); } catch (eIntro) {}
+      restyleKyodoMasterLook_(master);
+    }
     var urlSh = ss.getSheetByName('URL一覧');
     if (urlSh) restyleUrlIndexLook_(urlSh);
     if (master) hubEnsureSourceBanner_(master);
