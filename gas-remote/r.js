@@ -4958,6 +4958,7 @@ function setupSchoolDiscountImport_() {
     var sheet = setupSchoolDiscountSheet_(ss);
     var permit = permitImportRange_(ss, SCHOOL_FORM_SOURCE_ID_);
     var master = ss.getSheetByName('経堂マスタ');
+    var schoolKpi = master ? setupMasterSchoolKpi_() : { ok: false };
     var panel = master ? setupMasterSchoolPanel_(master) : { ok: false, message: '経堂マスタなし' };
     if (master) {
       var monthA1 = masterMonthCellA1_(master);
@@ -4979,6 +4980,7 @@ function setupSchoolDiscountImport_() {
       destSheet: SCHOOL_WS_SHEET_,
       permit: permit,
       panel: panel,
+      schoolKpi: schoolKpi,
       note: '元のフォーム回答ブックは未変更。B列が JOYFIT24 経堂 の行は件数制限なしで全部（今後の追加分も含む）。'
     };
   } catch (err) {
@@ -5020,6 +5022,97 @@ function masterPromoListFormula_(monthA1) {
     '"select Col1,Col2,Col3 where Col1 >= date \'"&TEXT($' + monthA1 +
     ',"yyyy-mm-dd")&"\' and Col1 < date \'"&TEXT(EDATE($' + monthA1 +
     ',1),"yyyy-mm-dd")&"\' order by Col1 desc",0),"")';
+}
+
+function masterSchoolCountFormula_(monthA1) {
+  return '=IFERROR(COUNTIFS(\'' + SCHOOL_WS_SHEET_ + '\'!A2:A,">="&$' + monthA1 +
+    ',\'' + SCHOOL_WS_SHEET_ + '\'!A2:A,"<"&EDATE($' + monthA1 + ',1)),)';
+}
+
+/** 当月紹介の右に、学校関係者割の当月件数。2列カードのまま足す */
+function setupMasterSchoolKpi_() {
+  try {
+    var ss = openWorkspaceSpreadsheet_();
+    var sh = ss.getSheetByName('経堂マスタ');
+    if (!sh) return { ok: false, message: '経堂マスタなし' };
+    var introCol = masterFindRowLabel_(sh, 4, '当月紹介');
+    var schoolKpiCol = masterFindRowLabel_(sh, 4, '当月学割');
+    var inserted = false;
+    if (!schoolKpiCol) {
+      if (!introCol) return { ok: false, message: '当月紹介の位置が見つかりません' };
+      sh.insertColumnsAfter(introCol + 1, 2);
+      inserted = true;
+      schoolKpiCol = introCol + 2;
+    }
+    var monthA1 = masterMonthCellA1_(sh);
+    try { sh.getRange(4, schoolKpiCol, 3, 2).breakApart(); } catch (eBr) {}
+    if (introCol) {
+      try {
+        sh.getRange(4, introCol, 3, 2).copyTo(
+          sh.getRange(4, schoolKpiCol, 3, 2),
+          SpreadsheetApp.CopyPasteType.PASTE_FORMAT,
+          false
+        );
+      } catch (eFmt) {}
+    }
+    sh.getRange(4, schoolKpiCol, 1, 2).merge().setValue('当月学割')
+      .setFontWeight('bold')
+      .setHorizontalAlignment('center')
+      .setVerticalAlignment('middle');
+    sh.getRange(5, schoolKpiCol, 2, 2).merge()
+      .setFormula(masterSchoolCountFormula_(monthA1))
+      .setNumberFormat('0" 件"')
+      .setHorizontalAlignment('center')
+      .setVerticalAlignment('middle')
+      .setFontWeight('bold');
+    if (introCol) {
+      try {
+        sh.setColumnWidth(schoolKpiCol, sh.getColumnWidth(introCol));
+        sh.setColumnWidth(schoolKpiCol + 1, sh.getColumnWidth(introCol + 1));
+      } catch (eW) {}
+    }
+    var titleEnd = schoolKpiCol + 1;
+    var title = String(sh.getRange(1, 1).getDisplayValue() || '');
+    if (!title || /元のシート/.test(title)) title = 'JOYFIT24経堂マスタ';
+    try { sh.getRange(1, 1, 1, titleEnd).breakApart(); } catch (eT) {}
+    sh.getRange(1, 1, 1, titleEnd).merge().setValue(title)
+      .setHorizontalAlignment('center').setFontWeight('bold');
+    return {
+      ok: true,
+      inserted: inserted,
+      schoolKpiCol: schoolKpiCol,
+      monthCell: monthA1
+    };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
+function stripMasterSideConditionalFormats_(sh) {
+  var reviewCol = masterFindRowLabel_(sh, 1, '今月の口コミ');
+  if (!reviewCol) return;
+  var rules = sh.getConditionalFormatRules();
+  var kept = [];
+  var i;
+  for (i = 0; i < rules.length; i++) {
+    var ranges = rules[i].getRanges();
+    var clipped = [];
+    var g;
+    for (g = 0; g < ranges.length; g++) {
+      var rng = ranges[g];
+      var c1 = rng.getColumn();
+      var c2 = c1 + rng.getNumColumns() - 1;
+      if (c2 < reviewCol) {
+        clipped.push(rng);
+      } else if (c1 < reviewCol) {
+        clipped.push(sh.getRange(rng.getRow(), c1, rng.getNumRows(), reviewCol - c1));
+      }
+    }
+    if (clipped.length) {
+      try { kept.push(rules[i].copy().setRanges(clipped).build()); } catch (eC) {}
+    }
+  }
+  sh.setConditionalFormatRules(kept);
 }
 
 function masterIntroCountFormula_(monthA1) {
@@ -5104,19 +5197,24 @@ function setupMasterIntroKpi_() {
 
 function restyleKyodoMasterLook_(sh) {
   var t = dnTheme_();
-  var last = Math.max(sh.getLastRow(), 24);
-  var maxScan = Math.min(last, 40);
-  var labels = sh.getRange(1, 1, maxScan, 1).getDisplayValues();
+  var aLast = Math.min(Math.max(sh.getLastRow(), 24), 80);
+  var labels = sh.getRange(1, 1, aLast, 1).getDisplayValues();
   var headerRow = 16;
+  var last = 24;
   var i;
   for (i = 0; i < labels.length; i++) {
-    if (String(labels[i][0] || '') === '項目') headerRow = i + 1;
+    var lab = String(labels[i][0] || '');
+    if (lab === '項目') headerRow = i + 1;
+    if (lab) last = i + 1;
   }
+  last = Math.max(last, 24);
   var start = headerRow + 1;
   var bodyRows = Math.max(last - headerRow, 1);
   var medium = SpreadsheetApp.BorderStyle.SOLID_MEDIUM;
   var introCol = masterFindRowLabel_(sh, 4, '当月紹介');
-  var kpiCols = introCol ? introCol + 1 : 11;
+  var schoolKpiCol = masterFindRowLabel_(sh, 4, '当月学割');
+  var kpiCols = schoolKpiCol ? schoolKpiCol + 1 : (introCol ? introCol + 1 : 11);
+  try { stripMasterSideConditionalFormats_(sh); } catch (eCf) {}
   hubType_(sh.getRange(1, 1, last, kpiCols))
     .setFontColor(t.ink)
     .setHorizontalAlignment('center')
@@ -5142,6 +5240,7 @@ function restyleKyodoMasterLook_(sh) {
       { needle: '今月の口コミ', cols: 4 },
       { needle: '学校関係者割', cols: 16 }
     ];
+    var sideLast = Math.max(sh.getLastRow(), 24);
     var s;
     for (s = 0; s < side.length; s++) {
       var c = masterFindRowLabel_(sh, 1, side[s].needle);
@@ -5150,6 +5249,12 @@ function restyleKyodoMasterLook_(sh) {
       sh.getRange(1, c, 1, w).setBackground(t.ink).setFontColor(t.paper);
       sh.getRange(2, c, 1, w).setBackground(t.cream).setFontColor(t.ink);
       sh.getRange(3, c, 1, w).setBackground(t.ink).setFontColor(t.paper);
+      var body = Math.min(Math.max(sideLast - 3, 1), 800);
+      hubType_(sh.getRange(4, c, body, w))
+        .setBackground(t.paper)
+        .setFontColor(t.ink)
+        .setHorizontalAlignment('center')
+        .setVerticalAlignment('middle');
     }
   } catch (eSide) {}
   if (introCol) {
@@ -5159,7 +5264,14 @@ function restyleKyodoMasterLook_(sh) {
         .setNumberFormat('0" 件"');
     } catch (eIntroStyle) {}
   }
-  hubStampType_(sh);
+  if (schoolKpiCol) {
+    try {
+      hubType_(sh.getRange(4, schoolKpiCol, 1, 2)).setFontWeight('bold').setFontSize(11);
+      hubType_(sh.getRange(5, schoolKpiCol, 2, 2)).setFontWeight('bold').setFontSize(18)
+        .setNumberFormat('0" 件"');
+    } catch (eSchoolStyle) {}
+  }
+  hubStampType_(sh, last + 40, kpiCols);
   sh.setTabColor(t.ink);
 }
 
