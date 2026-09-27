@@ -349,7 +349,7 @@ var PROMO_SOURCE_ID_ = '1w7ExndmZn7t2_z55CvxRDMZy4QAcuEyNhIuj-6sUy3E';
 var SCHOOL_FORM_SOURCE_ID_ = '1mmG_xM1WoWFKgpmOl5obsKXo_0GjWLnAnLY9hTGanVg';
 var SCHOOL_FORM_SHEET_ = 'フォームの回答 1';
 var SCHOOL_FORM_COLS_ = 16;
-var SCHOOL_WS_SHEET_ = '販促_学校関係者';
+var SCHOOL_WS_SHEET_ = '学割';
 /** 件数上限ではない。フォームが増えた分を QUERY が全部こぼせる行数 */
 var SCHOOL_MIN_ROWS_ = 3000;
 
@@ -915,7 +915,7 @@ function diagnoseImportsHealth_() {
       '入会者一覧＋自動メール管理',
       '販促_乗り換え',
       '販促_紹介・ペア入会',
-      '販促_学校関係者',
+      '学割',
       '経堂_入会',
       '経堂_退会',
       '経堂_OP'
@@ -4317,6 +4317,7 @@ function hubCatalog_(ss) {
     { group: '未納', name: '未納管理', title: '今月' },
     { group: '未納', name: '未納管理_推移', title: '推移' },
     { group: '現場', name: '見学体験申請', title: '見学' },
+    { group: '現場', name: '学割', title: '学割' },
     { group: '現場', name: '口コミ_経堂', title: '口コミ' },
     { group: '現場', name: 'マシンレクチャー申込', title: 'レクチャー' },
     { group: '現場', name: '入会者一覧＋自動メール管理', title: '入会者' }
@@ -4325,7 +4326,7 @@ function hubCatalog_(ss) {
   var i;
   for (i = 0; i < sheets.length; i++) {
     var n = sheets[i].getName();
-    if (/^販促_/.test(n) && n.indexOf('backup') === -1) {
+    if (/^販促_/.test(n) && n.indexOf('backup') === -1 && n.indexOf('学校') === -1) {
       items.push({ group: '販促', name: n, title: hubShortTitle_(n.replace(/^販促_/, '')) });
     }
   }
@@ -4363,7 +4364,7 @@ function hubSourceForName_(name) {
   if (name.indexOf('マシン') === 0 || name.indexOf('入会者一覧') === 0) {
     return { url: hubBookUrl_(MACHINE_SOURCE_ID_), label: '元のシートを開く ↗' };
   }
-  if (name.indexOf('学校') !== -1) {
+  if (name === '学割' || name.indexOf('学校') !== -1) {
     return { url: schoolFormOpenUrl_(), label: '元のシートを開く ↗' };
   }
   if (name.indexOf('販促_') === 0) {
@@ -4395,7 +4396,7 @@ function hubPaintOpenSourceCell_(sh, row, col, cols, src) {
 function hubEnsureSourceBanner_(sh) {
   if (!sh) return;
   var n = sh.getName();
-  if (n === HUB_HOME_SHEET_ || n === UNPAID_SHEET_ || n === '経堂マスタ' || n === '販促_学校関係者') return;
+  if (n === HUB_HOME_SHEET_ || n === UNPAID_SHEET_ || n === '経堂マスタ' || n === '学割' || n === '販促_学校関係者') return;
   if (hubIsAlwaysHidden_(n) && n !== UNPAID_TREND_SHEET_) return;
   var src = hubSourceForName_(n);
   if (!src) return;
@@ -4813,7 +4814,7 @@ function restyleHeaderBody_(sh) {
 function schoolDiscountQueryFormula_() {
   return '=QUERY(IMPORTRANGE("' + SCHOOL_FORM_SOURCE_ID_ +
     '","\'' + SCHOOL_FORM_SHEET_.replace(/'/g, "''") + '\'!A:P"),' +
-    '"select * where Col2 = \'JOYFIT24 経堂\'",1)';
+    '"select * where Col2 = \'JOYFIT24 経堂\' order by Col1 desc",1)';
 }
 
 function schoolDiscountHeaders_() {
@@ -4838,8 +4839,16 @@ function permitImportRange_(ss, donorId) {
 }
 
 function setupSchoolDiscountSheet_(ss) {
+  var old = ss.getSheetByName('販促_学校関係者');
   var sh = ss.getSheetByName(SCHOOL_WS_SHEET_);
+  if (!sh && old) {
+    old.setName(SCHOOL_WS_SHEET_);
+    sh = old;
+  }
   if (!sh) sh = ss.insertSheet(SCHOOL_WS_SHEET_);
+  if (old && old.getSheetId() !== sh.getSheetId()) {
+    try { ss.deleteSheet(old); } catch (eDel) { try { old.hideSheet(); } catch (eH) {} }
+  }
   var formula = schoolDiscountQueryFormula_();
   var f1 = String(sh.getRange(1, 1).getFormula() || '');
   var f2 = String(sh.getRange(2, 1).getFormula() || '');
@@ -4888,16 +4897,27 @@ function setupSchoolDiscountSheet_(ss) {
 }
 
 function schoolMasterListFormula_() {
-  return '=IFERROR(QUERY(\'' + SCHOOL_WS_SHEET_ + '\'!A2:P,"select * where Col1 is not null",0),"")';
+  return '=IFERROR(QUERY(\'' + SCHOOL_WS_SHEET_ + '\'!A2:P,"select Col1,Col3,Col6 where Col1 is not null order by Col1 desc",0),"")';
+}
+
+function masterIntroListFormula_() {
+  return '=IFERROR(QUERY({\'販促_紹介・ペア入会\'!A3:A,\'販促_紹介・ペア入会\'!B3:B,\'販促_紹介・ペア入会\'!F3:F},' +
+    '"select Col1,Col2,Col3 where Col1 is not null order by Col1 desc",0),"")';
+}
+
+function hubSheetGidUrl_(ss, name) {
+  var sh = ss.getSheetByName(name);
+  if (!sh) return hubBookUrl_(ss.getId());
+  return hubBookUrl_(ss.getId()) + '#gid=' + sh.getSheetId();
 }
 
 function schoolFormOpenUrl_() {
   return hubBookUrl_(SCHOOL_FORM_SOURCE_ID_) + '#gid=667254510';
 }
 
-function clearMasterSchoolPanel_(sh, schoolCol, w) {
+function clearMasterSideCard_(sh, col, w) {
   var lastR = sh.getMaxRows();
-  var rng = sh.getRange(1, schoolCol, lastR, w);
+  var rng = sh.getRange(1, col, lastR, w);
   try { rng.breakApart(); } catch (e0) {}
   try { rng.clearDataValidations(); } catch (e1) {}
   try { rng.clearContent(); } catch (e2) {}
@@ -4905,50 +4925,120 @@ function clearMasterSchoolPanel_(sh, schoolCol, w) {
   try { rng.setNumberFormat('General'); } catch (e4) {}
 }
 
-function setupMasterSchoolPanel_(sh) {
-  var reviewCol = masterFindRowLabel_(sh, 1, '今月の口コミ');
-  var schoolCol = masterFindRowLabel_(sh, 1, '学校関係者割');
-  var inserted = false;
-  if (!schoolCol) {
-    if (!reviewCol) return { ok: false, message: '今月の口コミの位置が見つかりません' };
-    var after = reviewCol + 3;
-    sh.insertColumnsAfter(after, SCHOOL_FORM_COLS_);
-    inserted = true;
-    schoolCol = after + 1;
-  }
+function paintMasterSideCard_(sh, col, w, titleF, linkF, headers, listF, widths) {
   var t = dnTheme_();
+  var hair = SpreadsheetApp.BorderStyle.SOLID;
   var medium = SpreadsheetApp.BorderStyle.SOLID_MEDIUM;
-  var w = SCHOOL_FORM_COLS_;
-  clearMasterSchoolPanel_(sh, schoolCol, w);
-  sh.getRange(1, schoolCol, 1, w).merge()
-    .setFormula('="学校関係者割　経堂 "&COUNTA(\'' + SCHOOL_WS_SHEET_ + '\'!A2:A)&"件"')
+  clearMasterSideCard_(sh, col, w);
+  sh.getRange(1, col, 1, w).merge()
+    .setFormula(titleF)
     .setBackground(t.ink).setFontColor(t.paper).setFontWeight('bold')
     .setHorizontalAlignment('center').setVerticalAlignment('middle')
     .setBorder(false, false, true, false, false, false, t.blood, medium);
-  hubType_(sh.getRange(1, schoolCol));
-  sh.getRange(2, schoolCol, 1, w).merge()
-    .setFormula('=HYPERLINK("' + schoolFormOpenUrl_() + '","元のシートを開く ↗")')
-    .setBackground(t.cream).setFontColor(t.ink).setFontWeight('bold')
-    .setHorizontalAlignment('center').setVerticalAlignment('middle');
-  hubType_(sh.getRange(2, schoolCol));
-  var headers = [schoolDiscountHeaders_()];
-  sh.getRange(3, schoolCol, 1, w).setValues(headers)
+  hubType_(sh.getRange(1, col));
+  sh.setRowHeight(1, 30);
+  sh.getRange(2, col, 1, w).merge()
+    .setFormula(linkF)
+    .setBackground(t.ash).setFontColor(t.paper).setFontWeight('bold')
+    .setHorizontalAlignment('center').setVerticalAlignment('middle')
+    .setBorder(false, true, false, true, false, false, t.ink, hair);
+  hubType_(sh.getRange(2, col)).setFontSize(9);
+  sh.setRowHeight(2, 22);
+  sh.getRange(3, col, 1, w).setValues([headers])
     .setBackground(t.ink).setFontColor(t.paper).setFontWeight('bold')
-    .setHorizontalAlignment('center').setWrap(true);
-  hubType_(sh.getRange(3, schoolCol, 1, w));
-  sh.setRowHeight(3, 36);
-  sh.getRange(4, schoolCol).setFormula(schoolMasterListFormula_());
-  var bodyRows = Math.min(Math.max(sh.getMaxRows() - 3, 1), 800);
-  hubType_(sh.getRange(4, schoolCol, bodyRows, w))
+    .setHorizontalAlignment('center').setVerticalAlignment('middle')
+    .setBorder(false, false, true, false, false, false, t.ash, hair);
+  hubType_(sh.getRange(3, col, 1, w)).setFontSize(9);
+  sh.setRowHeight(3, 24);
+  sh.getRange(4, col).setFormula(listF);
+  var body = Math.min(Math.max(sh.getMaxRows() - 3, 1), 400);
+  hubType_(sh.getRange(4, col, body, w))
     .setBackground(t.paper).setFontColor(t.ink)
-    .setHorizontalAlignment('center').setVerticalAlignment('middle');
-  sh.getRange(4, schoolCol, bodyRows, 1).setNumberFormat('yyyy/mm/dd HH:mm');
-  sh.setColumnWidth(schoolCol, 150);
-  sh.setColumnWidth(schoolCol + 1, 130);
-  sh.setColumnWidth(schoolCol + 2, 180);
+    .setVerticalAlignment('middle');
+  sh.getRange(4, col, body, 1).setNumberFormat('yyyy/mm/dd HH:mm')
+    .setHorizontalAlignment('center');
   var i;
-  for (i = 3; i < w; i++) sh.setColumnWidth(schoolCol + i, 110);
-  return { ok: true, inserted: inserted, schoolCol: schoolCol };
+  for (i = 1; i < w; i++) {
+    sh.getRange(4, col + i, body, 1).setHorizontalAlignment(i === w - 1 && w >= 4 ? 'center' : 'left');
+  }
+  var zebra = Math.min(body, 80);
+  for (i = 1; i < zebra; i += 2) {
+    sh.getRange(4 + i, col, 1, w).setBackground('#E6E6E6');
+  }
+  if (widths) {
+    for (i = 0; i < widths.length && i < w; i++) sh.setColumnWidth(col + i, widths[i]);
+  }
+}
+
+function setupMasterSchoolPanel_(sh) {
+  var wide = masterFindRowLabel_(sh, 1, '学校関係者割');
+  if (wide) {
+    var maxC = sh.getMaxColumns();
+    var drop = Math.min(SCHOOL_FORM_COLS_, maxC - wide + 1);
+    if (drop >= 8) {
+      try { sh.getRange(1, wide, 3, drop).breakApart(); } catch (eBr) {}
+      sh.deleteColumns(wide, drop);
+    }
+  }
+  var promoCol = masterFindRowLabel_(sh, 1, '紹介');
+  if (!promoCol) promoCol = masterFindRowLabel_(sh, 1, '今月の追加販促');
+  var kengakuCol = masterFindRowLabel_(sh, 1, '見学体験');
+  var reviewCol = masterFindRowLabel_(sh, 1, '口コミ');
+  var schoolCol = masterFindRowLabel_(sh, 1, '学割');
+  if (schoolCol && schoolCol === wide) schoolCol = 0;
+  if (!schoolCol && promoCol) {
+    var after = promoCol + 2;
+    var next = kengakuCol || reviewCol;
+    if (next && after + 1 === next) {
+      sh.insertColumnsAfter(after, 3);
+      kengakuCol = masterFindRowLabel_(sh, 1, '見学体験');
+      reviewCol = masterFindRowLabel_(sh, 1, '口コミ');
+    }
+    schoolCol = after + 1;
+  }
+  var ss = sh.getParent();
+  var monthA1 = masterMonthCellA1_(sh);
+  if (promoCol) {
+    paintMasterSideCard_(
+      sh, promoCol, 3,
+      '="紹介　"&COUNTA(\'販促_紹介・ペア入会\'!A3:A)&"件"',
+      '=HYPERLINK("' + hubSheetGidUrl_(ss, '販促_紹介・ペア入会') + '","紹介シートを開く ↗")',
+      ['申請日時', '種別', '名前'],
+      masterIntroListFormula_(),
+      [132, 88, 140]
+    );
+  }
+  if (schoolCol) {
+    paintMasterSideCard_(
+      sh, schoolCol, 3,
+      '="学割　"&COUNTA(\'' + SCHOOL_WS_SHEET_ + '\'!A2:A)&"件"',
+      '=HYPERLINK("' + hubSheetGidUrl_(ss, SCHOOL_WS_SHEET_) + '","学割シートを開く ↗")',
+      ['申請日時', '氏名', '学校名'],
+      schoolMasterListFormula_(),
+      [132, 150, 150]
+    );
+  }
+  if (kengakuCol) {
+    paintMasterSideCard_(
+      sh, kengakuCol, 5,
+      kengakuMasterTitleFormula_(monthA1),
+      '=HYPERLINK("' + hubSheetGidUrl_(ss, '見学体験申請') + '","見学体験申請を開く ↗")',
+      ['申請日時', '区分', '名前', '希望日', '入会'],
+      kengakuMasterListFormula_(),
+      [132, 56, 140, 88, 56]
+    );
+  }
+  if (reviewCol) {
+    paintMasterSideCard_(
+      sh, reviewCol, 4,
+      '="口コミ　"&COUNTA(\'口コミ_経堂\'!A3:A)&"件"',
+      '=HYPERLINK("' + REVIEW_GRANT_APP_URL_ + '","口コミ付与アプリ")',
+      ['日時', '氏名', '会員番号', '付与'],
+      masterReviewListFormula_(),
+      [120, 120, 100, 48]
+    );
+  }
+  return { ok: true, schoolCol: schoolCol, promoCol: promoCol, kengakuCol: kengakuCol, reviewCol: reviewCol };
 }
 
 /** 学校関係者割フォーム（経堂だけ）を Workspace へ。元ブックは読み取りのみ */
@@ -4958,19 +5048,9 @@ function setupSchoolDiscountImport_() {
     var sheet = setupSchoolDiscountSheet_(ss);
     var permit = permitImportRange_(ss, SCHOOL_FORM_SOURCE_ID_);
     var master = ss.getSheetByName('経堂マスタ');
-    var panel = master ? setupMasterSchoolPanel_(master) : { ok: false, message: '経堂マスタなし' };
     var schoolKpi = master ? setupMasterSchoolKpi_() : { ok: false };
+    var panel = master ? setupMasterSchoolPanel_(master) : { ok: false, message: '経堂マスタなし' };
     if (master) {
-      var monthA1 = masterMonthCellA1_(master);
-      var last = Math.max(master.getLastColumn(), 20);
-      var row4f = master.getRange(4, 1, 1, last).getFormulas()[0];
-      var p;
-      for (p = 0; p < row4f.length; p++) {
-        if (/販促_乗り換え/.test(String(row4f[p] || ''))) {
-          master.getRange(4, p + 1).setFormula(masterPromoListFormula_(monthA1));
-          break;
-        }
-      }
       restyleKyodoMasterLook_(master);
     }
     return {
@@ -5019,9 +5099,7 @@ function masterPromoListFormula_(monthA1) {
     '{\'販促_紹介・ペア入会\'!A3:A,\'販促_紹介・ペア入会\'!B3:B,\'販促_紹介・ペア入会\'!F3:F};' +
     '{\'販促_学校関係者\'!A2:A,ARRAYFORMULA(IF(\'販促_学校関係者\'!A2:A="","","学校関係者割")),\'販促_学校関係者\'!C2:C};' +
     '\'販促_ラグビー割\'!A3:C;\'販促_6ヶ月継続\'!A3:C},' +
-    '"select Col1,Col2,Col3 where Col1 >= date \'"&TEXT($' + monthA1 +
-    ',"yyyy-mm-dd")&"\' and Col1 < date \'"&TEXT(EDATE($' + monthA1 +
-    ',1),"yyyy-mm-dd")&"\' order by Col1 desc",0),"")';
+    '"select Col1,Col2,Col3 where Col1 is not null order by Col1 desc",0),"")';
 }
 
 function masterSchoolCountFormula_(monthA1) {
@@ -5089,7 +5167,7 @@ function setupMasterSchoolKpi_() {
 }
 
 function stripMasterSideConditionalFormats_(sh) {
-  var reviewCol = masterFindRowLabel_(sh, 1, '今月の口コミ');
+  var reviewCol = masterFindRowLabel_(sh, 1, '口コミ');
   if (!reviewCol) return;
   var rules = sh.getConditionalFormatRules();
   var kept = [];
@@ -5172,15 +5250,6 @@ function setupMasterIntroKpi_() {
     sh.getRange(1, 1, 1, titleEnd).merge().setValue(title)
       .setHorizontalAlignment('center').setFontWeight('bold');
 
-    var last = Math.max(sh.getLastColumn(), 20);
-    var row4f = sh.getRange(4, 1, 1, last).getFormulas()[0];
-    var p;
-    for (p = 0; p < row4f.length; p++) {
-      if (/販促_乗り換え/.test(String(row4f[p] || ''))) {
-        sh.getRange(4, p + 1).setFormula(masterPromoListFormula_(monthA1));
-        break;
-      }
-    }
     restyleKyodoMasterLook_(sh);
     SpreadsheetApp.flush();
     return {
@@ -5235,10 +5304,10 @@ function restyleKyodoMasterLook_(sh) {
   } catch (eBrief) {}
   try {
     var side = [
-      { needle: '今月の追加販促', cols: 3 },
-      { needle: '今月の見学体験', cols: 5 },
-      { needle: '今月の口コミ', cols: 4 },
-      { needle: '学校関係者割', cols: 16 }
+      { needle: '紹介', cols: 3 },
+      { needle: '学割', cols: 3 },
+      { needle: '見学体験', cols: 5 },
+      { needle: '口コミ', cols: 4 }
     ];
     var sideLast = Math.max(sh.getLastRow(), 24);
     var s;
@@ -5247,14 +5316,18 @@ function restyleKyodoMasterLook_(sh) {
       if (!c) continue;
       var w = side[s].cols;
       sh.getRange(1, c, 1, w).setBackground(t.ink).setFontColor(t.paper);
-      sh.getRange(2, c, 1, w).setBackground(t.cream).setFontColor(t.ink);
+      sh.getRange(2, c, 1, w).setBackground(t.ash).setFontColor(t.paper);
       sh.getRange(3, c, 1, w).setBackground(t.ink).setFontColor(t.paper);
-      var body = Math.min(Math.max(sideLast - 3, 1), 800);
+      var body = Math.min(Math.max(sideLast - 3, 1), 400);
       hubType_(sh.getRange(4, c, body, w))
         .setBackground(t.paper)
         .setFontColor(t.ink)
-        .setHorizontalAlignment('center')
         .setVerticalAlignment('middle');
+      var z;
+      var zebra = Math.min(body, 80);
+      for (z = 1; z < zebra; z += 2) {
+        sh.getRange(4 + z, c, 1, w).setBackground('#E6E6E6');
+      }
     }
   } catch (eSide) {}
   if (introCol) {
@@ -5361,7 +5434,7 @@ function restyleHubLook_() {
     for (i = 0; i < sheets.length; i++) {
       var sh = sheets[i];
       var n = sh.getName();
-      if (n === HUB_HOME_SHEET_ || n === '経堂マスタ' || n === UNPAID_SHEET_ || n === UNPAID_TREND_SHEET_ || n === 'URL一覧' || n === '販促_学校関係者') continue;
+      if (n === HUB_HOME_SHEET_ || n === '経堂マスタ' || n === UNPAID_SHEET_ || n === UNPAID_TREND_SHEET_ || n === 'URL一覧' || n === '学割' || n === '販促_学校関係者') continue;
       if (/backup|シート\d+/.test(n)) continue;
       if (/^販促_/.test(n) || n === 'マシンレクチャー申込' || n === '入会者一覧＋自動メール管理' ||
           n === '口コミ_経堂' || n === '【経堂】会員動向' || n === '見学体験申請' ||
@@ -5616,8 +5689,9 @@ function maybeApplyFourColorOnce_() {
 }
 
 function applyFourColorLook_() {
-  setupHubHome_();
   var ss = SpreadsheetApp.getActiveSpreadsheet() || openWorkspaceSpreadsheet_();
+  try { setupSchoolDiscountSheet_(ss); } catch (eSch) {}
+  setupHubHome_();
   var unpaid = ss.getSheetByName(UNPAID_SHEET_);
   if (unpaid) applyUnpaidScanLook_(unpaid);
   return restyleHubLook_();
@@ -5909,31 +5983,44 @@ function styleMembershipMirrors_() {
   }
 }
 
-/** 経堂マスタ R4: 今月の見学体験一覧。元フォームの希望日・時刻は文字列なので TO_TEXT で揃える */
+/** 経堂マスタ R4: 見学体験一覧。全件・新しい順 */
 function kengakuMasterListFormula_() {
   return "=IFERROR(QUERY({'見学体験申請'!A2:C," +
     "ARRAYFORMULA(SUBSTITUTE(TO_TEXT('見学体験申請'!H2:H),\"-\",\"/\"))," +
     "ARRAYFORMULA(TO_TEXT('見学体験申請'!I2:I))," +
     "'見学体験申請'!J2:J}," +
-    "\"select Col1,Col2,Col3,Col4,Col5,Col6 where Col1 >= date '\"&TEXT($AB$5,\"yyyy-mm-dd\")&\"' " +
-    "and Col1 < date '\"&TEXT(EDATE($AB$5,1),\"yyyy-mm-dd\")&\"' order by Col1 desc\",0),\"\")";
+    "\"select Col1,Col2,Col3,Col4,Col6 where Col1 is not null order by Col1 desc\",0),\"\")";
 }
 
-/** 経堂マスタ R1: 選択月（AB5）の見学体験 入会数/申込数（率） */
-function kengakuMasterTitleFormula_() {
+/** 経堂マスタ 見学見出し: 当月の入会数/申込数（率）。一覧自体は全件 */
+function kengakuMasterTitleFormula_(monthA1) {
+  monthA1 = monthA1 || 'AV5';
   var monthRange =
-    "'見学体験申請'!A2:A,\">=\"&$AB$5,'見学体験申請'!A2:A,\"<\"&EDATE($AB$5,1)";
+    "'見学体験申請'!A2:A,\">=\"&$" + monthA1 + ",'見学体験申請'!A2:A,\"<\"&EDATE($" + monthA1 + ",1)";
   var total =
     '(COUNTIFS(' + monthRange + ",'見学体験申請'!B2:B,\"見学\")+COUNTIFS(" + monthRange + ",'見学体験申請'!B2:B,\"体験\"))";
   var joined = 'COUNTIFS(' + monthRange + ",'見学体験申請'!J2:J,\"入会\")";
-  return '="今月の見学体験　入会 "&' + joined + '&"/"&' + total +
+  return '="見学体験　"&COUNTA(\'見学体験申請\'!A2:A)&"件　当月入会 "&' + joined + '&"/"&' + total +
     '&"（"&IFERROR(TEXT(' + joined + '/' + total + ',"0%"),"-")&"）"';
+}
+
+function masterReviewListFormula_() {
+  return "=IFERROR(QUERY('口コミ_経堂'!A3:W,\"select Col1,Col5,Col6,Col22 where Col1 is not null order by Col1 desc\",0),\"\")";
 }
 
 /**
  * 見学体験申請を元フォームからの IMPORTRANGE に切替え（バックアップ作成）、J列に入会判定、
  * 経堂マスタ R:W に今月の入会率と○列を出す。confirm=yes のときだけ書き込む。
  */
+function applyKengakuMasterFormulas_(master) {
+  var monthA1 = masterMonthCellA1_(master);
+  var col = masterFindRowLabel_(master, 1, '見学体験');
+  if (!col) col = 22;
+  master.getRange(1, col).setFormula(kengakuMasterTitleFormula_(monthA1));
+  master.getRange(4, col).setFormula(kengakuMasterListFormula_());
+  return col;
+}
+
 function setupKengakuJoinLive_(confirm) {
   try {
     var ss = openWorkspaceSpreadsheet_();
@@ -5945,9 +6032,9 @@ function setupKengakuJoinLive_(confirm) {
       master: 'R1 タイトルに今月の入会率 / R4 の QUERY に入会列を追加（W列に○）/ W3 見出し「入会」'
     };
     if (confirm === 'r1only') {
-      master.getRange('R1').setFormula(kengakuMasterTitleFormula_());
+      var kColR = applyKengakuMasterFormulas_(master);
       SpreadsheetApp.flush();
-      return { ok: true, r1: master.getRange('R1').getDisplayValue() };
+      return { ok: true, r1: master.getRange(1, kColR).getDisplayValue() };
     }
     if (confirm === 'emailJoin') {
       var joinSh = ss.getSheetByName('経堂_入会');
@@ -6003,7 +6090,7 @@ function setupKengakuJoinLive_(confirm) {
     }
     if (confirm === 'joinLabel') {
       sh.getRange(1, 10).setFormula(kengakuJoinFormula_());
-      master.getRange('R1').setFormula(kengakuMasterTitleFormula_());
+      applyKengakuMasterFormulas_(master);
       ['経堂_入会', '経堂_退会'].forEach(function (n) {
         var m = ss.getSheetByName(n);
         if (m) m.hideSheet();
