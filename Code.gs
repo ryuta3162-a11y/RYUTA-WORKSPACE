@@ -54,11 +54,13 @@ function onOpen() {
   ui.createMenu('今日の作業')
     .addItem('しまう', 'hubCloseWork_')
     .addItem('トップを表示', 'hubShowHome_')
+    .addItem('未納一覧を見やすくする', 'applyUnpaidScanFromMenu')
     .addToUi();
   ui.createMenu('数値更新')
     .addItem('受付状況表の数値を更新（入会・退会・OP）', 'refreshReceptionNumbersFromMenu')
     .addItem('前回の更新時刻を確認', 'showReceptionRefreshStatus')
     .addToUi();
+  try { maybeApplyUnpaidScanOnce_(); } catch (eScan) {}
 }
 
 function onEdit(e) {}
@@ -67,6 +69,11 @@ function onSelectionChange(e) {
   try {
     handleHubHomeSelect_(e);
   } catch (err) {}
+  try {
+    if (e && e.range && e.range.getSheet().getName() === UNPAID_SHEET_) {
+      maybeApplyUnpaidScanOnce_(e.range.getSheet());
+    }
+  } catch (eScan) {}
 }
 
 function callReceptionRefreshApi_(api) {
@@ -4916,9 +4923,63 @@ function styleUnpaidView_(sh) {
   unpaidHideNoiseCols_(sh);
 }
 
+var UNPAID_SCAN_PROP_ = 'unpaidScanV2';
+
+function applyUnpaidScanLook_(sh) {
+  if (!sh) return { ok: false };
+  sh.getRange(UNPAID_DATA_ROW_, 1).setFormula(unpaidViewFormula_());
+  styleUnpaidView_(sh);
+  styleUnpaidDashboard_(sh);
+  sh.setColumnWidth(1, 72);
+  sh.setColumnWidth(2, 52);
+  sh.setColumnWidth(3, 100);
+  sh.setColumnWidth(4, 148);
+  sh.setColumnWidths(5, 4, 88);
+  sh.setColumnWidth(9, 110);
+  sh.setColumnWidths(10, 2, 92);
+  sh.setColumnWidths(12, 5, 100);
+  sh.setColumnWidth(25, 104);
+  sh.setColumnWidth(26, 92);
+  try { sh.setRowHeightsForced(UNPAID_DATA_ROW_ + 2, Math.max(sh.getMaxRows() - UNPAID_DATA_ROW_ - 1, 1), 24); } catch (eH) {}
+  unpaidHideNoiseCols_(sh);
+  sh.setFrozenColumns(4);
+  sh.setFrozenRows(UNPAID_DATA_ROW_ + 1);
+  sh.setHiddenGridlines(true);
+  return { ok: true };
+}
+
+function maybeApplyUnpaidScanOnce_(optSheet) {
+  var props = PropertiesService.getDocumentProperties();
+  if (props.getProperty(UNPAID_SCAN_PROP_) === '1') return { ok: true, skipped: true };
+  var ss = SpreadsheetApp.getActiveSpreadsheet() || openWorkspaceSpreadsheet_();
+  var sh = optSheet && optSheet.getName() === UNPAID_SHEET_
+    ? optSheet
+    : ss.getSheetByName(UNPAID_SHEET_);
+  if (!sh) return { ok: false };
+  applyUnpaidScanLook_(sh);
+  props.setProperty(UNPAID_SCAN_PROP_, '1');
+  return { ok: true };
+}
+
+function applyUnpaidScanFromMenu() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName(UNPAID_SHEET_);
+  if (!sh) {
+    ss.toast('未納管理がありません', '未納', 8);
+    return { ok: false };
+  }
+  var r = applyUnpaidScanLook_(sh);
+  try { PropertiesService.getDocumentProperties().setProperty(UNPAID_SCAN_PROP_, '1'); } catch (eP) {}
+  ss.toast('区分・金額・回収済みが見やすくなりました', '未納', 8);
+  return r;
+}
+
 function styleUnpaidDashboard_(sh) {
   var t = dnTheme_();
   var solid = SpreadsheetApp.BorderStyle.SOLID;
+  try { sh.getRange('B1:C1').breakApart(); } catch (e0) {}
+  try { sh.getRange('A2:C3').breakApart(); } catch (e1) {}
+  try { sh.getRange('A4:C4').breakApart(); } catch (e2) {}
   sh.getRange(1, 1, 4, 37).setBackground(t.paper).setFontColor(t.ink).setVerticalAlignment('middle');
   sh.getRange('A1').setFontSize(9).setFontColor(t.ash).setHorizontalAlignment('right');
   sh.getRange('B1:C1').merge().setFontSize(12).setFontWeight('bold').setHorizontalAlignment('center')
@@ -5082,6 +5143,7 @@ function setupUnpaidView_() {
     sh.setFrozenColumns(4);
     sh.setTabColor(dnTheme_().blood);
     applyHubTabColors_(ss);
+    try { PropertiesService.getDocumentProperties().setProperty(UNPAID_SCAN_PROP_, '1'); } catch (eProp) {}
     SpreadsheetApp.flush();
     return {
       ok: true,
