@@ -4198,7 +4198,7 @@ function dnTheme_() {
 
 function hubTabColorFor_(name) {
   var t = dnTheme_();
-  if (name === HUB_HOME_SHEET_) return '#8B1216';
+  if (name === HUB_HOME_SHEET_) return '#111111';
   if (name === '経堂マスタ') return t.ink;
   if (name.indexOf('未納') === 0) return t.blood;
   if (name.indexOf('見学体験') === 0 && name.indexOf('backup') === -1) return '#6B3A1F';
@@ -4239,14 +4239,14 @@ var HUB_KEY_BASE_ = 16;
 
 function hubUi_() {
   return {
-    bg: '#F4ECD9',
-    card: '#E9DCC6',
-    ink: '#140C0C',
-    mute: '#5C5346',
-    line: '#140C0C',
-    onBg: '#140C0C',
-    onFg: '#F4ECD9',
-    shut: '#8B1216'
+    bg: '#F2F2F2',
+    card: '#FFFFFF',
+    ink: '#111111',
+    mute: '#666666',
+    line: '#111111',
+    onBg: '#111111',
+    onFg: '#FFFFFF',
+    shut: '#111111'
   };
 }
 
@@ -4259,7 +4259,8 @@ function hubCatalog_(ss) {
     { group: '現場', name: '見学体験申請', title: '見学' },
     { group: '現場', name: '口コミ_経堂', title: '口コミ' },
     { group: '現場', name: 'マシンレクチャー申込', title: 'レクチャー' },
-    { group: '現場', name: '入会者一覧＋自動メール管理', title: '入会者' }
+    { group: '現場', name: '入会者一覧＋自動メール管理', title: '入会者' },
+    { group: '一覧', name: 'URL一覧', title: 'URL一覧' }
   ];
   var sheets = ss.getSheets();
   var i;
@@ -4281,6 +4282,29 @@ function hubShortTitle_(title) {
   if (/ラグビー/.test(title)) return 'ラグビー';
   if (/6ヶ月|6カ月/.test(title)) return '6ヶ月';
   return title;
+}
+
+function hubUrlBoard_(ss) {
+  var out = [];
+  var seen = {};
+  var add = function (title, url) {
+    url = String(url || '').trim();
+    if (!url || seen[url]) return;
+    seen[url] = true;
+    out.push({ title: String(title || url).trim() || url, url: url });
+  };
+  var src = ss.getSheetByName('URL一覧');
+  if (src && src.getLastRow() >= 2) {
+    var vals = src.getRange(2, 1, src.getLastRow() - 1, 4).getDisplayValues();
+    var i;
+    for (i = 0; i < vals.length; i++) {
+      add(vals[i][2] || vals[i][1], vals[i][3]);
+    }
+  }
+  var extra = hubSourceLinks_();
+  var j;
+  for (j = 0; j < extra.length; j++) add(extra[j].title, extra[j].url);
+  return out;
 }
 
 function hubSourceLinks_() {
@@ -4407,7 +4431,7 @@ function handleHubHomeSelect_(e) {
 function handleHubHomeEdit_(e) {}
 
 function restyleHubHomeLook_(sh) {
-  sh.setTabColor('#8B1216');
+  sh.setTabColor('#111111');
 }
 
 function setupHubHome_() {
@@ -4431,7 +4455,7 @@ function setupHubHome_() {
 
     var u = hubUi_();
     var items = hubCatalog_(ss);
-    var links = hubSourceLinks_();
+    var links = hubUrlBoard_(ss);
     var groups = [];
     var seen = {};
     var i;
@@ -4443,7 +4467,7 @@ function setupHubHome_() {
       seen[items[i].group].push(items[i]);
     }
 
-    sh.getRange(1, 1, 12, 8)
+    sh.getRange(1, 1, 40, 8)
       .setBackground(u.bg)
       .setFontColor(u.ink)
       .setFontFamily('Noto Sans JP')
@@ -4455,7 +4479,7 @@ function setupHubHome_() {
 
     sh.getRange(1, 1).setValue('経堂').setFontSize(16).setFontWeight('bold').setFontColor(u.ink);
     sh.getRange(1, 6).setValue('しまう').setFontSize(12).setFontWeight('bold')
-      .setBackground(u.shut).setFontColor('#F4ECD9');
+      .setBackground(u.shut).setFontColor('#FFFFFF');
     sh.getRange(1, HUB_KEY_BASE_ + 6).setValue('CLOSE');
     sh.setRowHeight(1, 36);
 
@@ -4493,27 +4517,44 @@ function setupHubHome_() {
       row += 1;
     }
 
-    sh.getRange(row, 1).setValue('リンク').setFontSize(12).setFontWeight('bold')
-      .setBackground(u.ink).setFontColor(u.bg).setHorizontalAlignment('center')
+    sh.getRange(1, 7).setValue('名前').setFontSize(11).setFontWeight('bold')
+      .setBackground(u.ink).setFontColor('#FFFFFF').setHorizontalAlignment('center')
+      .setBorder(true, true, true, true, false, false, u.line, solid);
+    sh.getRange(1, 8).setValue('URL').setFontSize(11).setFontWeight('bold')
+      .setBackground(u.ink).setFontColor('#FFFFFF').setHorizontalAlignment('center')
       .setBorder(true, true, true, true, false, false, u.line, solid);
     var c;
-    for (c = 0; c < links.length; c++) {
-      sh.getRange(row, 2 + c)
-        .setFormula('=HYPERLINK("' + String(links[c].url).replace(/"/g, '""') + '","' + links[c].title + '")')
+    var linkMax = Math.min(links.length, 40);
+    for (c = 0; c < linkMax; c++) {
+      var lr = 2 + c;
+      var title = String(links[c].title).replace(/"/g, '""');
+      var url = String(links[c].url).replace(/"/g, '""');
+      sh.getRange(lr, 7)
+        .setFormula('=HYPERLINK("' + url + '","' + title + '")')
         .setFontColor(u.ink)
-        .setFontSize(12)
+        .setFontSize(11)
         .setFontWeight('bold')
-        .setHorizontalAlignment('center')
+        .setHorizontalAlignment('left')
         .setBackground(u.card)
         .setBorder(true, true, true, true, false, false, u.line, solid);
+      sh.getRange(lr, 8)
+        .setFormula('=HYPERLINK("' + url + '","' + url + '")')
+        .setFontColor('#444444')
+        .setFontSize(10)
+        .setHorizontalAlignment('left')
+        .setBackground(u.card)
+        .setBorder(true, true, true, true, false, false, u.line, solid);
+      sh.setRowHeight(lr, 28);
     }
-    sh.setRowHeight(row, 42);
 
     sh.setHiddenGridlines(true);
     sh.setFrozenRows(1);
     sh.setColumnWidth(1, 72);
-    for (i = 2; i <= 6; i++) sh.setColumnWidth(i, 128);
-    try { sh.hideColumns(7, 9); } catch (eH1) {}
+    for (i = 2; i <= 6; i++) sh.setColumnWidth(i, 120);
+    sh.setColumnWidth(7, 160);
+    sh.setColumnWidth(8, 280);
+    try { sh.showColumns(7, 2); } catch (eShow) {}
+    try { sh.hideColumns(9, 7); } catch (eH1) {}
     try { sh.hideColumns(HUB_KEY_BASE_, 20); } catch (eH2) {}
 
     restyleHubHomeLook_(sh);
