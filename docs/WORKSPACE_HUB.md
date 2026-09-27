@@ -123,6 +123,13 @@ https://script.google.com/macros/s/AKfycbzMELimQThNdPUShwo2_KBzJd8kGy9BNdRyOYNgu
 
 **シート内容の一括書き換え API（`repairRestrictedImports` 等）は使わない。** ラベル消失の原因になりうる。権限切れは上の共有＋再許可で直す。
 
+## GAS を本番へ出す（clasp）
+
+以前の手動はこれだけ:
+`clasp login`（初回だけ、`r-kusaka@okamoto-group.co.jp`）→ リポジトリ直下で `clasp push --force` を2回 → `clasp deploy -i AKfycbzMELimQThNdPUShwo2_KBzJd8kGy9BNdRyOYNgu_sg41t2SleVRiWXFztZJ48e2l9L`
+
+今後は **main へマージすると GitHub Actions が同じことを自動でやる**（`.github/workflows/gas-deploy.yml`）。必要なのは GitHub secret `CLASPRC_JSON` を1回入れること。中身は手元の `%USERPROFILE%\.clasprc.json`（Mac/Linux は `~/.clasprc.json`）。
+
 ## 他PCでの再開手順（最短）
 
 1. このリポジトリを clone
