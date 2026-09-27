@@ -4887,6 +4887,24 @@ function setupSchoolDiscountSheet_(ss) {
   return sh;
 }
 
+function schoolMasterListFormula_() {
+  return '=IFERROR(QUERY(\'' + SCHOOL_WS_SHEET_ + '\'!A2:P,"select * where Col1 is not null",0),"")';
+}
+
+function schoolFormOpenUrl_() {
+  return hubBookUrl_(SCHOOL_FORM_SOURCE_ID_) + '#gid=667254510';
+}
+
+function clearMasterSchoolPanel_(sh, schoolCol, w) {
+  var lastR = sh.getMaxRows();
+  var rng = sh.getRange(1, schoolCol, lastR, w);
+  try { rng.breakApart(); } catch (e0) {}
+  try { rng.clearDataValidations(); } catch (e1) {}
+  try { rng.clearContent(); } catch (e2) {}
+  try { rng.clearNote(); } catch (e3) {}
+  try { rng.setNumberFormat('General'); } catch (e4) {}
+}
+
 function setupMasterSchoolPanel_(sh) {
   var reviewCol = masterFindRowLabel_(sh, 1, '今月の口コミ');
   var schoolCol = masterFindRowLabel_(sh, 1, '学校関係者割');
@@ -4901,7 +4919,7 @@ function setupMasterSchoolPanel_(sh) {
   var t = dnTheme_();
   var medium = SpreadsheetApp.BorderStyle.SOLID_MEDIUM;
   var w = SCHOOL_FORM_COLS_;
-  try { sh.getRange(1, schoolCol, 3, w).breakApart(); } catch (eBr) {}
+  clearMasterSchoolPanel_(sh, schoolCol, w);
   sh.getRange(1, schoolCol, 1, w).merge()
     .setFormula('="学校関係者割　経堂 "&COUNTA(\'' + SCHOOL_WS_SHEET_ + '\'!A2:A)&"件"')
     .setBackground(t.ink).setFontColor(t.paper).setFontWeight('bold')
@@ -4909,7 +4927,7 @@ function setupMasterSchoolPanel_(sh) {
     .setBorder(false, false, true, false, false, false, t.blood, medium);
   hubType_(sh.getRange(1, schoolCol));
   sh.getRange(2, schoolCol, 1, w).merge()
-    .setFormula('=HYPERLINK("' + hubBookUrl_(SCHOOL_FORM_SOURCE_ID_) + '","元のシートを開く ↗")')
+    .setFormula('=HYPERLINK("' + schoolFormOpenUrl_() + '","元のシートを開く ↗")')
     .setBackground(t.cream).setFontColor(t.ink).setFontWeight('bold')
     .setHorizontalAlignment('center').setVerticalAlignment('middle');
   hubType_(sh.getRange(2, schoolCol));
@@ -4919,12 +4937,7 @@ function setupMasterSchoolPanel_(sh) {
     .setHorizontalAlignment('center').setWrap(true);
   hubType_(sh.getRange(3, schoolCol, 1, w));
   sh.setRowHeight(3, 36);
-  if (sh.getMaxRows() < SCHOOL_MIN_ROWS_) {
-    sh.insertRowsAfter(sh.getMaxRows(), SCHOOL_MIN_ROWS_ - sh.getMaxRows());
-  }
-  sh.getRange(4, schoolCol).setFormula(
-    '=IFERROR(QUERY(\'' + SCHOOL_WS_SHEET_ + '\'!A2:P,"select *",0),"")'
-  );
+  sh.getRange(4, schoolCol).setFormula(schoolMasterListFormula_());
   var bodyRows = Math.max(sh.getMaxRows() - 3, 1);
   hubType_(sh.getRange(4, schoolCol, bodyRows, w))
     .setBackground(t.paper).setFontColor(t.ink)
