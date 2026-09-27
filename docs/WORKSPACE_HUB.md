@@ -18,6 +18,7 @@
 | 受付状況表／日報（マスタKPI元） | 経堂　受付状況表 | `14hxiLBzvGTuIpfZcoVjiHpz8b419OzUrtQAr5788h3w` | https://docs.google.com/spreadsheets/d/14hxiLBzvGTuIpfZcoVjiHpz8b419OzUrtQAr5788h3w/edit |
 | 見学・体験フォーム | 経堂　見学・体験フォーム | `1RPUw0slNCit9ZwJgINGfv89oc2Hxw8zzAZyMt6g_QuY` | https://docs.google.com/spreadsheets/d/1RPUw0slNCit9ZwJgINGfv89oc2Hxw8zzAZyMt6g_QuY/edit |
 | 追加販促（スタッフ入力） | JOYFIT24経堂追加販促 | `1w7ExndmZn7t2_z55CvxRDMZy4QAcuEyNhIuj-6sUy3E` | https://docs.google.com/spreadsheets/d/1w7ExndmZn7t2_z55CvxRDMZy4QAcuEyNhIuj-6sUy3E/edit |
+| 学校関係者割（全店フォーム・読み取りのみ） | 学校関係者割フォーム　JOYFIT24（回答） | `1mmG_xM1WoWFKgpmOl5obsKXo_0GjWLnAnLY9hTGanVg` | https://docs.google.com/spreadsheets/d/1mmG_xM1WoWFKgpmOl5obsKXo_0GjWLnAnLY9hTGanVg/edit |
 | EAST口コミ回答 | EAST口コミ回答者 | `13_E8m3vQa_61hcoMAPb7XZTyVDVtQ9O7rkVDNtHQvRM` | https://docs.google.com/spreadsheets/d/13_E8m3vQa_61hcoMAPb7XZTyVDVtQ9O7rkVDNtHQvRM/edit |
 | マシンレクチャー／自動メール | 20分マシンレクチャー・自動送信メール | `1wntzhyPGcz9hW4saswppYmVG-zHINbjAibu9VkCyEQ8` | https://docs.google.com/spreadsheets/d/1wntzhyPGcz9hW4saswppYmVG-zHINbjAibu9VkCyEQ8/edit |
 | 未納管理（オーナー別・自分は編集者） | 26年度未納管理ドライブ【経堂】 | `10vpQRDfTdwx_Wb7JaSm3lZCkTk8msLyf8ggAHhI1shI` | https://docs.google.com/spreadsheets/d/10vpQRDfTdwx_Wb7JaSm3lZCkTk8msLyf8ggAHhI1shI/edit |
@@ -41,15 +42,17 @@ Web アプリ実行ユーザー（`appsscript.json` の `USER_DEPLOYING`）:
 1. [経堂　受付状況表](https://docs.google.com/spreadsheets/d/14hxiLBzvGTuIpfZcoVjiHpz8b419OzUrtQAr5788h3w/edit)（日報・入会・退会・OP）
 2. [経堂　見学・体験フォーム](https://docs.google.com/spreadsheets/d/1RPUw0slNCit9ZwJgINGfv89oc2Hxw8zzAZyMt6g_QuY/edit)
 3. [JOYFIT24経堂追加販促](https://docs.google.com/spreadsheets/d/1w7ExndmZn7t2_z55CvxRDMZy4QAcuEyNhIuj-6sUy3E/edit)
-4. [EAST口コミ回答者](https://docs.google.com/spreadsheets/d/13_E8m3vQa_61hcoMAPb7XZTyVDVtQ9O7rkVDNtHQvRM/edit)
-5. [マシンレクチャー](https://docs.google.com/spreadsheets/d/1wntzhyPGcz9hW4saswppYmVG-zHINbjAibu9VkCyEQ8/edit)
-6. 会員動向など、マスタがさらに参照している元があれば同様
+4. [学校関係者割フォーム　JOYFIT24（回答）](https://docs.google.com/spreadsheets/d/1mmG_xM1WoWFKgpmOl5obsKXo_0GjWLnAnLY9hTGanVg/edit)（閲覧者以上。**元ブックは編集しない**）
+5. [EAST口コミ回答者](https://docs.google.com/spreadsheets/d/13_E8m3vQa_61hcoMAPb7XZTyVDVtQ9O7rkVDNtHQvRM/edit)
+6. [マシンレクチャー](https://docs.google.com/spreadsheets/d/1wntzhyPGcz9hW4saswppYmVG-zHINbjAibu9VkCyEQ8/edit)
+7. 会員動向など、マスタがさらに参照している元があれば同様
 
 ### Workspace 側の再許可（1回／元ブック）
 
 1. **`r-kusaka@okamoto-group.co.jp` でログインしたブラウザ**で [RYUTA Workspace](https://docs.google.com/spreadsheets/d/1deuG2zYdIMegMnCCT7lVl4AD7J75K8KisEsH2NVH10Q/edit) を開く
 2. `#REF!` が出ているセルを選ぶ（よくある場所）
-   - `経堂マスタ` の **AB4 / AB5 / AB6** 付近（受付・月・見学の土台）
+   - `経堂マスタ` の **AB4 / AB5 / AB6** 付近（受付・月・見学の土台。口コミ右に学校関係者割を足すと土台は AT 付近へずれる）
+   - `販促_学校関係者` の A1（全店フォーム → 経堂だけ）
    - `経堂_入会` / `経堂_退会` / `経堂_OP` の A1
    - `見学体験申請` など
 3. セル上または数式バー近くの **「アクセスを許可」** を押す（元ブックごとに1回）
@@ -71,7 +74,8 @@ https://script.google.com/macros/s/AKfycbzMELimQThNdPUShwo2_KBzJd8kGy9BNdRyOYNgu
 
 | Workspace シート名 | 元 | 方式 |
 |--------------------|----|------|
-| `販促_乗り換え` ほか `販促_*` | 追加販促の各シート | `IMPORTRANGE`（見た目整形のみ元側可） |
+| `販促_乗り換え` ほか `販促_*` | 追加販促の各シート（`学校関係者` スタブは使わない） | `IMPORTRANGE`（見た目整形のみ元側可） |
+| `販促_学校関係者` | 学校関係者割フォーム `フォームの回答 1` の A:P。B列=`JOYFIT24 経堂` のみ（全店約1680行中・経堂191件） | `QUERY(IMPORTRANGE(...))`。元フォームは読み取りのみ・未変更。経堂マスタは **今月の口コミの右** に A:P 全列、累計/権限の AD ブロックはさらに右へ。今月の追加販促一覧にも「学校関係者割」を積む。API `setupSchoolDiscountImport`（`見た目を整える` でも実行） |
 | `口コミ_経堂` | `回答シート_JOYFIT` の `storeId=kyodo` | `QUERY(IMPORTRANGE(...))` |
 | `見学体験申請` | 見学・体験フォーム（`1RPUw0…`）の `見学体験申請` | A2 `IMPORTRANGE`。K列＝入会日。J列＝入会／未入会。経堂マスタは当月移籍の右に **当月紹介**（`販促_紹介・ペア入会` の当月申請件数）、R1 に今月の見学入会率、R:W に一覧 |
 | `経堂_入会` / `経堂_退会` | 受付状況表 `入会・退会_データ` の A:F / G:L | `IMPORTRANGE`（白黒整形のみ）。E列「メールID」は Gmail の通知メールID（重複防止用）。F列「メールアドレス」は入会メールの宛先（受付状況表 GAS が `入会_メールアドレス` 対応表から毎回再生成）。見学体験申請 J列はこのF列でもメール一致を見る。退会キャンセル列は6ヶ月継続の途中退会がほぼ無くなったため Workspace では扱わない（受付状況表側では今後使う可能性があるので残す） |
@@ -104,14 +108,15 @@ https://script.google.com/macros/s/AKfycbzMELimQThNdPUShwo2_KBzJd8kGy9BNdRyOYNgu
 
 | api | 内容 |
 |-----|------|
-| `setupPromoImport` | 追加販促 → `販促_*` |
+| `setupPromoImport` | 追加販促 → `販促_*`（元ブックの「学校関係者」はスキップ。フォーム側を使う） |
+| `setupSchoolDiscountImport` | 学校関係者割フォーム → `販促_学校関係者`（経堂だけ A:P）＋経堂マスタの口コミ右に一覧。元フォームは触らない |
 | `setupReviewImport` | 口コミ経堂 → `口コミ_経堂` |
 | `setupMachineImport` | マシンレクチャー2シート |
 | `listSheets` | Workspace シート一覧 |
 | `diagnoseImports` | IMPORTRANGE／元スプシ疎通の健全性 |
 | `formatJoinList` | 入会者一覧：枠線削除＋チェック列を下まで適用（IMPORTRANGE維持） |
 | `setupUnpaidView` | `未納管理`（ダッシュボード＋月表示＋入会照合4列）と `未納管理_推移` を再作成。B1 の選択月は保持。IMPORTRANGE 許可もスクリプトで付与 |
-| `restyleHubLook` | 経堂マスタ・未納・ミラー・URL一覧の見た目とタブ色だけ再適用。値・数式は書き換えない |
+| `restyleHubLook` | 見た目再適用。経堂マスタでは当月紹介と学校関係者割の取り込みも冪等に載せる |
 | `setupMasterIntroKpi` | 経堂マスタの当月移籍の右に「当月紹介」（`販促_紹介・ペア入会` の当月申請件数）を追加 |
 | `hubOpen&name=` | 指定シートだけ表示して開く |
 | `hubClose` | トップ以外を隠す |

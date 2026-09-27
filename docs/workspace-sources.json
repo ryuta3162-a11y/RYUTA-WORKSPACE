@@ -22,6 +22,7 @@
     "executeAs": "USER_DEPLOYING",
     "setupApis": [
       "setupPromoImport",
+      "setupSchoolDiscountImport",
       "setupReviewImport",
       "setupMachineImport",
       "listSheets",
@@ -79,20 +80,35 @@
       "sourceSheets": [
         "乗り換え",
         "紹介・ペア入会",
-        "学校関係者",
         "ラグビー割",
         "6ヶ月継続"
       ],
       "workspaceSheets": [
         "販促_乗り換え",
         "販促_紹介・ペア入会",
-        "販促_学校関係者",
         "販促_ラグビー割",
         "販促_6ヶ月継続"
       ],
       "sync": "IMPORTRANGE",
       "setupApi": "setupPromoImport",
-      "shareWith": ["r-kusaka@okamoto-group.co.jp"]
+      "shareWith": ["r-kusaka@okamoto-group.co.jp"],
+      "notes": "Source book may still have a 学校関係者 stub. Workspace ignores it and pulls the Google Form instead."
+    },
+    {
+      "key": "school",
+      "name": "学校関係者割フォーム　JOYFIT24（回答）",
+      "spreadsheetId": "1mmG_xM1WoWFKgpmOl5obsKXo_0GjWLnAnLY9hTGanVg",
+      "url": "https://docs.google.com/spreadsheets/d/1mmG_xM1WoWFKgpmOl5obsKXo_0GjWLnAnLY9hTGanVg/edit",
+      "role": "all_stores_form_read_only_from_workspace",
+      "sourceSheet": "フォームの回答 1",
+      "filter": "Col2 = 'JOYFIT24 経堂'",
+      "importRange": "A:P",
+      "workspaceSheet": "販促_学校関係者",
+      "masterPanel": "経堂マスタ: right of 今月の口コミ (16 cols A:P). Helper/累計 block in AD shifts further right.",
+      "sync": "QUERY(IMPORTRANGE(...))",
+      "setupApi": "setupSchoolDiscountImport",
+      "shareWith": ["r-kusaka@okamoto-group.co.jp"],
+      "notes": "Do not edit the form response book. IMPORTRANGE is read-only; no share-change on the source. 今月の追加販促 stacks 学校関係者割 + 氏名."
     },
     {
       "key": "review_east",
