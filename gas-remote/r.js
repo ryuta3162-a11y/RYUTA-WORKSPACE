@@ -2021,6 +2021,9 @@ function handleApiGet_(e) {
     if (api === 'setupUnpaidView') {
       return jsonOutput_(setupUnpaidView_());
     }
+    if (api === 'fillUnpaidNow') {
+      return jsonOutput_(fillUnpaidNow_());
+    }
     if (api === 'restyleHubLook') {
       return jsonOutput_(restyleHubLook_());
     }
@@ -5793,7 +5796,7 @@ function unpaidPrepareDisplay_(vals) {
 function unpaidReadMonthValues_(src, monthName) {
   var srcSh = src.getSheetByName(monthName);
   if (!srcSh) return null;
-  var lastR = Math.max(srcSh.getLastRow(), 3);
+  var lastR = Math.min(Math.max(srcSh.getLastRow(), 3), 400);
   var lastC = Math.min(Math.max(srcSh.getLastColumn(), 1), 37);
   return srcSh.getRange(1, 1, lastR, lastC).getValues();
 }
@@ -5805,21 +5808,32 @@ function unpaidFillFromSource_(destSh) {
   var vals = unpaidReadMonthValues_(src, monthName);
   if (!vals) return { ok: false, message: 'no sheet ' + monthName };
   var shown = unpaidPrepareDisplay_(vals);
-  var maxR = destSh.getMaxRows();
-  destSh.getRange(UNPAID_DATA_ROW_, 1, Math.max(maxR - UNPAID_DATA_ROW_ + 1, 1), UNPAID_COLS_).clearContent();
+  destSh.getRange(UNPAID_DATA_ROW_, 1).clearContent();
   destSh.getRange(UNPAID_DATA_ROW_, 1, shown.length, shown[0].length).setValues(shown);
   try {
     destSh.getRange(UNPAID_DATA_ROW_, UNPAID_PAY_COL_, shown.length, 1).setNumberFormat('¥#,##0');
     destSh.getRange(UNPAID_DATA_ROW_, UNPAID_REC_COL_, shown.length, 1).setNumberFormat('¥#,##0');
   } catch (eFmt) {}
-  unpaidWriteDashboardValues_(destSh, unpaidStatsFromValues_(vals));
+  var tailStart = UNPAID_DATA_ROW_ + shown.length;
+  var last = destSh.getLastRow();
+  if (last >= tailStart) {
+    destSh.getRange(tailStart, 1, last - tailStart + 1, Math.min(UNPAID_COLS_, destSh.getMaxColumns())).clearContent();
+  }
+  var st = unpaidStatsFromValues_(vals);
+  unpaidWriteDashboardValues_(destSh, st);
+  SpreadsheetApp.flush();
   return {
     ok: true,
     month: monthName,
     rows: vals.length,
     cols: shown[0].length,
     a5: String(destSh.getRange('A5').getDisplayValue() || ''),
-    d2: String(destSh.getRange('D2').getDisplayValue() || '')
+    d2: String(destSh.getRange('D2').getDisplayValue() || ''),
+    n: st.n,
+    sp: st.sp,
+    sr: st.sr,
+    nr: st.nr,
+    stats: st
   };
 }
 
@@ -5896,7 +5910,7 @@ function unpaidHideNoiseCols_(sh) {
 }
 
 function styleUnpaidView_(sh) {
-  var maxR = sh.getMaxRows();
+  var maxR = Math.min(sh.getMaxRows(), Math.max(sh.getLastRow(), UNPAID_DATA_ROW_ + 20));
   var top = UNPAID_DATA_ROW_;
   var solid = SpreadsheetApp.BorderStyle.SOLID;
   var W = UNPAID_COLS_;
@@ -5982,7 +5996,7 @@ function applyUnpaidScanLook_(sh) {
   sh.setColumnWidths(12, 5, 100);
   sh.setColumnWidth(25, 104);
   sh.setColumnWidth(26, 92);
-  try { sh.setRowHeightsForced(UNPAID_DATA_ROW_ + 2, Math.max(sh.getMaxRows() - UNPAID_DATA_ROW_ - 1, 1), 24); } catch (eH) {}
+  try { sh.setRowHeightsForced(UNPAID_DATA_ROW_ + 2, Math.min(Math.max(sh.getLastRow() - UNPAID_DATA_ROW_ - 1, 10), 400), 24); } catch (eH) {}
   unpaidHideNoiseCols_(sh);
   sh.setFrozenColumns(4);
   sh.setFrozenRows(UNPAID_DATA_ROW_ + 1);
@@ -6069,6 +6083,16 @@ function unpaidTrendRowFromStats_(monthName, st) {
   return [monthName, st.n, st.sp, st.sr, rate, '', st.sp - st.sr, st.nr, rq(st.kone), rq(st.ktwo), rq(st.kbad)];
 }
 
+function unpaidWriteTrendMonth_(tr, monthName, st) {
+  if (!tr || !monthName || !st) return;
+  var months = unpaidMonthListChrono_();
+  var idx = months.indexOf(monthName);
+  if (idx < 0) return;
+  var row = idx + 3;
+  var vals = unpaidTrendRowFromStats_(monthName, st);
+  tr.getRange(row, 1, 1, 11).setValues([vals]);
+}
+
 function setupUnpaidTrend_(ss, options) {
   var tr = ss.getSheetByName(UNPAID_TREND_SHEET_);
   if (!tr) tr = ss.insertSheet(UNPAID_TREND_SHEET_);
@@ -6084,16 +6108,12 @@ function setupUnpaidTrend_(ss, options) {
   tr.getRange(2, 1, 1, 11).setValues([[
     '累計', '=SUM(B3:B)', '=SUM(C3:C)', '=SUM(D3:D)', '', '', '', '=SUM(H3:H)', '', '', ''
   ]]);
-  var src = null;
-  try { src = SpreadsheetApp.openById(UNPAID_SOURCE_ID_); } catch (eSrc) { src = null; }
   var body = [];
   var spark = [];
   var tBar = dnTheme_().blood;
   var i;
   for (i = 0; i < months.length; i++) {
-    var m = months[i];
-    var vals = src ? unpaidReadMonthValues_(src, m) : null;
-    body.push(vals ? unpaidTrendRowFromStats_(m, unpaidStatsFromValues_(vals)) : [m, '', '', '', '', '', '', '', '', '', '']);
+    body.push([months[i], '', '', '', '', '', '', '', '', '', '']);
     spark.push(['=IF(OR(E' + (i + 3) + '="",ISTEXT(E' + (i + 3) + ')),"",SPARKLINE(E' + (i + 3) + ',{"charttype","bar";"max",1;"color1","' + tBar + '"}))']);
   }
   tr.getRange(3, 1, body.length, 1).setNumberFormat('@');
@@ -6145,6 +6165,28 @@ function applyUnpaidNotes_(sh, tr) {
   tr.getRange('A2').setNote('各月の回収額の単純合計。繰越があると二重計上の可能性があります。');
 }
 
+function fillUnpaidNow_() {
+  try {
+    var ss = openWorkspaceSpreadsheet_();
+    var sh = ss.getSheetByName(UNPAID_SHEET_);
+    if (!sh) return { ok: false, message: 'missing 未納管理' };
+    var filled = unpaidFillFromSource_(sh);
+    try { styleUnpaidDashboard_(sh); } catch (eD) {}
+    var tr = ss.getSheetByName(UNPAID_TREND_SHEET_);
+    if (tr && filled && filled.ok && filled.stats) {
+      try { unpaidWriteTrendMonth_(tr, filled.month, filled.stats); } catch (eTr) {}
+    }
+    return {
+      ok: !!(filled && filled.ok),
+      filled: filled,
+      dash: sh.getRange('D1:M3').getDisplayValues(),
+      head: sh.getRange(UNPAID_DATA_ROW_, 1, 12, 12).getDisplayValues()
+    };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
 /**
  * 未納管理ドライブ【経堂】の月タブを、B1 の年月選択で切り替えて表示するシートを作る。
  * 1〜3行目＝選択月の集計、5行目〜＝元シートの値コピー。別タブ「未納管理_推移」に全月の集計。
@@ -6181,6 +6223,9 @@ function setupUnpaidView_() {
     var triggerErr = '';
     try { ensureUnpaidEditTrigger_(); } catch (eT) { triggerErr = String(eT && eT.message ? eT.message : eT); }
     try { filled = unpaidFillFromSource_(sh); } catch (eFill) { filled = { ok: false, message: String(eFill) }; }
+    if (filled && filled.ok && filled.stats) {
+      try { unpaidWriteTrendMonth_(trend, filled.month, filled.stats); } catch (eTr) {}
+    }
 
     styleUnpaidView_(sh);
     styleUnpaidDashboard_(sh);
@@ -6190,7 +6235,7 @@ function setupUnpaidView_() {
     try { sh.showSheet(); } catch (eShowU) {}
     sh.setColumnWidth(1, 72);
     sh.setColumnWidth(2, 52);
-    sh.setRowHeightsForced(UNPAID_DATA_ROW_ + 2, sh.getMaxRows() - UNPAID_DATA_ROW_ - 1, 24);
+    sh.setRowHeightsForced(UNPAID_DATA_ROW_ + 2, Math.min(Math.max(sh.getLastRow() - UNPAID_DATA_ROW_ - 1, 10), 400), 24);
     ss.setActiveSheet(trend);
     ss.moveActiveSheet(sh.getIndex() + (trend.getIndex() < sh.getIndex() ? 0 : 1));
     ss.setActiveSheet(sh);
