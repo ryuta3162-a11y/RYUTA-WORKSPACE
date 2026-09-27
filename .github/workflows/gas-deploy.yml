@@ -1,0 +1,25 @@
+name: Deploy GAS
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'gas-remote/**'
+      - '.clasp.json'
+      - 'scripts/gas-deploy.sh'
+      - '.github/workflows/gas-deploy.yml'
+
+jobs:
+  clasp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Push and deploy Apps Script
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+          APPLY_HUB_HOME: '1'
+        run: bash scripts/gas-deploy.sh
