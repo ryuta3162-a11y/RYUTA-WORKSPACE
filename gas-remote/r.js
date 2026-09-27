@@ -2024,6 +2024,9 @@ function handleApiGet_(e) {
     if (api === 'fillUnpaidNow') {
       return jsonOutput_(fillUnpaidNow_());
     }
+    if (api === 'styleUnpaidNow') {
+      return jsonOutput_(styleUnpaidNow_());
+    }
     if (api === 'restyleHubLook') {
       return jsonOutput_(restyleHubLook_());
     }
@@ -6181,6 +6184,37 @@ function fillUnpaidNow_() {
       filled: filled,
       dash: sh.getRange('D1:M3').getDisplayValues(),
       head: sh.getRange(UNPAID_DATA_ROW_, 1, 12, 12).getDisplayValues()
+    };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
+function styleUnpaidNow_() {
+  try {
+    var ss = openWorkspaceSpreadsheet_();
+    var sh = ss.getSheetByName(UNPAID_SHEET_);
+    if (!sh) return { ok: false, message: 'missing 未納管理' };
+    try { ensureUnpaidEditTrigger_(); } catch (eT) {}
+    styleUnpaidView_(sh);
+    styleUnpaidDashboard_(sh);
+    unpaidHideNoiseCols_(sh);
+    sh.setColumnWidth(1, 72);
+    sh.setColumnWidth(2, 52);
+    sh.setColumnWidth(3, 100);
+    sh.setColumnWidth(4, 148);
+    sh.setColumnWidths(5, 4, 88);
+    sh.setColumnWidth(9, 110);
+    sh.setColumnWidths(10, 2, 92);
+    sh.setFrozenColumns(4);
+    sh.setFrozenRows(UNPAID_DATA_ROW_ + 1);
+    sh.setHiddenGridlines(true);
+    sh.setTabColor(dnTheme_().blood);
+    try { sh.showSheet(); } catch (eShow) {}
+    return {
+      ok: true,
+      d2: String(sh.getRange('D2').getDisplayValue() || ''),
+      a5c: sh.getRange('A5:D8').getDisplayValues()
     };
   } catch (err) {
     return { ok: false, message: String(err && err.message ? err.message : err) };
