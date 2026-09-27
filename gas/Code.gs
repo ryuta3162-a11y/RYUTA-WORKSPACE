@@ -5466,6 +5466,7 @@ function restyleKyodoMasterLook_(sh) {
       try { masterPaintMonthTabs_(sh, sideStart); } catch (eTab) {}
       var helperCol = sh.getRange(masterMonthCellA1_(sh)).getColumn();
       var sideW = helperCol > sideStart ? helperCol - sideStart : 16;
+      try { sh.showColumns(sideStart, Math.max(sideW, 1)); } catch (eShowSide) {}
       sh.getRange(1, sideStart, 1, Math.max(sideW - 1, 1)).setBackground(t.ink).setFontColor(t.paper);
       sh.getRange(3, sideStart, 1, sideW).setBackground(t.ink).setFontColor(t.paper);
       var body = Math.min(Math.max(Math.max(sh.getLastRow(), 24) - 3, 1), 400);
@@ -5634,46 +5635,15 @@ function unpaidMonthOptions_() {
  * 同名が複数なら未納開始月末までで最新の入会）。
  */
 function unpaidViewFormula_() {
-  var src = 'IMPORTRANGE("' + UNPAID_SOURCE_ID_ + '","\'"&B1&"\'!A1:AK")';
-  return '=LET(d,' + src + ',' +
-    'IFERROR(LET(' +
-    'h,BYCOL(CHOOSEROWS(d,1,2,3),LAMBDA(c,TEXTJOIN("",TRUE,c))),' +
-    'cat,SCAN("",CHOOSECOLS(d,1),LAMBDA(acc,x,IF(x<>"",x,acc))),' +
-    'nc,IFERROR(MATCH(TRUE,ARRAYFORMULA(REGEXMATCH(h,"会員名")),0),4),' +
-    'mc,IFERROR(MATCH(TRUE,ARRAYFORMULA(REGEXMATCH(h,"未納対象月")),0),0),' +
-    'jd,\'経堂_入会\'!A2:A,jk,\'経堂_入会\'!D2:D,' +
-    'jn,ARRAYFORMULA(REGEXREPLACE(\'経堂_入会\'!B2:B&"","[\\s　]","")),' +
-    'ex,MAKEARRAY(ROWS(d),4,LAMBDA(r,c,LET(nm,TRIM(IFERROR(INDEX(d,r,nc),"")&""),' +
-    'IF(nm="","",IF(nm="会員名",CHOOSE(c,"入会日","入会区分","未納開始","入会から未納"),' +
-    'LET(om,IF(mc=0,"",IFERROR(INDEX(d,r,mc),"")&""),' +
-    'od,IFERROR(DATE(2000+VALUE(REGEXEXTRACT(om,"(\\d+)年")),VALUE(REGEXEXTRACT(om,"年(\\d+)")),1),""),' +
-    'nn,REGEXREPLACE(nm,"[\\s　]",""),' +
-    'lim,IF(od="",TODAY()+1,EOMONTH(od,0)+1),' +
-    'jdt,IFERROR(MAX(FILTER(jd,jn=nn,jd<lim)),0),' +
-    'CHOOSE(c,' +
-    'IF(jdt=0,"該当なし",TEXT(jdt,"yyyy/mm/dd")),' +
-    'IF(jdt=0,"",IFERROR(INDEX(FILTER(jk,jn=nn,jd=jdt),1),"")),' +
-    'IF(od="","",TEXT(od,"yy年m月")),' +
-    'IF(OR(jdt=0,od=""),"",((YEAR(od)-YEAR(jdt))*12+MONTH(od)-MONTH(jdt))&"ヶ月")))))))),' +
-    'vw,MAKEARRAY(ROWS(d),COLUMNS(d),LAMBDA(r,c,LET(v,IFERROR(INDEX(d,r,c),""),' +
-    'n,IF(ISNUMBER(v),v,IF(REGEXMATCH(v&"","^-?[0-9,]+(\\.[0-9]+)?$"),VALUE(v),"")),' +
-    'lab,IF(AND(c>=28,r>1),IFERROR(LET(x,ARRAY_CONSTRAIN(CHOOSECOLS(d,c),r-1,1),CHOOSEROWS(FILTER(x,ISTEXT(x)),-1)),""),INDEX(h,1,c)),' +
-    'IF(c=1,IF(INDEX(d,r,3)&INDEX(d,r,4)="",v,LET(cx,INDEX(cat,r,1)&"",' + unpaidShortCatExpr_('cx') + ')),' +
-    'IF(ISLOGICAL(v),IF(v,"☑","☐"),' +
-    'IF(n="",v,' +
-    'IF(REGEXMATCH(lab,"率$"),TEXT(n,"0.0%"),' +
-    'IF(AND(REGEXMATCH(lab,"DL|日$"),n>40000),TEXT(n,"m/d"),' +
-    'IF(REGEXMATCH(lab,"額|当月分|手数料|繰越|支払|回収$"),TEXT(n,"¥#,##0"),v))))))))),' +
-    'HSTACK(CHOOSECOLS(vw,SEQUENCE(1,nc)),ex,CHOOSECOLS(vw,SEQUENCE(1,COLUMNS(vw)-nc,nc+1)))),' +
-    'd))';
+  return '=IMPORTRANGE("' + UNPAID_SOURCE_ID_ + '","\'"&B1&"\'!A1:AK")';
 }
 
 var UNPAID_TREND_SHEET_ = '未納管理_推移';
 var UNPAID_DATA_ROW_ = 5;
 var UNPAID_COLS_ = 41;
 var UNPAID_NAME_COL_ = 4;
-var UNPAID_PAY_COL_ = 14;
-var UNPAID_REC_COL_ = 25;
+var UNPAID_PAY_COL_ = 10;
+var UNPAID_REC_COL_ = 21;
 
 function unpaidShortCatExpr_(cx) {
   return 'IFS(' +
@@ -5685,6 +5655,194 @@ function unpaidShortCatExpr_(cx) {
     'TRUE,' + cx + ')';
 }
 
+function unpaidParseAmount_(v) {
+  if (typeof v === 'number' && isFinite(v)) return v;
+  var s = String(v == null ? '' : v).replace(/[¥,\s]/g, '');
+  var n = parseFloat(s);
+  return isFinite(n) ? n : 0;
+}
+
+function unpaidStatsFromValues_(vals) {
+  var out = { n: 0, sp: 0, st: 0, sr: 0, nr: 0, kone: { pay: 0, rec: 0 }, ktwo: { pay: 0, rec: 0 }, kbad: { pay: 0, rec: 0 }, kjac: { pay: 0, rec: 0 } };
+  if (!vals || vals.length < 3) return out;
+  var cols = vals[0].length;
+  var h = [];
+  var c;
+  for (c = 0; c < cols; c++) {
+    h.push(String(vals[0][c] || '') + String(vals[1][c] || '') + String(vals[2][c] || ''));
+  }
+  var fc = function (re) {
+    var rx = new RegExp(re);
+    for (c = 0; c < h.length; c++) {
+      if (rx.test(h[c])) return c;
+    }
+    return -1;
+  };
+  var mc = fc('会員番号');
+  var pc = fc('支払額');
+  var tc = fc('総額');
+  var uc = fc('回収金額|入金金額|レジ打ち金額');
+  var cat = '';
+  var r;
+  for (r = 0; r < vals.length; r++) {
+    var row = vals[r];
+    if (row[0]) cat = String(row[0]);
+    var mem = mc < 0 ? '' : String(row[mc] == null ? '' : row[mc]).trim();
+    var pay = pc < 0 ? 0 : unpaidParseAmount_(row[pc]);
+    var tot = tc < 0 ? 0 : unpaidParseAmount_(row[tc]);
+    var rec = uc < 0 ? 0 : unpaidParseAmount_(row[uc]);
+    if (uc >= 0 && rec === 0) {
+      var neigh = String(row[uc + 1] || '') + String(row[uc + 2] || '') + String(row[uc + 3] || '');
+      if (/入金/.test(neigh)) rec = pay;
+    }
+    if (!mem || mem === '会員番号' || mem === '合計' || pay <= 0) continue;
+    out.n += 1;
+    out.sp += pay;
+    out.st += tot;
+    out.sr += rec;
+    if (rec > 0) out.nr += 1;
+    var bump = function (k) {
+      k.pay += pay;
+      k.rec += rec;
+    };
+    if (/1ヶ月|1ヵ月|1カ月|1か月/.test(cat)) bump(out.kone);
+    else if (/2ヶ月|2ヵ月|2カ月|2か月/.test(cat)) bump(out.ktwo);
+    if (/貸倒|貸し倒/.test(cat)) bump(out.kbad);
+    if (/JACCS/.test(cat)) bump(out.kjac);
+  }
+  return out;
+}
+
+function unpaidYen_(n) {
+  return '¥' + Math.round(Number(n) || 0).toLocaleString('en-US');
+}
+
+function unpaidRateText_(pay, rec) {
+  if (!pay) return '対象なし';
+  return (Math.round((rec / pay) * 1000) / 10).toFixed(1) + '%';
+}
+
+function unpaidWriteDashboardValues_(sh, st) {
+  sh.getRange('D1:M3').setValues([
+    ['未納件数', '未納総額', '回収額', '回収率', '未回収額', '回収済み', '1ヶ月未納 回収率', '2ヶ月未納 回収率', '貸倒候補 回収率', 'JACCS 回収率'],
+    [
+      st.n + '件',
+      unpaidYen_(st.sp),
+      unpaidYen_(st.sr),
+      st.sp ? unpaidRateText_(st.sp, st.sr) : '-',
+      unpaidYen_(st.sp - st.sr),
+      st.nr + '件',
+      unpaidRateText_(st.kone.pay, st.kone.rec),
+      unpaidRateText_(st.ktwo.pay, st.ktwo.rec),
+      unpaidRateText_(st.kbad.pay, st.kbad.rec),
+      unpaidRateText_(st.kjac.pay, st.kjac.rec)
+    ],
+    [
+      '支払額ベース',
+      '手数料込 ' + unpaidYen_(st.st),
+      '回収金額の合計',
+      '回収額÷未納総額',
+      '残り ' + (st.n - st.nr) + '件',
+      st.n ? Math.round((st.nr / st.n) * 100) + '%（人数）' : '',
+      st.kone.pay ? unpaidYen_(st.kone.rec) + ' / ' + unpaidYen_(st.kone.pay) : '対象なし',
+      st.ktwo.pay ? unpaidYen_(st.ktwo.rec) + ' / ' + unpaidYen_(st.ktwo.pay) : '対象なし',
+      st.kbad.pay ? unpaidYen_(st.kbad.rec) + ' / ' + unpaidYen_(st.kbad.pay) : '対象なし',
+      st.kjac.pay ? unpaidYen_(st.kjac.rec) + ' / ' + unpaidYen_(st.kjac.pay) : '対象なし'
+    ]
+  ]);
+}
+
+function unpaidShortCat_(s) {
+  var t = String(s || '');
+  if (/貸倒|貸し倒/.test(t)) return '貸倒';
+  if (/JACCS/.test(t)) return 'JACCS';
+  if (/1ヶ月|1ヵ月|1カ月|1か月/.test(t)) return '1ヶ月';
+  if (/2ヶ月|2ヵ月|2カ月|2か月/.test(t)) return '2ヶ月';
+  if (/過年度/.test(t)) return '過年度';
+  return t;
+}
+
+function unpaidPrepareDisplay_(vals) {
+  if (!vals || !vals.length) return vals;
+  var out = [];
+  var cat = '';
+  var r;
+  var c;
+  for (r = 0; r < vals.length; r++) {
+    var row = vals[r].slice();
+    if (row[0]) cat = String(row[0]);
+    else if (r >= 3 && cat) {
+      var hasData = false;
+      for (c = 1; c < row.length; c++) {
+        if (row[c] !== '' && row[c] != null) {
+          hasData = true;
+          break;
+        }
+      }
+      if (hasData) row[0] = unpaidShortCat_(cat);
+    }
+    if (r >= 3 && row[0]) row[0] = unpaidShortCat_(row[0]);
+    for (c = 0; c < row.length; c++) {
+      if (typeof row[c] === 'boolean') row[c] = row[c] ? '☑' : '☐';
+    }
+    out.push(row);
+  }
+  return out;
+}
+
+function unpaidReadMonthValues_(src, monthName) {
+  var srcSh = src.getSheetByName(monthName);
+  if (!srcSh) return null;
+  var lastR = Math.max(srcSh.getLastRow(), 3);
+  var lastC = Math.min(Math.max(srcSh.getLastColumn(), 1), 37);
+  return srcSh.getRange(1, 1, lastR, lastC).getValues();
+}
+
+function unpaidFillFromSource_(destSh) {
+  var monthName = String(destSh.getRange('B1').getDisplayValue() || '').trim();
+  if (!monthName) return { ok: false, message: 'B1 empty' };
+  var src = SpreadsheetApp.openById(UNPAID_SOURCE_ID_);
+  var vals = unpaidReadMonthValues_(src, monthName);
+  if (!vals) return { ok: false, message: 'no sheet ' + monthName };
+  var shown = unpaidPrepareDisplay_(vals);
+  var maxR = destSh.getMaxRows();
+  destSh.getRange(UNPAID_DATA_ROW_, 1, Math.max(maxR - UNPAID_DATA_ROW_ + 1, 1), UNPAID_COLS_).clearContent();
+  destSh.getRange(UNPAID_DATA_ROW_, 1, shown.length, shown[0].length).setValues(shown);
+  try {
+    destSh.getRange(UNPAID_DATA_ROW_, UNPAID_PAY_COL_, shown.length, 1).setNumberFormat('¥#,##0');
+    destSh.getRange(UNPAID_DATA_ROW_, UNPAID_REC_COL_, shown.length, 1).setNumberFormat('¥#,##0');
+  } catch (eFmt) {}
+  unpaidWriteDashboardValues_(destSh, unpaidStatsFromValues_(vals));
+  return {
+    ok: true,
+    month: monthName,
+    rows: vals.length,
+    cols: shown[0].length,
+    a5: String(destSh.getRange('A5').getDisplayValue() || ''),
+    d2: String(destSh.getRange('D2').getDisplayValue() || '')
+  };
+}
+
+function ensureUnpaidEditTrigger_() {
+  var ss = openWorkspaceSpreadsheet_();
+  var triggers = ScriptApp.getProjectTriggers();
+  var i;
+  for (i = 0; i < triggers.length; i++) {
+    if (triggers[i].getHandlerFunction() === 'unpaidOnEditInstalled_') return;
+  }
+  ScriptApp.newTrigger('unpaidOnEditInstalled_').forSpreadsheet(ss).onEdit().create();
+}
+
+function unpaidOnEditInstalled_(e) {
+  if (!e || !e.range) return;
+  var sh = e.range.getSheet();
+  if (!sh || sh.getName() !== UNPAID_SHEET_) return;
+  if (e.range.getRow() !== 1 || e.range.getColumn() !== 2) return;
+  unpaidFillFromSource_(sh);
+  styleUnpaidView_(sh);
+  styleUnpaidDashboard_(sh);
+}
+
 /**
  * 月タブ1枚分の集計に使う LET 変数（新旧レイアウト両対応。列は見出しの文字で探す）。
  * ok=会員番号あり・支払額>0 の行、pay=支払額、tot=総額、cat=A列区分の埋め。
@@ -5693,13 +5851,14 @@ function unpaidShortCatExpr_(cx) {
 function unpaidStatsLet_(rangeExpr) {
   return 'd,IMPORTRANGE("' + UNPAID_SOURCE_ID_ + '",' + rangeExpr + '),' +
     'h,BYCOL(CHOOSEROWS(d,1,2,3),LAMBDA(c,TEXTJOIN("",TRUE,c))),' +
-    'fc,LAMBDA(re,MATCH(TRUE,REGEXMATCH(h,re),0)),' +
-    'nv,LAMBDA(col,IFERROR(VALUE(REGEXREPLACE(CHOOSECOLS(d,col)&"","[¥,\\s]","")),0)),' +
+    'fc,LAMBDA(re,IFERROR(MATCH(TRUE,ARRAYFORMULA(REGEXMATCH(h,re)),0),0)),' +
+    'nv,LAMBDA(col,IF(col<1,0,IFERROR(VALUE(REGEXREPLACE(CHOOSECOLS(d,col)&"","[¥,\\s]","")),0))),' +
     'cat,SCAN("",CHOOSECOLS(d,1),LAMBDA(a,x,IF(x&""<>"",x&"",a))),' +
-    'mem,TRIM(CHOOSECOLS(d,fc("会員番号"))&""),' +
+    'mc,fc("会員番号"),' +
+    'mem,TRIM(CHOOSECOLS(d,IF(mc<1,1,mc))&""),' +
     'pay,nv(fc("支払額")),tot,nv(fc("総額")),uc,fc("回収金額|入金金額|レジ打ち金額"),recraw,nv(uc),' +
-    'rec,IF(recraw>0,recraw,IF(REGEXMATCH(CHOOSECOLS(d,uc+1)&CHOOSECOLS(d,uc+2)&CHOOSECOLS(d,uc+3)&"","入金"),pay,0)),' +
-    'ok,(mem<>"")*(mem<>"会員番号")*(mem<>"合計")*(pay>0),' +
+    'rec,IF(uc<1,0,IF(recraw>0,recraw,IF(REGEXMATCH(CHOOSECOLS(d,uc+1)&CHOOSECOLS(d,uc+2)&CHOOSECOLS(d,uc+3)&"","入金"),pay,0))),' +
+    'ok,(mc>0)*(mem<>"")*(mem<>"会員番号")*(mem<>"合計")*(pay>0),' +
     'n,SUM(ok),sp,SUM(ok*pay),st,SUM(ok*tot),sr,SUM(ok*rec),nr,SUM(ok*(rec>0)),' +
     'kone,ok*REGEXMATCH(cat,"1ヶ月|1ヵ月|1カ月|1か月"),' +
     'ktwo,ok*REGEXMATCH(cat,"2ヶ月|2ヵ月|2カ月|2か月"),' +
@@ -5730,9 +5889,9 @@ function unpaidTrendRowFormula_(row) {
 function unpaidHideNoiseCols_(sh) {
   var maxC = sh.getMaxColumns();
   try { sh.showColumns(1, maxC); } catch (eShow) {}
-  try { sh.hideColumns(17, 8); } catch (eProc) {}
-  if (maxC >= 27) {
-    try { sh.hideColumns(27, maxC - 26); } catch (eTail) {}
+  var hideFrom = UNPAID_REC_COL_ + 2;
+  if (maxC >= hideFrom) {
+    try { sh.hideColumns(hideFrom, maxC - hideFrom + 1); } catch (eTail) {}
   }
 }
 
@@ -5767,9 +5926,9 @@ function styleUnpaidView_(sh) {
   var recRng = sh.getRange(r0, UNPAID_REC_COL_, bodyRows, 1);
   var name = '$D' + r0 + '&""';
   var hasName = 'AND(' + name + '<>"",' + name + '<>"会員名")';
-  var recovered = 'REGEXMATCH($Y' + r0 + '&"","[1-9]")';
-  var early = 'IFERROR(VALUE(REGEXEXTRACT($H' + r0 + '&"","^(\\d+)ヶ月$"))<=2,FALSE)';
-  var none = '$E' + r0 + '="該当なし"';
+  var recovered = 'REGEXMATCH($U' + r0 + '&"","[1-9]")';
+  var early = 'FALSE';
+  var none = 'FALSE';
   var rules = sh.getConditionalFormatRules().filter(function (r) {
     return r.getRanges().every(function (x) { return x.getSheet().getName() !== UNPAID_SHEET_; });
   });
@@ -5807,8 +5966,9 @@ function applyUnpaidScanLook_(sh) {
     sh.insertColumnsAfter(sh.getMaxColumns(), UNPAID_COLS_ - sh.getMaxColumns());
   }
   try { permitImportRange_(sh.getParent(), UNPAID_SOURCE_ID_); } catch (eP) {}
-  sh.getRange(UNPAID_DATA_ROW_, 1).setFormula(unpaidViewFormula_());
-  sh.getRange('D1').setFormula(unpaidDashboardFormula_());
+  try { ensureUnpaidEditTrigger_(); } catch (eT) {}
+  var filled = { ok: false };
+  try { filled = unpaidFillFromSource_(sh); } catch (eFill) { filled = { ok: false, message: String(eFill) }; }
   SpreadsheetApp.flush();
   styleUnpaidView_(sh);
   styleUnpaidDashboard_(sh);
@@ -5827,7 +5987,7 @@ function applyUnpaidScanLook_(sh) {
   sh.setFrozenColumns(4);
   sh.setFrozenRows(UNPAID_DATA_ROW_ + 1);
   sh.setHiddenGridlines(true);
-  return { ok: true };
+  return { ok: true, filled: filled };
 }
 
 function maybeApplyFourColorOnce_() {
@@ -5901,6 +6061,14 @@ function styleUnpaidDashboard_(sh) {
   sh.setRowHeight(4, 20);
 }
 
+function unpaidTrendRowFromStats_(monthName, st) {
+  var rate = st.sp ? st.sr / st.sp : '';
+  var rq = function (k) {
+    return k.pay ? k.rec / k.pay : '対象なし';
+  };
+  return [monthName, st.n, st.sp, st.sr, rate, '', st.sp - st.sr, st.nr, rq(st.kone), rq(st.ktwo), rq(st.kbad)];
+}
+
 function setupUnpaidTrend_(ss, options) {
   var tr = ss.getSheetByName(UNPAID_TREND_SHEET_);
   if (!tr) tr = ss.insertSheet(UNPAID_TREND_SHEET_);
@@ -5913,31 +6081,43 @@ function setupUnpaidTrend_(ss, options) {
     '年月', '未納件数', '未納総額', '回収額', '回収率', '全体回収率バー', '未回収額', '回収済み件数',
     '1ヶ月未納 回収率', '2ヶ月未納 回収率', '貸倒候補 回収率'
   ]]);
-  tr.getRange(2, 1, 1, 11).setValues([['累計', '', '', '=SUM(D3:D)', '', '', '', '=SUM(H3:H)', '', '', '']]);
-  var rows = months.map(function (m, i) {
-    return [m, unpaidTrendRowFormula_(i + 3)];
-  });
-  tr.getRange(3, 1, rows.length, 1).setNumberFormat('@');
-  tr.getRange(3, 1, rows.length, 2).setValues(rows);
+  tr.getRange(2, 1, 1, 11).setValues([[
+    '累計', '=SUM(B3:B)', '=SUM(C3:C)', '=SUM(D3:D)', '', '', '', '=SUM(H3:H)', '', '', ''
+  ]]);
+  var src = null;
+  try { src = SpreadsheetApp.openById(UNPAID_SOURCE_ID_); } catch (eSrc) { src = null; }
+  var body = [];
+  var spark = [];
+  var tBar = dnTheme_().blood;
+  var i;
+  for (i = 0; i < months.length; i++) {
+    var m = months[i];
+    var vals = src ? unpaidReadMonthValues_(src, m) : null;
+    body.push(vals ? unpaidTrendRowFromStats_(m, unpaidStatsFromValues_(vals)) : [m, '', '', '', '', '', '', '', '', '', '']);
+    spark.push(['=IF(OR(E' + (i + 3) + '="",ISTEXT(E' + (i + 3) + ')),"",SPARKLINE(E' + (i + 3) + ',{"charttype","bar";"max",1;"color1","' + tBar + '"}))']);
+  }
+  tr.getRange(3, 1, body.length, 1).setNumberFormat('@');
+  tr.getRange(3, 1, body.length, 11).setValues(body);
+  tr.getRange(3, 6, spark.length, 1).setFormulas(spark);
 
   var t = dnTheme_();
   var solid = SpreadsheetApp.BorderStyle.SOLID;
   var all = tr.getRange(1, 1, tr.getMaxRows(), 11);
   all.setBackground(t.paper).setFontColor(t.ink).setFontSize(10).setVerticalAlignment('middle')
     .setBorder(false, false, false, false, false, false);
-  tr.getRange(3, 1, rows.length, 11).setBorder(null, null, null, null, null, true, t.line, solid);
+  tr.getRange(3, 1, body.length, 11).setBorder(null, null, null, null, null, true, t.line, solid);
   tr.getRange(1, 1, 1, 11).setBackground(t.ink).setFontColor(t.paper).setFontWeight('bold')
     .setFontSize(9).setWrap(true).setHorizontalAlignment('center');
   tr.getRange(1, 6, 1, 1).setBackground(t.blood).setFontColor(t.paper);
   tr.getRange(2, 1, 1, 11).setBackground(t.cream).setFontWeight('bold');
-  tr.getRange(3, 1, rows.length, 1).setFontWeight('bold').setHorizontalAlignment('center');
-  tr.getRange(2, 2, rows.length + 1, 10).setHorizontalAlignment('right');
-  tr.getRange(3, 2, rows.length, 1).setNumberFormat('0"件"');
-  tr.getRange(2, 3, rows.length + 1, 2).setNumberFormat('¥#,##0');
-  tr.getRange(3, 5, rows.length, 1).setNumberFormat('0.0%');
-  tr.getRange(3, 7, rows.length, 1).setNumberFormat('¥#,##0');
-  tr.getRange(2, 8, rows.length + 1, 1).setNumberFormat('0"件"');
-  tr.getRange(3, 9, rows.length, 3).setNumberFormat('0.0%');
+  tr.getRange(3, 1, body.length, 1).setFontWeight('bold').setHorizontalAlignment('center');
+  tr.getRange(2, 2, body.length + 1, 10).setHorizontalAlignment('right');
+  tr.getRange(3, 2, body.length, 1).setNumberFormat('0"件"');
+  tr.getRange(2, 3, body.length + 1, 2).setNumberFormat('¥#,##0');
+  tr.getRange(3, 5, body.length, 1).setNumberFormat('0.0%');
+  tr.getRange(3, 7, body.length, 1).setNumberFormat('¥#,##0');
+  tr.getRange(2, 8, body.length + 1, 1).setNumberFormat('0"件"');
+  tr.getRange(3, 9, body.length, 3).setNumberFormat('0.0%');
   tr.setFrozenRows(2);
   tr.setColumnWidth(1, 90);
   tr.setColumnWidths(2, 4, 105);
@@ -5959,8 +6139,6 @@ function applyUnpaidNotes_(sh, tr) {
   sh.getRange('J1').setNote('A列区分が「1ヶ月未納」の行だけを集計した回収率。');
   sh.getRange('K1').setNote('A列区分が「2ヶ月未納」の行だけを集計した回収率。');
   sh.getRange('L1').setNote('A列に「貸倒」または「貸し倒れ」を含む行の回収率。該当者がいなければ対象なし。');
-  sh.getRange('E6').setNote('経堂_入会を氏名（空白なし）で照合。未納開始月末までの最新入会。見つからない場合は該当なし（他店・改姓・2023/10以前など）。');
-  sh.getRange('H6').setNote('入会日から未納開始月までの経過月数。2ヶ月以内は赤字。元の未納管理ファイルは触っていません。');
   tr.getRange('E1').setNote('その月全体の回収率（回収額÷未納総額＝支払額ベース）。右のバーと同じ数字です。');
   tr.getRange('F1').setNote('左の「回収率」を0〜100%の横棒にしたもの。貸倒や1ヶ月未納の率ではありません。');
   tr.getRange('K1').setNote('A列が貸倒／貸し倒れの行の回収率。該当者がいなければ「対象なし」。25年11月のように表記が「貸し倒れ」でも集計します。');
@@ -5969,8 +6147,8 @@ function applyUnpaidNotes_(sh, tr) {
 
 /**
  * 未納管理ドライブ【経堂】の月タブを、B1 の年月選択で切り替えて表示するシートを作る。
- * 1〜3行目＝選択月の集計、5行目〜＝元シートの表示用コピー。別タブ「未納管理_推移」に全月の集計。
- * 元ファイルには触れない（IMPORTRANGE のみ）。
+ * 1〜3行目＝選択月の集計、5行目〜＝元シートの値コピー。別タブ「未納管理_推移」に全月の集計。
+ * 元ファイルは開いて読むだけ（書き換えない）。
  */
 function setupUnpaidView_() {
   try {
@@ -5999,20 +6177,10 @@ function setupUnpaidView_() {
       .setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(options, true).setAllowInvalid(false).build());
     sh.getRange('A2').setFormula('=HYPERLINK("https://docs.google.com/spreadsheets/d/' + UNPAID_SOURCE_ID_ + '/edit","元の未納管理ドライブを開く ↗")');
     sh.getRange('A3').setFormula('=HYPERLINK("#gid=' + trend.getSheetId() + '","月別の推移を見る ↗")');
-    sh.getRange('D1').setFormula(unpaidDashboardFormula_());
-    sh.getRange(UNPAID_DATA_ROW_, 1).setFormula(unpaidViewFormula_());
-
-    var permit = '';
-    try {
-      var resp = UrlFetchApp.fetch(
-        'https://docs.google.com/spreadsheets/d/' + ss.getId() +
-          '/externaldata/addimportrangepermissions?donorDocId=' + UNPAID_SOURCE_ID_,
-        { method: 'post', headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true }
-      );
-      permit = String(resp.getResponseCode());
-    } catch (eP) {
-      permit = 'error: ' + (eP && eP.message ? eP.message : eP);
-    }
+    var filled = { ok: false };
+    var triggerErr = '';
+    try { ensureUnpaidEditTrigger_(); } catch (eT) { triggerErr = String(eT && eT.message ? eT.message : eT); }
+    try { filled = unpaidFillFromSource_(sh); } catch (eFill) { filled = { ok: false, message: String(eFill) }; }
 
     styleUnpaidView_(sh);
     styleUnpaidDashboard_(sh);
@@ -6044,7 +6212,8 @@ function setupUnpaidView_() {
     return {
       ok: true,
       b1: sh.getRange('B1').getDisplayValue(),
-      permit: permit,
+      filled: filled,
+      triggerErr: triggerErr,
       dash: sh.getRange('D1:M3').getDisplayValues(),
       head: sh.getRange(UNPAID_DATA_ROW_, 1, 14, 10).getDisplayValues(),
       trend: trend.getRange(1, 1, 16, 11).getDisplayValues()
