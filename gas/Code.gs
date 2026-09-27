@@ -52,7 +52,6 @@ var RECEPTION_REFRESH_TOKEN_ = 'kyodo-ws-refresh-7f3c91';
 function onOpen() {
   var ui = SpreadsheetApp.getUi();
   ui.createMenu('今日の作業')
-    .addItem('しまう', 'hubCloseWork_')
     .addItem('トップを表示', 'hubShowHome_')
     .addItem('見た目を整える', 'applyFourColorFromMenu')
     .addToUi();
@@ -1994,7 +1993,7 @@ function handleApiGet_(e) {
   try {
     var api = e && e.parameter ? String(e.parameter.api || '') : '';
     if (api === 'status') {
-      return jsonOutput_({ ok: true, service: 'ryuta-workspace-gas', version: 'v2-four-color' });
+      return jsonOutput_({ ok: true, service: 'ryuta-workspace-gas', version: 'v2-hub-field' });
     }
     if (api === 'listSheets') {
       return jsonOutput_(listWorkspaceSheets_());
@@ -4421,23 +4420,18 @@ function handleHubHomeSelect_(e) {
   var row = e.range.getRow();
   var col = e.range.getColumn();
   var key = String(sh.getRange(row, HUB_KEY_BASE_ + col).getValue() || '');
-  if (!key) return;
-  if (key === 'CLOSE') {
-    hubCloseWork_();
+  if (!key || key.indexOf('SHEET:') !== 0) {
+    hubRefreshStatus_(sh, sh.getParent());
     return;
   }
-  if (key.indexOf('SHEET:') !== 0) return;
   var name = key.slice(6);
   var ss = sh.getParent();
   var target = ss.getSheetByName(name);
   if (!target) return;
-  var opening = target.isSheetHidden();
-  if (opening) {
-    try { target.showSheet(); } catch (e1) {}
-  } else if (hubIsWorkSheet_(name)) {
-    try { target.hideSheet(); } catch (e2) {}
-  }
-  hubPaintTile_(sh, row, col, opening);
+  try { sh.getRange(1, 1).activate(); } catch (eSel) {}
+  try { target.showSheet(); } catch (e1) {}
+  hubPaintTile_(sh, row, col, true);
+  ss.setActiveSheet(target);
 }
 
 function handleHubHomeEdit_(e) {}
@@ -4449,7 +4443,6 @@ function restyleHubHomeLook_(sh) {
   var last = Math.max(sh.getLastRow(), 8);
   var rows = Math.min(last, 16);
   sh.getRange(1, 1, rows, 8).setBackground(u.bg).setFontColor(u.ink).setFontFamily('Noto Sans JP');
-  sh.getRange(1, 6).setBackground(u.shut).setFontColor(u.bg);
   sh.getRange(1, 8, rows, 1).setBackground(u.rail).setFontColor(u.bg);
   var vals = sh.getRange(1, 1, rows, 8).getDisplayValues();
   var groups = { '数字': 1, '未納': 1, '現場': 1, '販促': 1 };
@@ -4511,12 +4504,9 @@ function setupHubHome_() {
       .setHorizontalAlignment('center')
       .setBorder(false, false, false, false, false, false)
       .setFontWeight('normal')
-      .setWrap(false);
+      .setWrap(true);
 
     sh.getRange(1, 1).setValue('経堂').setFontSize(16).setFontWeight('bold').setFontColor(u.ink);
-    sh.getRange(1, 6).setValue('しまう').setFontSize(12).setFontWeight('bold')
-      .setBackground(u.shut).setFontColor(u.bg);
-    hubWriteKey_(sh, 1, 6, 'CLOSE');
     sh.setRowHeight(1, 36);
 
     var row = 2;
@@ -4538,10 +4528,10 @@ function setupHubHome_() {
         var col = 2 + p;
         var it = list[p];
         sh.getRange(row, col)
-          .setValue(it.title)
-          .setFontSize(13)
+          .setValue(it.name)
+          .setFontSize(10)
           .setFontWeight('bold')
-          .setWrap(false)
+          .setWrap(true)
           .setBackground(u.card)
           .setFontColor(u.ink)
           .setHorizontalAlignment('center')
@@ -4549,7 +4539,7 @@ function setupHubHome_() {
           .setBorder(true, true, true, true, false, false, u.line, solid);
         hubWriteKey_(sh, row, col, 'SHEET:' + it.name);
       }
-      sh.setRowHeight(row, 44);
+      sh.setRowHeight(row, 64);
       row += 1;
     }
 
@@ -4582,13 +4572,12 @@ function setupHubHome_() {
     sh.setHiddenGridlines(true);
     sh.setFrozenRows(1);
     sh.setColumnWidth(1, 64);
-    for (i = 2; i <= 6; i++) sh.setColumnWidth(i, 118);
+    for (i = 2; i <= 6; i++) sh.setColumnWidth(i, 168);
     sh.setColumnWidth(7, 28);
     sh.setColumnWidth(8, 280);
     hubHideInternalCols_(sh);
 
     restyleHubHomeLook_(sh);
-    hubCloseWork_();
     hubHideInternalCols_(sh);
     applyHubTabColors_(ss);
     return {
@@ -4810,9 +4799,7 @@ function unpaidViewFormula_() {
     'IF(REGEXMATCH(lab,"率$"),TEXT(n,"0.0%"),' +
     'IF(AND(REGEXMATCH(lab,"DL|日$"),n>40000),TEXT(n,"m/d"),' +
     'IF(REGEXMATCH(lab,"額|当月分|手数料|繰越|支払|回収$"),TEXT(n,"¥#,##0"),v))))))))),' +
-    'full,HSTACK(CHOOSECOLS(vw,SEQUENCE(1,nc)),ex,CHOOSECOLS(vw,SEQUENCE(1,COLUMNS(vw)-nc,nc+1))),' +
-    'stop,IFERROR(MATCH("合計",CHOOSECOLS(full,1),0),ROWS(full)),' +
-    'FILTER(full,SEQUENCE(ROWS(full))<=stop))))),' +
+    'HSTACK(CHOOSECOLS(vw,SEQUENCE(1,nc)),ex,CHOOSECOLS(vw,SEQUENCE(1,COLUMNS(vw)-nc,nc+1)))))),' +
     '"「"&B1&"」のシートは元ファイルにまだありません")';
 }
 
@@ -4955,7 +4942,7 @@ function unpaidFindTotalRow_(sh) {
     var b = String(vals[i][1] || '').replace(/[\s　]/g, '');
     if (a === '合計' || b === '合計') return start + i;
   }
-  return last;
+  return 0;
 }
 
 function unpaidTrimBelowTotal_(sh) {
@@ -4970,11 +4957,17 @@ function unpaidTrimBelowTotal_(sh) {
 }
 
 var UNPAID_SCAN_PROP_ = 'unpaidScanV2';
-var FOUR_COLOR_PROP_ = 'fourColorV1';
+var FOUR_COLOR_PROP_ = 'hubFieldV1';
 
 function applyUnpaidScanLook_(sh) {
   if (!sh) return { ok: false };
+  try { sh.showRows(1, sh.getMaxRows()); } catch (eShowR) {}
+  try { sh.showSheet(); } catch (eShowS) {}
+  if (sh.getMaxColumns() < UNPAID_COLS_) {
+    sh.insertColumnsAfter(sh.getMaxColumns(), UNPAID_COLS_ - sh.getMaxColumns());
+  }
   sh.getRange(UNPAID_DATA_ROW_, 1).setFormula(unpaidViewFormula_());
+  SpreadsheetApp.flush();
   styleUnpaidView_(sh);
   styleUnpaidDashboard_(sh);
   sh.setColumnWidth(1, 72);
@@ -5006,6 +4999,7 @@ function maybeApplyFourColorOnce_() {
 }
 
 function applyFourColorLook_() {
+  setupHubHome_();
   var ss = SpreadsheetApp.getActiveSpreadsheet() || openWorkspaceSpreadsheet_();
   var unpaid = ss.getSheetByName(UNPAID_SHEET_);
   if (unpaid) applyUnpaidScanLook_(unpaid);
@@ -5016,7 +5010,7 @@ function applyFourColorFromMenu() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var r = applyFourColorLook_();
   try { PropertiesService.getDocumentProperties().setProperty(FOUR_COLOR_PROP_, '1'); } catch (eP) {}
-  ss.toast('4色に揃え、合計より下を隠しました', '見た目', 8);
+  ss.toast('シート名で開きます。タブを右クリックで非表示にできます', 'トップ', 8);
   return r;
 }
 
