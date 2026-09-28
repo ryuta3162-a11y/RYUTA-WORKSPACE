@@ -5890,6 +5890,12 @@ function restyleKyodoMasterLook_(sh) {
   sh.getRange(start, 1, bodyRows, 1).setBackground(t.cream);
   sh.getRange(start, 6, bodyRows, 1).setBackground(t.cream);
   sh.getRange(start, 7, bodyRows, 1).setBackground(t.cream);
+  try { sh.showColumns(10); } catch (eJ) {}
+  try {
+    sh.getRange(Math.max(headerRow - 1, 15), 11, 72, 5)
+      .setBackground(t.paper)
+      .setFontColor(t.ink);
+  } catch (eRail) {}
   try {
     sh.getRange('F7:K14').setBackground(t.ghost).setFontColor(t.ink);
     sh.getRange('F7').setBackground(t.blood).setFontColor(t.paper);
@@ -6014,34 +6020,36 @@ function masterRestoreMomCol_(sh, head) {
       '=IF(AND(ISNUMBER(F' + row + '),ISNUMBER(E' + row + ')),F' + row + '-E' + row + ',)'
     );
   }
+  try { sh.showColumns(10); } catch (eH) {}
 }
 
 function masterInsertKpiChart_(sh, spec) {
   try {
+    var gray = '#EDEDED';
     var b = sh.newChart()
       .addRange(spec.range)
       .setNumHeaders(1)
       .setPosition(spec.row, spec.col, 2, 2)
       .asColumnChart()
       .setOption('title', spec.title)
-      .setOption('width', spec.width || 560)
-      .setOption('height', spec.height || 300)
+      .setOption('width', spec.width || 420)
+      .setOption('height', spec.height || 250)
       .setOption('colors', spec.colors)
-      .setOption('backgroundColor', '#FFFFFF')
-      .setOption('titleTextStyle', { color: '#171717', fontSize: 16, bold: true, fontName: 'Arial' })
-      .setOption('legend', { position: 'bottom', alignment: 'center', textStyle: { color: '#171717', fontSize: 12, fontName: 'Arial' } })
+      .setOption('backgroundColor', gray)
+      .setOption('titleTextStyle', { color: '#171717', fontSize: 14, bold: true })
+      .setOption('legend', { position: 'bottom', alignment: 'center', textStyle: { color: '#171717', fontSize: 11 } })
       .setOption('hAxis', {
         slantedText: false,
         showTextEvery: 1,
-        textStyle: { fontSize: 12, color: '#171717', fontName: 'Arial' }
+        textStyle: { fontSize: 11, color: '#171717' }
       })
       .setOption('vAxis', {
         minValue: 0,
-        textStyle: { fontSize: 12, color: '#171717', fontName: 'Arial' },
-        gridlines: { color: '#EDEDED', count: 5 },
+        textStyle: { fontSize: 11, color: '#171717' },
+        gridlines: { color: '#D4D4D4', count: 5 },
         minorGridlines: { count: 0 }
       })
-      .setOption('chartArea', { left: 52, top: 44, width: '84%', height: '70%' })
+      .setOption('chartArea', { backgroundColor: gray, left: 44, top: 36, width: '82%', height: '68%' })
       .setOption('bar', { groupWidth: '62%' })
       .setOption('useFirstColumnAsDomain', true);
     sh.insertChart(b.build());
@@ -6058,9 +6066,12 @@ function masterEnsureKpiCharts_(sh) {
   var head = src.head || 16;
   try { masterRestoreMomCol_(sh, head); } catch (eMom) {}
   var t = dnTheme_();
+  try {
+    sh.getRange(Math.max(head - 1, 15), 11, 72, 5).setBackground(t.paper).setFontColor(t.ink);
+  } catch (eRail) {}
   var start = src.startCol || 35;
   var chartTop = head;
-  var gap = 16;
+  var gap = 14;
   var titles = [
     { title: '入会 計画と実績', colors: [t.ash, t.ink] },
     { title: '退会 計画と実績', colors: [t.ash, t.blood] },
@@ -6078,8 +6089,8 @@ function masterEnsureKpiCharts_(sh) {
       title: titles[i].title,
       row: chartTop + i * gap,
       col: 11,
-      width: 560,
-      height: 300,
+      width: 420,
+      height: 250,
       colors: titles[i].colors
     });
     if (r && r.ok) placed += 1;
