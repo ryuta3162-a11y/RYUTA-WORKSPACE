@@ -6111,7 +6111,7 @@ function unpaidTrendRowFormula_(row) {
 function unpaidHideNoiseCols_(sh) {
   var maxC = sh.getMaxColumns();
   try { sh.showColumns(1, maxC); } catch (eShow) {}
-  var hideFrom = 25;
+  var hideFrom = 27;
   if (maxC >= hideFrom) {
     try { sh.hideColumns(hideFrom, maxC - hideFrom + 1); } catch (eTail) {}
   }
