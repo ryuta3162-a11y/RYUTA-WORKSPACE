@@ -4684,6 +4684,7 @@ function hubIsAlwaysHidden_(name) {
   if (/backup/i.test(name)) return true;
   if (/^シート\d+$/.test(name)) return true;
   if (name === 'Tasks' || name === 'WorkspaceSync') return true;
+  if (name === '未納_同期' || name === '未納_推移_グラフ元') return true;
   return false;
 }
 
@@ -6718,7 +6719,7 @@ function styleUnpaidDashboard_(sh) {
 }
 
 var UNPAID_TREND_HEAD_ROW_ = 6;
-var UNPAID_TREND_CHART_SRC_COL_ = 14;
+var UNPAID_TREND_CHART_SHEET_ = '未納_推移_グラフ元';
 var UNPAID_TREND_CHART_GAP_ROWS_ = 15;
 
 function unpaidTrendRowFromStats_(monthName, st) {
@@ -6779,11 +6780,22 @@ function unpaidEnsureTrendSheet_(ss) {
   ss = ss || openWorkspaceSpreadsheet_();
   var tr = ss.getSheetByName(UNPAID_TREND_SHEET_);
   if (!tr) tr = ss.insertSheet(UNPAID_TREND_SHEET_);
-  var needCols = UNPAID_TREND_CHART_SRC_COL_ + 10;
-  if (tr.getMaxColumns() < needCols) tr.insertColumnsAfter(tr.getMaxColumns(), needCols - tr.getMaxColumns());
+  if (tr.getMaxColumns() < 12) tr.insertColumnsAfter(tr.getMaxColumns(), 12 - tr.getMaxColumns());
   if (tr.getMaxRows() < 90) tr.insertRowsAfter(tr.getMaxRows(), 90 - tr.getMaxRows());
   try { tr.showSheet(); } catch (eShow) {}
+  try { tr.showColumns(1, tr.getMaxColumns()); } catch (eShowC) {}
   return tr;
+}
+
+function unpaidEnsureTrendChartSheet_(ss) {
+  ss = ss || openWorkspaceSpreadsheet_();
+  var sh = ss.getSheetByName(UNPAID_TREND_CHART_SHEET_);
+  if (!sh) sh = ss.insertSheet(UNPAID_TREND_CHART_SHEET_);
+  if (sh.getMaxColumns() < 14) sh.insertColumnsAfter(sh.getMaxColumns(), 14 - sh.getMaxColumns());
+  if (sh.getMaxRows() < 40) sh.insertRowsAfter(sh.getMaxRows(), 40 - sh.getMaxRows());
+  try { sh.hideSheet(); } catch (eH) {}
+  sh.setTabColor(dnTheme_().ash);
+  return sh;
 }
 
 function unpaidClearTrendCharts_(tr) {
@@ -6808,65 +6820,78 @@ function unpaidChartStyle_() {
 
 function unpaidInsertTrendChart_(tr, spec) {
   try {
-    var t = dnTheme_();
     var b = tr.newChart()
-      .setChartType(spec.type)
       .addRange(spec.range)
       .setNumHeaders(1)
       .setPosition(spec.row, spec.col, 8, 8)
       .setOption('title', spec.title)
       .setOption('width', spec.width || 540)
       .setOption('height', spec.height || 280)
-      .setOption('colors', spec.colors || [t.ink, t.blood, t.ash])
-      .setOption('backgroundColor', t.paper)
-      .setOption('titleTextStyle', unpaidChartStyle_().titleTextStyle)
-      .setOption('legend', unpaidChartStyle_().legend)
-      .setOption('hAxis', unpaidChartStyle_().hAxis)
-      .setOption('vAxis', spec.vAxis || unpaidChartStyle_().vAxis)
-      .setOption('chartArea', unpaidChartStyle_().chartArea)
-      .setOption('useFirstColumnAsDomain', true)
-      .setOption('interpolateNulls', true);
-    if (spec.series) b = b.setOption('series', spec.series);
-    if (spec.seriesType) b = b.setOption('seriesType', spec.seriesType);
+      .setOption('colors', spec.colors || ['#171717', '#DA0037', '#444444'])
+      .setOption('backgroundColor', '#EDEDED')
+      .setOption('legend', { position: 'bottom' })
+      .setOption('hAxis', { slantedText: true, slantedTextAngle: 45 })
+      .setOption('useFirstColumnAsDomain', true);
+    if (spec.kind === 'line') b = b.asLineChart();
+    else b = b.asColumnChart();
+    if (spec.vAxis) b = b.setOption('vAxis', spec.vAxis);
     tr.insertChart(b.build());
-    return true;
+    return { ok: true };
   } catch (err) {
-    return false;
+    return { ok: false, message: String(err && err.message ? err.message : err) };
   }
 }
 
 function unpaidChartNum_(v) {
   if (v === '' || v == null) return null;
+  if (typeof v === 'number' && !isNaN(v)) return v;
   var n = Number(v);
   return isNaN(n) ? null : n;
 }
 
-function unpaidWriteTrendChartSource_(tr, body, head) {
-  var start = UNPAID_TREND_CHART_SRC_COL_;
-  var clearTo = Math.max(tr.getMaxRows(), head + Math.max(body.length, 1) + 2);
-  tr.getRange(1, start, clearTo, 10).clearContent();
-  if (!body.length) return { ok: true, rows: 0 };
+function unpaidWriteTrendChartSource_(tr, body) {
+  var start = 14;
+  if (tr.getMaxColumns() < start + 13) {
+    tr.insertColumnsAfter(tr.getMaxColumns(), start + 13 - tr.getMaxColumns());
+  }
+  try { tr.showColumns(1, tr.getMaxColumns()); } catch (eShow) {}
+  var clearTo = Math.max(tr.getMaxRows(), (body && body.length ? body.length : 1) + 2);
+  tr.getRange(1, start, clearTo, 14).clearContent();
+  var src = unpaidEnsureTrendChartSheet_(tr.getParent());
+  src.clear();
+  if (!body || !body.length) return { ok: true, rows: 0, sheet: src, start: start };
   var headers = [[
-    '年月', '未納総額', '回収額',
-    '年月', '回収率',
-    '年月', '未納件数',
-    '年月', '1ヶ月未納 回収率', '2ヶ月未納 回収率', '貸倒候補 回収率'
+    '年月', '未納総額', '回収額', '',
+    '年月', '回収率', '',
+    '年月', '未納件数', '',
+    '年月', '1ヶ月未納', '2ヶ月未納', '貸倒候補'
   ]];
   var rows = [];
   var i;
   for (i = 0; i < body.length; i++) {
     var r = body[i];
     rows.push([
-      r[0], unpaidChartNum_(r[2]), unpaidChartNum_(r[3]),
-      r[0], unpaidChartNum_(r[4]),
-      r[0], unpaidChartNum_(r[1]),
+      r[0], unpaidChartNum_(r[2]), unpaidChartNum_(r[3]), '',
+      r[0], unpaidChartNum_(r[4]), '',
+      r[0], unpaidChartNum_(r[1]), '',
       r[0], unpaidChartNum_(r[8]), unpaidChartNum_(r[9]), unpaidChartNum_(r[10])
     ]);
   }
-  tr.getRange(head, start, 1, 11).setValues(headers);
-  tr.getRange(head + 1, start, rows.length, 11).setValues(rows);
-  try { tr.hideColumns(start, 11); } catch (eH) {}
-  return { ok: true, rows: rows.length };
+  src.getRange(1, 1, 1, 14).setValues(headers);
+  src.getRange(2, 1, rows.length, 14).setValues(rows);
+  try { src.hideSheet(); } catch (eH) {}
+  // 同じシートの見える列にも置く（非表示列だとグラフが空になる）
+  var t = dnTheme_();
+  tr.getRange(1, start, 1, 14).setValues(headers);
+  tr.getRange(2, start, rows.length, 14).setValues(rows);
+  tr.getRange(2, start + 1, rows.length, 2).setNumberFormat('0');
+  tr.getRange(2, start + 5, rows.length, 1).setNumberFormat('0.000');
+  tr.getRange(2, start + 8, rows.length, 1).setNumberFormat('0');
+  tr.getRange(2, start + 11, rows.length, 3).setNumberFormat('0.000');
+  tr.getRange(1, start, rows.length + 1, 14)
+    .setFontColor(t.paper).setBackground(t.paper).setFontSize(8);
+  try { tr.setColumnWidths(start, 14, 10); } catch (eW) {}
+  return { ok: true, rows: rows.length, sheet: src, start: start };
 }
 
 function unpaidTrendTableBounds_(tr) {
@@ -6896,62 +6921,63 @@ function unpaidEnsureTrendCharts_(tr) {
   unpaidClearTrendCharts_(tr);
   var b = unpaidTrendTableBounds_(tr);
   if (!b.n) return { ok: true, charts: 0 };
-  try {
-    var tableBody = tr.getRange(b.head + 1, 1, b.n, 11).getValues();
-    unpaidWriteTrendChartSource_(tr, tableBody, b.head);
-  } catch (eSrc) {}
+  var tableBody = tr.getRange(b.head + 1, 1, b.n, 11).getValues();
+  var srcPack = unpaidWriteTrendChartSource_(tr, tableBody);
+  var start = (srcPack && srcPack.start) || 14;
   var t = dnTheme_();
-  var rows = b.n + 1;
-  var src = UNPAID_TREND_CHART_SRC_COL_;
+  var nSrc = Math.max((srcPack && srcPack.rows) || b.n, 1);
+  var srcRows = nSrc + 1;
   var chartTop = b.last + 3;
   var gap = UNPAID_TREND_CHART_GAP_ROWS_;
   var need = chartTop + gap * 2 + 2;
   if (tr.getMaxRows() < need) tr.insertRowsAfter(tr.getMaxRows(), need - tr.getMaxRows());
-  var pctAxis = {
-    textStyle: unpaidChartStyle_().vAxis.textStyle,
-    gridlines: { color: t.paper },
-    minorGridlines: { count: 0 },
-    format: '0%',
-    viewWindow: { min: 0, max: 1 }
-  };
+  SpreadsheetApp.flush();
+  var pctAxis = { format: '0%', viewWindow: { min: 0, max: 1 } };
+  var errors = [];
   var placed = 0;
-  if (unpaidInsertTrendChart_(tr, {
-    type: Charts.ChartType.COMBO,
-    range: tr.getRange(b.head, src, rows, 3),
-    title: '未納総額と回収額',
-    row: chartTop,
-    col: 1,
-    colors: [t.ink, t.blood],
-    seriesType: 'bars',
-    series: { 1: { type: 'line', targetAxisIndex: 0 } }
-  })) placed += 1;
-  if (unpaidInsertTrendChart_(tr, {
-    type: Charts.ChartType.LINE,
-    range: tr.getRange(b.head, src + 3, rows, 2),
-    title: '回収率',
-    row: chartTop,
-    col: 7,
-    colors: [t.blood],
-    vAxis: pctAxis
-  })) placed += 1;
-  if (unpaidInsertTrendChart_(tr, {
-    type: Charts.ChartType.COLUMN,
-    range: tr.getRange(b.head, src + 5, rows, 2),
-    title: '未納件数',
-    row: chartTop + gap,
-    col: 1,
-    colors: [t.ink]
-  })) placed += 1;
-  if (unpaidInsertTrendChart_(tr, {
-    type: Charts.ChartType.LINE,
-    range: tr.getRange(b.head, src + 7, rows, 4),
-    title: '1ヶ月 / 2ヶ月 / 貸倒 の回収率',
-    row: chartTop + gap,
-    col: 7,
-    colors: [t.ink, t.ash, t.blood],
-    vAxis: pctAxis
-  })) placed += 1;
-  return { ok: placed > 0, charts: placed, chartTop: chartTop };
+  var specs = [
+    {
+      kind: 'column',
+      range: tr.getRange(1, start, srcRows, 3),
+      title: '未納総額と回収額',
+      row: chartTop,
+      col: 1,
+      colors: [t.ink, t.blood]
+    },
+    {
+      kind: 'line',
+      range: tr.getRange(1, start + 4, srcRows, 2),
+      title: '回収率',
+      row: chartTop,
+      col: 7,
+      colors: [t.blood],
+      vAxis: pctAxis
+    },
+    {
+      kind: 'column',
+      range: tr.getRange(1, start + 7, srcRows, 2),
+      title: '未納件数',
+      row: chartTop,
+      col: 1,
+      colors: [t.ink]
+    },
+    {
+      kind: 'line',
+      range: tr.getRange(1, start + 10, srcRows, 4),
+      title: '1ヶ月 / 2ヶ月 / 貸倒 の回収率',
+      row: chartTop + gap,
+      col: 7,
+      colors: [t.ink, t.ash, t.blood],
+      vAxis: pctAxis
+    }
+  ];
+  var i;
+  for (i = 0; i < specs.length; i++) {
+    var r = unpaidInsertTrendChart_(tr, specs[i]);
+    if (r && r.ok) placed += 1;
+    else errors.push((specs[i].title || '') + ': ' + ((r && r.message) || 'fail'));
+  }
+  return { ok: placed > 0, charts: placed, chartTop: chartTop, errors: errors, srcRows: nSrc };
 }
 
 function unpaidStyleTrendSheet_(tr) {
@@ -7046,7 +7072,7 @@ function unpaidWriteTrendMonth_(tr, monthName, st) {
       tr.getRange(row, 6).setFormula(unpaidSparkFormula_(row));
       try {
         var bodyNow = tr.getRange(b.head + 1, 1, b.n, 11).getValues();
-        unpaidWriteTrendChartSource_(tr, bodyNow, b.head);
+        unpaidWriteTrendChartSource_(tr, bodyNow);
       } catch (eC) {}
       return;
     }
@@ -7057,7 +7083,7 @@ function unpaidPaintTrend_(tr, body, totals, latest) {
   var t = dnTheme_();
   unpaidClearTrendCharts_(tr);
   var wipeRows = Math.min(tr.getMaxRows(), 90);
-  var wipeCols = Math.min(tr.getMaxColumns(), UNPAID_TREND_CHART_SRC_COL_ + 10);
+  var wipeCols = tr.getMaxColumns();
   try { tr.getRange(1, 1, wipeRows, wipeCols).breakApart(); } catch (e0) {}
   try { tr.getRange(1, 1, wipeRows, wipeCols).clearContent(); } catch (e1) {}
   try { tr.getRange(1, 1, wipeRows, wipeCols).clearDataValidations(); } catch (e2) {}
@@ -7109,7 +7135,7 @@ function unpaidPaintTrend_(tr, body, totals, latest) {
       .setFontSize(10).setFontColor(t.ash).setFontWeight('bold')
       .setHorizontalAlignment('left').setBackground(t.paper);
   }
-  unpaidWriteTrendChartSource_(tr, body, head);
+  unpaidWriteTrendChartSource_(tr, body);
   unpaidStyleTrendSheet_(tr);
   if (latestRate !== '' && latestRate < 0.5) {
     tr.getRange(3, 9, 1, 2).setBackground(t.blood).setFontColor(t.paper);
@@ -7147,7 +7173,7 @@ function unpaidFillTrendAll_(ss) {
       latest = { name: name, st: st };
       scanned.push({ name: name, ok: true, n: st.n, sp: st.sp, sr: st.sr });
     }
-    unpaidPaintTrend_(tr, body, totals, latest);
+    var painted = unpaidPaintTrend_(tr, body, totals, latest);
     var bNow = unpaidTrendTableBounds_(tr);
     return {
       ok: true,
@@ -7158,6 +7184,9 @@ function unpaidFillTrendAll_(ss) {
       sheet: tr,
       gid: tr.getSheetId(),
       charts: tr.getCharts().length,
+      chartTop: painted && painted.chartTop,
+      chartErrors: painted && painted.errors,
+      srcRows: painted && painted.srcRows,
       headRow: bNow.head,
       tableLast: bNow.last,
       a1: String(tr.getRange('A1').getDisplayValue() || ''),
