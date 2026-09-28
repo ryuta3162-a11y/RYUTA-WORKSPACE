@@ -3,6 +3,8 @@
 他PC・別担当でも同じ構成を復元・理解するための共有データです。  
 機械可読版: [`workspace-sources.json`](./workspace-sources.json)
 
+**2026-09-28 時点の保存**: [`SNAPSHOT_2026-09-28.md`](./SNAPSHOT_2026-09-28.md)（会社PC確認用。コードは PR [#12](https://github.com/ryuta3162-a11y/RYUTA-WORKSPACE/pull/12) ブランチ `cursor/hub-field-7e8b`）
+
 ## 方針
 
 - **集約用**: RYUTA Workspace（このリポジトリの GAS が紐づくスプシ）
@@ -81,7 +83,7 @@ https://script.google.com/macros/s/AKfycbzMELimQThNdPUShwo2_KBzJd8kGy9BNdRyOYNgu
 | `経堂_入会` / `経堂_退会` | 受付状況表 `入会・退会_データ` の A:F / G:L | `IMPORTRANGE`（白黒整形のみ）。E列「メールID」は Gmail の通知メールID（重複防止用）。F列「メールアドレス」は入会メールの宛先（受付状況表 GAS が `入会_メールアドレス` 対応表から毎回再生成）。見学体験申請 J列はこのF列でもメール一致を見る。退会キャンセル列は6ヶ月継続の途中退会がほぼ無くなったため Workspace では扱わない（受付状況表側では今後使う可能性があるので残す） |
 | `マシンレクチャー申込` | 同名 | `IMPORTRANGE` |
 | `未納管理` | 26年度未納管理ドライブ【経堂】（`10vpQRDf…`）の月タブ | 値コピー（B1 で月切替）。チェック・会員名・回収金額は installed onEdit で元へ自動写し戻し。メニュー「チェックを元へ反映」は予備 |
-| `未納管理_推移` | 同上の全月タブ | 1行＝1ヶ月の集計（件数・未納総額・回収額・回収率・カテゴリ別回収率）。表は KPI の直下、グラフは表の下（被せない）。`setupUnpaidView` / `fillUnpaidTrendNow` |
+| `未納管理_推移` | 同上の全月タブ | 1行＝1ヶ月の集計（件数・未納総額・回収額・回収率・カテゴリ別回収率）。表は KPI の直下、その下に SPARKLINE の 2×2（総額と回収額／回収率／件数／1・2・貸倒）。埋め込みグラフは空枠になるので使わない。`setupUnpaidView` / `fillUnpaidTrendNow` |
 | `入会者一覧＋自動メール管理` | 経堂マシンレクチャー／FIT365 の同名シート | A:E / F:J を一塊で値コピー。チェック・名前・メール・入会日は未納と同じ installed onEdit で元へ自動写し戻し（メール一致。メール変更時は変更前で照合）。メニュー「チェックを元へ反映」は予備 |
 | `トップ` | 作業の目次。上段＝シート名（`#gid=` でそのタブへ）。下段＝`元のシートを開く ↗`（元ブック）。墨の細い行が陰影。閉じるときはタブを右クリック→非表示 | HYPERLINK |
 | `URL一覧` | リンク索引（先頭に口コミ付与アプリ） | 値 |
@@ -91,7 +93,8 @@ https://script.google.com/macros/s/AKfycbzMELimQThNdPUShwo2_KBzJd8kGy9BNdRyOYNgu
 
 | 用途 | URL |
 |------|-----|
-| Workspace GAS Web App（本番） | https://script.google.com/macros/s/AKfycbzMELimQThNdPUShwo2_KBzJd8kGy9BNdRyOYNgu_sg41t2SleVRiWXFztZJ48e2l9L/exec |
+| Workspace GAS Web App（本番・version 200 凍結・古い） | https://script.google.com/macros/s/AKfycbzMELimQThNdPUShwo2_KBzJd8kGy9BNdRyOYNgu_sg41t2SleVRiWXFztZJ48e2l9L/exec |
+| Workspace GAS HEAD（clasp push 先。ライブシートはこのコード） | https://script.google.com/macros/s/AKfycbztH7Vs24mmNisVosxyKdy35a82qAh2JlUqWUnDwFY/exec |
 | EAST 口コミ付与アプリ | https://script.google.com/a/macros/okamoto-group.co.jp/s/AKfycbwu1eUxJzePa494p-343axfwgUcnHATf-db7FKw806rXZQsHn_ea0uHc6415yw-RZ80/exec |
 
 ## GAS プロジェクト
@@ -119,7 +122,7 @@ https://script.google.com/macros/s/AKfycbzMELimQThNdPUShwo2_KBzJd8kGy9BNdRyOYNgu
 | `fillUnpaidTrendNow` | 推移シートを実データ月で描き直し（表の下にグラフ） |
 | `restyleHubLook` | 見た目再適用。経堂マスタでは当月紹介・当月学割と P列以降の当月パネルも冪等に載せる |
 | `setupMasterIntroKpi` | 経堂マスタの当月移籍の右に「当月紹介」（`販促_紹介・ペア入会` の当月申請件数）を追加 |
-| `setupMasterKpiCharts` | 経堂マスタ：5ヶ月の入会／退会／月初／月末の計画対実績グラフ（表の数値に連動） |
+| `setupMasterKpiCharts` | 経堂マスタ K〜O：5ヶ月の入会／退会／月初／月末の計画対実績（表の数値に連動する SPARKLINE カード。埋め込みグラフは使わない） |
 | `hubOpen&name=` | 指定シートだけ表示して開く |
 | `hubClose` | トップ以外を隠す |
 | `setupKengakuJoinLive&mode=` | 見学体験申請の入会判定（`joinDate`=K列入会日／`joinLabel`=J列／`emailJoin`=経堂_入会・退会の列拡張／`leaveList`=経堂マスタ D9 今日の退会者） |
@@ -155,7 +158,8 @@ https://script.google.com/macros/s/AKfycbzMELimQThNdPUShwo2_KBzJd8kGy9BNdRyOYNgu
   - 会員名の右に 4列（入会日・入会区分・未納開始・入会から未納）。`経堂_入会` を氏名（空白除去）で照合し、未納開始月末までの最新入会を採用。入会から未納が2ヶ月以内は赤字、見つからない人は「該当なし」（2023/10 以前の入会・他店番号など）
   - 見方: 左の区分色 → 氏名 → 赤い支払額＝未回収。回収済みは灰。合計より下の備考はそのまま残す。配色は `#EDEDED` / `#171717` / `#444444` / `#DA0037`
   - タブ色は4色のみ（通常＝墨 `#171717`、未納＝アクセント `#DA0037`、バックアップ等＝補助 `#444444`）。見た目再適用は `restyleHubLook`（数式は触らない）。各作業シートに `元のシートを開く ↗`（未納は左上 A2 の「元の未納管理ドライブを開く ↗」、見学・会員動向は行1の右端、他は行1左上）
-- **`未納管理_推移`**: KPI（1〜3行）の直下に月別表、その下に4つのグラフ（未納総額と回収額／回収率／件数／1・2・貸倒）。グラフは表に被せない。`全体回収率バー` は E列の回収率の横棒。貸倒候補は A列の「貸倒」「貸し倒れ」両方。該当者がいなければ空欄。累計の回収額は各月の単純合計（繰越で二重計上の可能性あり）
+- **`未納管理_推移`**: KPI（1〜3行）の直下に月別表、その下に SPARKLINE カード 2×2（未納総額と回収額／回収率／件数／1・2・貸倒）。表の数値列を直接参照。Sheets 埋め込みグラフは空枠になるので置かない。`全体回収率バー` は E列の回収率の横棒。貸倒候補は A列の「貸倒」「貸し倒れ」両方。該当者がいなければ空欄。累計の回収額は各月の単純合計（繰越で二重計上の可能性あり）
+- **経堂マスタの5ヶ月グラフ**: K〜O に入会／退会／月初／月末。上段＝計画・下段＝実績の SPARKLINE。月は `5月` 形式。J列は対前月の数字（「5ヶ月」矢印は使わない）。P列以降の当月の申請には被せない
 - **写し戻し**: 未納のチェック・会員名・回収金額、入会者一覧のチェック・名前・メール・入会日は installed onEdit（`unpaidOnEditInstalled_`）で元スプシへ自動送信。1行だけ送るので重くない。メニュー「チェックを元へ反映」は予備。支払額など未納の元金額は Workspace からは変えない
 - **集計ロジック**（`unpaidStatsLet_`）: 新旧レイアウトが混在（26年3月以前は会員番号がB列・区分列なし）するため、列は見出し文字（会員番号／支払額／総額／回収金額|入金金額|レジ打ち金額）で探す。対象行＝会員番号あり・支払額>0。回収＝回収金額、空なら右隣3列に「〇〇入金」があれば支払額を回収扱い。元ファイル右上の独自集計欄とは定義が違うので数字は一致しない。25年11月の区分表記は「貸し倒れ」
 

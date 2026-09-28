@@ -1,5 +1,11 @@
 {
-  "updated": "2026-09-27",
+  "updated": "2026-09-28",
+  "snapshot": {
+    "memo": "docs/SNAPSHOT_2026-09-28.md",
+    "pr": "https://github.com/ryuta3162-a11y/RYUTA-WORKSPACE/pull/12",
+    "branch": "cursor/hub-field-7e8b",
+    "note": "Live hub uses SPARKLINE cards (not embedded charts). Frozen web app stays at version 200; HEAD is clasp push."
+  },
   "purpose": "RYUTA Workspace aggregation hub — shared spreadsheet IDs and sync map for handoff",
   "policy": {
     "sync": "IMPORTRANGE",
@@ -18,7 +24,9 @@
     "localRoot": "gas-remote",
     "serverFile": "gas-remote/r.js",
     "webAppExec": "https://script.google.com/macros/s/AKfycbzMELimQThNdPUShwo2_KBzJd8kGy9BNdRyOYNgu_sg41t2SleVRiWXFztZJ48e2l9L/exec",
+    "webAppHead": "https://script.google.com/macros/s/AKfycbztH7Vs24mmNisVosxyKdy35a82qAh2JlUqWUnDwFY/exec",
     "deploymentId": "AKfycbzMELimQThNdPUShwo2_KBzJd8kGy9BNdRyOYNgu_sg41t2SleVRiWXFztZJ48e2l9L",
+    "headDeploymentId": "AKfycbztH7Vs24mmNisVosxyKdy35a82qAh2JlUqWUnDwFY",
     "executeAs": "USER_DEPLOYING",
     "setupApis": [
       "setupPromoImport",
@@ -30,6 +38,8 @@
       "inspectBook",
       "rebuildUrlIndex",
       "setupUnpaidView",
+      "fillUnpaidTrendNow",
+      "setupMasterKpiCharts",
       "setupKengakuJoinLive",
       "readRange",
       "peekExternal"
@@ -44,7 +54,7 @@
       "role": "unpaid_billing_source",
       "sourceSheets": ["25年8月 ... 26年9月（月ごとのタブ）"],
       "workspaceSheets": ["未納管理", "未納管理_推移"],
-      "sync": "IMPORTRANGE",
+      "sync": "value copy from month tabs + SPARKLINE cards on 未納管理_推移",
       "owner": "other (r-kusaka is editor)",
       "setupApi": "setupUnpaidView"
     },

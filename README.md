@@ -23,6 +23,7 @@ PC 向けの黒背景アプリ。Chrome の「アプリをインストール」�
 | メイン UI | `web/`（PWA） |
 | 日報・スプシ・Gmail | `gas/Code.gs` / 本番は `gas-remote/` |
 | **集約ハブ（スプシID・同期マップ）** | [`docs/WORKSPACE_HUB.md`](docs/WORKSPACE_HUB.md) / [`docs/workspace-sources.json`](docs/workspace-sources.json) |
+| **2026-09-28 保存メモ（会社PC）** | [`docs/SNAPSHOT_2026-09-28.md`](docs/SNAPSHOT_2026-09-28.md) / PR [#12](https://github.com/ryuta3162-a11y/RYUTA-WORKSPACE/pull/12) |
 
 ## セットアップ
 
