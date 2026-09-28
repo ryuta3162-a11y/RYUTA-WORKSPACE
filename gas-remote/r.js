@@ -54,6 +54,8 @@ function onOpen() {
   ui.createMenu('今日の作業')
     .addItem('トップを表示', 'hubShowHome_')
     .addItem('見た目を整える', 'applyFourColorFromMenu')
+    .addItem('未納を再取得', 'fillUnpaidFromMenu')
+    .addItem('未納のチェックを元へ反映', 'flushUnpaidFromMenu')
     .addToUi();
   ui.createMenu('数値更新')
     .addItem('受付状況表の数値を更新（入会・退会・OP）', 'refreshReceptionNumbersFromMenu')
@@ -67,6 +69,7 @@ function onOpen() {
 
 function onEdit(e) {
   try { masterMonthTabSelect_(e); } catch (err) {}
+  try { unpaidOnEditSimple_(e); } catch (errU) {}
 }
 
 function onSelectionChange(e) {
@@ -2023,6 +2026,9 @@ function handleApiGet_(e) {
     }
     if (api === 'fillUnpaidNow') {
       return jsonOutput_(fillUnpaidNow_());
+    }
+    if (api === 'flushUnpaidQueue') {
+      return jsonOutput_(unpaidFlushQueue_());
     }
     if (api === 'styleUnpaidNow') {
       return jsonOutput_(styleUnpaidNow_());
@@ -5788,31 +5794,197 @@ function unpaidPrepareDisplay_(vals) {
       if (hasData) row[0] = unpaidShortCat_(cat);
     }
     if (r >= 3 && row[0]) row[0] = unpaidShortCat_(row[0]);
-    for (c = 0; c < row.length; c++) {
-      if (typeof row[c] === 'boolean') row[c] = row[c] ? '☑' : '☐';
-    }
     out.push(row);
   }
   return out;
 }
 
-function unpaidReadMonthValues_(src, monthName) {
+function unpaidDetectBoolCols_(vals) {
+  var cols = [];
+  if (!vals || vals.length < 4) return cols;
+  var width = vals[0].length;
+  var c;
+  var r;
+  for (c = 0; c < width; c++) {
+    var nBool = 0;
+    for (r = 3; r < vals.length; r++) {
+      if (typeof vals[r][c] === 'boolean') nBool += 1;
+    }
+    if (nBool > 0) cols.push(c);
+  }
+  return cols;
+}
+
+function unpaidIsPushCol_(col1, boolCols) {
+  if (col1 === UNPAID_REC_COL_) return true;
+  return boolCols.indexOf(col1 - 1) >= 0;
+}
+
+function unpaidApplyCheckboxValidations_(destSh, vals) {
+  var boolCols = unpaidDetectBoolCols_(vals);
+  var r0 = UNPAID_DATA_ROW_ + 2;
+  var n = Math.max(vals.length - 2, 1);
+  if (r0 + n - 1 > destSh.getMaxRows()) n = destSh.getMaxRows() - r0 + 1;
+  var rule = SpreadsheetApp.newDataValidation().requireCheckbox().setAllowInvalid(true).build();
+  var i;
+  for (i = 0; i < boolCols.length; i++) {
+    destSh.getRange(r0, boolCols[i] + 1, n, 1).setDataValidation(rule);
+  }
+  try {
+    PropertiesService.getDocumentProperties().setProperty('unpaidBoolCols', JSON.stringify(boolCols));
+  } catch (eP) {}
+  return boolCols;
+}
+
+function unpaidBoolColsStored_() {
+  try {
+    var raw = PropertiesService.getDocumentProperties().getProperty('unpaidBoolCols');
+    if (raw) return JSON.parse(raw);
+  } catch (eP) {}
+  return [13, 14, 15, 16, 17, 18, 19];
+}
+
+var UNPAID_QUEUE_SHEET_ = '未納_同期';
+
+function unpaidQueueSheet_(ss) {
+  ss = ss || openWorkspaceSpreadsheet_();
+  var sh = ss.getSheetByName(UNPAID_QUEUE_SHEET_);
+  if (!sh) {
+    sh = ss.insertSheet(UNPAID_QUEUE_SHEET_);
+    sh.hideSheet();
+    sh.getRange(1, 1, 1, 7).setValues([['ts', 'action', 'month', 'srcRow', 'srcCol', 'value', 'status']]);
+    sh.setTabColor(dnTheme_().ash);
+  }
+  try { sh.hideSheet(); } catch (eH) {}
+  return sh;
+}
+
+function unpaidOnEditSimple_(e) {
+  if (!e || !e.range) return;
+  var sh = e.range.getSheet();
+  if (!sh || sh.getName() !== UNPAID_SHEET_) return;
+  if (e.range.getRow() === 1 && e.range.getColumn() === 2) return;
+  if (e.range.getRow() < UNPAID_DATA_ROW_ + 2) return;
+  unpaidQueueRange_(sh, e.range);
+}
+
+function unpaidQueueRange_(sh, range) {
+  var month = String(sh.getRange('B1').getDisplayValue() || '').trim();
+  if (!month) return;
+  var boolCols = unpaidBoolColsStored_();
+  var vals = range.getValues();
+  var q = unpaidQueueSheet_(sh.getParent());
+  var last = Math.max(q.getLastRow(), 1);
+  var rows = [];
+  var r;
+  var c;
+  for (r = 0; r < vals.length; r++) {
+    for (c = 0; c < vals[r].length; c++) {
+      var destR = range.getRow() + r;
+      var destC = range.getColumn() + c;
+      if (destR < UNPAID_DATA_ROW_ + 2) continue;
+      if (!unpaidIsPushCol_(destC, boolCols)) continue;
+      rows.push([
+        new Date(),
+        'push',
+        month,
+        destR - UNPAID_DATA_ROW_ + 1,
+        destC,
+        JSON.stringify(vals[r][c]),
+        'queued'
+      ]);
+    }
+  }
+  if (!rows.length) return;
+  q.getRange(last + 1, 1, rows.length, 7).setValues(rows);
+}
+
+function unpaidFlushQueue_(ss) {
+  ss = ss || openWorkspaceSpreadsheet_();
+  var q = ss.getSheetByName(UNPAID_QUEUE_SHEET_);
+  if (!q || q.getLastRow() < 2) return { ok: true, pushed: 0, pending: 0 };
+  var n = q.getLastRow() - 1;
+  var data = q.getRange(2, 1, n, 7).getValues();
+  var pending = [];
+  var i;
+  for (i = 0; i < data.length; i++) {
+    if (String(data[i][6] || '') === 'queued') pending.push({ i: i, row: data[i] });
+  }
+  if (!pending.length) return { ok: true, pushed: 0, pending: 0 };
+  var byMonth = {};
+  for (i = 0; i < pending.length; i++) {
+    var m = String(pending[i].row[2] || '');
+    if (!byMonth[m]) byMonth[m] = [];
+    byMonth[m].push(pending[i]);
+  }
+  var src = SpreadsheetApp.openById(UNPAID_SOURCE_ID_);
+  var pushed = 0;
+  var errors = 0;
+  var monthName;
+  for (monthName in byMonth) {
+    if (!byMonth.hasOwnProperty(monthName) || !monthName) continue;
+    var srcSh = src.getSheetByName(monthName);
+    var items = byMonth[monthName];
+    var j;
+    for (j = 0; j < items.length; j++) {
+      var it = items[j];
+      var srcRow = Number(it.row[3]);
+      var srcCol = Number(it.row[4]);
+      var val = it.row[5];
+      try { val = JSON.parse(val); } catch (eJ) {}
+      try {
+        if (!srcSh || srcRow < 3 || srcCol < 1) throw new Error('bad target');
+        srcSh.getRange(srcRow, srcCol).setValue(val);
+        q.getRange(it.i + 2, 7).setValue('done');
+        pushed += 1;
+      } catch (eW) {
+        q.getRange(it.i + 2, 7).setValue('error: ' + String(eW && eW.message ? eW.message : eW));
+        errors += 1;
+      }
+    }
+  }
+  SpreadsheetApp.flush();
+  return { ok: errors === 0, pushed: pushed, errors: errors, pending: pending.length - pushed };
+}
+
+function unpaidReadMonthPack_(src, monthName) {
   var srcSh = src.getSheetByName(monthName);
   if (!srcSh) return null;
   var lastR = Math.min(Math.max(srcSh.getLastRow(), 3), 400);
   var lastC = Math.min(Math.max(srcSh.getLastColumn(), 1), 37);
-  return srcSh.getRange(1, 1, lastR, lastC).getValues();
+  return {
+    sh: srcSh,
+    vals: srcSh.getRange(1, 1, lastR, lastC).getValues(),
+    lastR: lastR,
+    lastC: lastC
+  };
+}
+
+function unpaidReadMonthValues_(src, monthName) {
+  var pack = unpaidReadMonthPack_(src, monthName);
+  return pack ? pack.vals : null;
 }
 
 function unpaidFillFromSource_(destSh) {
   var monthName = String(destSh.getRange('B1').getDisplayValue() || '').trim();
   if (!monthName) return { ok: false, message: 'B1 empty' };
+  var flushed = { ok: true, pushed: 0 };
+  try { flushed = unpaidFlushQueue_(destSh.getParent()); } catch (eQ) { flushed = { ok: false, message: String(eQ) }; }
   var src = SpreadsheetApp.openById(UNPAID_SOURCE_ID_);
-  var vals = unpaidReadMonthValues_(src, monthName);
-  if (!vals) return { ok: false, message: 'no sheet ' + monthName };
+  var pack = unpaidReadMonthPack_(src, monthName);
+  if (!pack) return { ok: false, message: 'no sheet ' + monthName, flushed: flushed };
+  var vals = pack.vals;
   var shown = unpaidPrepareDisplay_(vals);
   destSh.getRange(UNPAID_DATA_ROW_, 1).clearContent();
   destSh.getRange(UNPAID_DATA_ROW_, 1, shown.length, shown[0].length).setValues(shown);
+  try {
+    pack.sh.getRange(1, 1, pack.lastR, pack.lastC).copyTo(
+      destSh.getRange(UNPAID_DATA_ROW_, 1),
+      SpreadsheetApp.CopyPasteType.PASTE_DATA_VALIDATION,
+      false
+    );
+  } catch (eVal) {}
+  var boolCols = unpaidApplyCheckboxValidations_(destSh, vals);
   try {
     destSh.getRange(UNPAID_DATA_ROW_, UNPAID_PAY_COL_, shown.length, 1).setNumberFormat('¥#,##0');
     destSh.getRange(UNPAID_DATA_ROW_, UNPAID_REC_COL_, shown.length, 1).setNumberFormat('¥#,##0');
@@ -5836,6 +6008,12 @@ function unpaidFillFromSource_(destSh) {
     sp: st.sp,
     sr: st.sr,
     nr: st.nr,
+    checks: boolCols,
+    flushed: flushed,
+    n7check: (function () {
+      var dv = destSh.getRange('N7').getDataValidation();
+      return dv ? String(dv.getCriteriaType()) : '';
+    })(),
     stats: st
   };
 }
@@ -5845,19 +6023,46 @@ function ensureUnpaidEditTrigger_() {
   var triggers = ScriptApp.getProjectTriggers();
   var i;
   for (i = 0; i < triggers.length; i++) {
-    if (triggers[i].getHandlerFunction() === 'unpaidOnEditInstalled_') return;
+    if (triggers[i].getHandlerFunction() === 'unpaidOnEditInstalled_') return { ok: true, existed: true };
   }
   ScriptApp.newTrigger('unpaidOnEditInstalled_').forSpreadsheet(ss).onEdit().create();
+  return { ok: true, created: true };
 }
 
 function unpaidOnEditInstalled_(e) {
   if (!e || !e.range) return;
   var sh = e.range.getSheet();
   if (!sh || sh.getName() !== UNPAID_SHEET_) return;
-  if (e.range.getRow() !== 1 || e.range.getColumn() !== 2) return;
-  unpaidFillFromSource_(sh);
-  styleUnpaidView_(sh);
-  styleUnpaidDashboard_(sh);
+  if (e.range.getRow() === 1 && e.range.getColumn() === 2) {
+    unpaidFillFromSource_(sh);
+    styleUnpaidView_(sh);
+    styleUnpaidDashboard_(sh);
+    unpaidHideNoiseCols_(sh);
+    return;
+  }
+  try { unpaidFlushQueue_(sh.getParent()); } catch (eF) {}
+}
+
+function fillUnpaidFromMenu() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet() || openWorkspaceSpreadsheet_();
+  var sh = ss.getSheetByName(UNPAID_SHEET_);
+  if (!sh) {
+    ss.toast('未納管理シートがありません', '未納', 8);
+    return { ok: false };
+  }
+  try { ensureUnpaidEditTrigger_(); } catch (eT) {}
+  var filled = unpaidFillFromSource_(sh);
+  try { styleUnpaidView_(sh); styleUnpaidDashboard_(sh); unpaidHideNoiseCols_(sh); } catch (eS) {}
+  ss.toast(filled && filled.ok ? ('再取得しました（' + filled.d2 + '）') : String(filled && filled.message ? filled.message : '失敗'), '未納', 8);
+  return filled;
+}
+
+function flushUnpaidFromMenu() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet() || openWorkspaceSpreadsheet_();
+  try { ensureUnpaidEditTrigger_(); } catch (eT) {}
+  var r = unpaidFlushQueue_(ss);
+  ss.toast(r.pushed ? ('元ファイルへ ' + r.pushed + ' 件送りました') : (r.errors ? '送れなかったマスがあります' : '送るチェックはありません'), '未納', 8);
+  return r;
 }
 
 /**
@@ -5906,7 +6111,7 @@ function unpaidTrendRowFormula_(row) {
 function unpaidHideNoiseCols_(sh) {
   var maxC = sh.getMaxColumns();
   try { sh.showColumns(1, maxC); } catch (eShow) {}
-  var hideFrom = UNPAID_REC_COL_ + 2;
+  var hideFrom = 25;
   if (maxC >= hideFrom) {
     try { sh.hideColumns(hideFrom, maxC - hideFrom + 1); } catch (eTail) {}
   }
@@ -5997,6 +6202,7 @@ function applyUnpaidScanLook_(sh) {
   sh.setColumnWidth(9, 110);
   sh.setColumnWidths(10, 2, 92);
   sh.setColumnWidths(12, 5, 100);
+  sh.setColumnWidths(14, 7, 44);
   sh.setColumnWidth(25, 104);
   sh.setColumnWidth(26, 92);
   try { sh.setRowHeightsForced(UNPAID_DATA_ROW_ + 2, Math.min(Math.max(sh.getLastRow() - UNPAID_DATA_ROW_ - 1, 10), 400), 24); } catch (eH) {}
@@ -6068,7 +6274,7 @@ function styleUnpaidDashboard_(sh) {
   sh.getRange('G1:G3').setBackground(t.blood).setFontColor(t.paper);
   sh.getRange('G1').setFontColor(t.paper);
   sh.getRange('G3').setFontColor(t.paper);
-  sh.getRange('A4:C4').merge().setValue('未回収の支払額が赤。回収済みは灰。')
+  sh.getRange('A4:C4').merge().setValue('チェックと回収金額はこちらで編集できます。元の未納管理ドライブに保存します。')
     .setFontSize(8).setFontColor(t.ash).setHorizontalAlignment('left').setFontWeight('normal')
     .setBackground(t.paper);
 
@@ -6153,7 +6359,7 @@ function setupUnpaidTrend_(ss, options) {
 }
 
 function applyUnpaidNotes_(sh, tr) {
-    sh.getRange('A1').setNote('☑☐ は表示だけです。クリックしても元ファイルは変わりません。操作は「元の未納管理ドライブ」で。対応チェック列は右に隠してあります。');
+    sh.getRange('A1').setNote('レジ送信・ゲートストップ・SMS のチェックは Workspace から押せます。元の未納管理ドライブに保存します。支払額など元データは変えません。');
   sh.getRange('B1').setNote('元ファイルの月タブ名です。いまの月が一番上、あとは新しい順です。');
   sh.getRange('D1').setNote('会員番号があり、支払額が1円以上の行の件数。');
   sh.getRange('E1').setNote('支払額の合計（手数料は含まない）。');
@@ -6173,8 +6379,12 @@ function fillUnpaidNow_() {
     var ss = openWorkspaceSpreadsheet_();
     var sh = ss.getSheetByName(UNPAID_SHEET_);
     if (!sh) return { ok: false, message: 'missing 未納管理' };
+    try { ensureUnpaidEditTrigger_(); } catch (eT) {}
     var filled = unpaidFillFromSource_(sh);
+    try { styleUnpaidView_(sh); } catch (eV) {}
     try { styleUnpaidDashboard_(sh); } catch (eD) {}
+    try { unpaidHideNoiseCols_(sh); } catch (eH) {}
+    try { sh.setColumnWidths(14, 7, 44); } catch (eW) {}
     var tr = ss.getSheetByName(UNPAID_TREND_SHEET_);
     if (tr && filled && filled.ok && filled.stats) {
       try { unpaidWriteTrendMonth_(tr, filled.month, filled.stats); } catch (eTr) {}
@@ -6206,6 +6416,7 @@ function styleUnpaidNow_() {
     sh.setColumnWidths(5, 4, 88);
     sh.setColumnWidth(9, 110);
     sh.setColumnWidths(10, 2, 92);
+    sh.setColumnWidths(14, 7, 44);
     sh.setFrozenColumns(4);
     sh.setFrozenRows(UNPAID_DATA_ROW_ + 1);
     sh.setHiddenGridlines(true);
@@ -6223,8 +6434,7 @@ function styleUnpaidNow_() {
 
 /**
  * 未納管理ドライブ【経堂】の月タブを、B1 の年月選択で切り替えて表示するシートを作る。
- * 1〜3行目＝選択月の集計、5行目〜＝元シートの値コピー。別タブ「未納管理_推移」に全月の集計。
- * 元ファイルは開いて読むだけ（書き換えない）。
+ * 1〜3行目＝選択月の集計、5行目〜＝元シートと同じマス（チェック可）。チェックは元ファイルへ保存。
  */
 function setupUnpaidView_() {
   try {
@@ -6279,6 +6489,7 @@ function setupUnpaidView_() {
     sh.setColumnWidth(9, 110);
     sh.setColumnWidths(10, 2, 92);
     sh.setColumnWidths(12, 5, 100);
+    sh.setColumnWidths(14, 7, 44);
     sh.setColumnWidth(25, 104);
     sh.setColumnWidth(26, 92);
     unpaidHideNoiseCols_(sh);
