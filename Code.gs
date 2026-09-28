@@ -1493,6 +1493,7 @@ function syncReceptionLiveTriggered_() {
   try { syncReceptionLiveSheet_(); } catch (e1) {}
   try { syncReceptionJoinMirrors_(); } catch (e2) {}
   try { joinListRefresh_(); } catch (e3) {}
+  try { unpaidFillTrendAll_(); } catch (e4) {}
 }
 
 
@@ -2268,6 +2269,9 @@ function handleApiGet_(e) {
     }
     if (api === 'fillUnpaidNow') {
       return jsonOutput_(fillUnpaidNow_());
+    }
+    if (api === 'fillUnpaidTrendNow') {
+      return jsonOutput_(unpaidFillTrendAll_());
     }
     if (api === 'flushUnpaidQueue') {
       var ssFlush = openWorkspaceSpreadsheet_();
@@ -4663,7 +4667,7 @@ function hubEnsureSourceBanner_(sh) {
   if (!sh) return;
   var n = sh.getName();
   if (n === HUB_HOME_SHEET_ || n === UNPAID_SHEET_ || n === '経堂マスタ' || n === '学割' || n === '販促_学校関係者') return;
-  if (n === JOIN_LIST_SHEET_) return;
+  if (n === JOIN_LIST_SHEET_ || n === UNPAID_TREND_SHEET_) return;
   if (hubIsAlwaysHidden_(n) && n !== UNPAID_TREND_SHEET_) return;
   var src = hubSourceForName_(n);
   if (!src) return;
@@ -4674,11 +4678,7 @@ function hubEnsureSourceBanner_(sh) {
     hubPaintOpenSourceCell_(sh, 1, 1, span, src);
     return;
   }
-  if (n === UNPAID_TREND_SHEET_) {
-    hubPaintOpenSourceCell_(sh, 1, 12, 1, src);
-    sh.setColumnWidth(12, 168);
-    return;
-  }
+  if (n === UNPAID_TREND_SHEET_) return;
   if (n === '見学体験申請') {
     hubPaintOpenSourceCell_(sh, 1, 12, 2, src);
     sh.setColumnWidth(12, 168);
@@ -5762,30 +5762,8 @@ function restyleKyodoMasterLook_(sh) {
 }
 
 function restyleUnpaidTrendLook_(tr) {
-  var t = dnTheme_();
-  var last = Math.max(tr.getLastRow(), 3);
-  tr.getRange(1, 1, last, 11).setBackground(t.paper).setFontColor(t.ink).setFontFamily('Noto Sans JP').setFontStyle('italic')
-    .setHorizontalAlignment('center');
-  tr.getRange(1, 1, 1, 11).setBackground(t.ink).setFontColor(t.paper).setFontWeight('bold')
-    .setBorder(false, false, true, false, false, false, t.blood, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
-  tr.getRange(2, 1, 1, 11).setBackground(t.cream).setFontWeight('bold');
-  tr.getRange(1, 6, 1, 1).setBackground(t.blood).setFontColor(t.paper);
-  tr.setTabColor(t.blood);
-  try {
-    var body = Math.max(last - 2, 1);
-    var rng = tr.getRange(3, 2, body, 1);
-    var forms = rng.getFormulas();
-    var i;
-    var changed = false;
-    for (i = 0; i < forms.length; i++) {
-      var s = String(forms[i][0] || '');
-      if (s.indexOf('#333333') !== -1) {
-        forms[i][0] = s.replace(/#333333/g, t.blood);
-        changed = true;
-      }
-    }
-    if (changed) rng.setFormulas(forms);
-  } catch (eSp) {}
+  try { unpaidStyleTrendSheet_(tr); } catch (e0) {}
+  try { unpaidEnsureTrendCharts_(tr); } catch (e1) {}
 }
 
 function restyleUrlIndexLook_(sh) {
@@ -6289,10 +6267,14 @@ function unpaidOnEditInstalled_(e) {
   var sh = e.range.getSheet();
   if (!sh || sh.getName() !== UNPAID_SHEET_) return;
   if (e.range.getRow() === 1 && e.range.getColumn() === 2) {
-    unpaidFillFromSource_(sh);
+    var filledEd = unpaidFillFromSource_(sh);
     styleUnpaidView_(sh);
     styleUnpaidDashboard_(sh);
     unpaidHideNoiseCols_(sh);
+    try {
+      var trEd = sh.getParent().getSheetByName(UNPAID_TREND_SHEET_);
+      if (trEd && filledEd && filledEd.ok && filledEd.stats) unpaidWriteTrendMonth_(trEd, filledEd.month, filledEd.stats);
+    } catch (eTr) {}
     return;
   }
   try { unpaidFlushQueue_(sh.getParent()); } catch (eF) {}
@@ -6308,10 +6290,12 @@ function fillUnpaidFromMenu() {
   try { ensureUnpaidEditTrigger_(); } catch (eT) {}
   var filled = unpaidFillFromSource_(sh);
   try { styleUnpaidView_(sh); styleUnpaidDashboard_(sh); unpaidHideNoiseCols_(sh); } catch (eS) {}
+  var trend = null;
+  try { trend = unpaidFillTrendAll_(ss); } catch (eTr) { trend = { ok: false, message: String(eTr) }; }
   var join = null;
   try { join = joinListRefresh_(ss.getSheetByName(JOIN_LIST_SHEET_)); } catch (eJ) {}
   ss.toast(filled && filled.ok ? ('再取得しました（' + filled.d2 + '）') : String(filled && filled.message ? filled.message : '失敗'), '再取得', 8);
-  return { unpaid: filled, joinList: join };
+  return { unpaid: filled, trend: trend, joinList: join };
 }
 
 function flushUnpaidFromMenu() {
@@ -6546,94 +6530,424 @@ function styleUnpaidDashboard_(sh) {
   sh.setRowHeight(4, 20);
 }
 
+var UNPAID_TREND_HEAD_ROW_ = 21;
+
 function unpaidTrendRowFromStats_(monthName, st) {
-  var rate = st.sp ? st.sr / st.sp : '';
+  st = st || { n: 0, sp: 0, sr: 0, nr: 0, kone: { pay: 0, rec: 0 }, ktwo: { pay: 0, rec: 0 }, kbad: { pay: 0, rec: 0 } };
   var rq = function (k) {
-    return k.pay ? k.rec / k.pay : '対象なし';
+    return k && k.pay ? k.rec / k.pay : '';
   };
-  return [monthName, st.n, st.sp, st.sr, rate, '', st.sp - st.sr, st.nr, rq(st.kone), rq(st.ktwo), rq(st.kbad)];
+  return [
+    monthName,
+    st.n || 0,
+    st.sp || 0,
+    st.sr || 0,
+    st.sp ? st.sr / st.sp : '',
+    '',
+    (st.sp || 0) - (st.sr || 0),
+    st.nr || 0,
+    rq(st.kone),
+    rq(st.ktwo),
+    rq(st.kbad)
+  ];
+}
+
+function unpaidSparkFormula_(row) {
+  return '=IFERROR(IF(N(E' + row + ')<=0,"",SPARKLINE(E' + row + ',{"charttype","bar";"max",1;"color1","' + dnTheme_().blood + '"})),"")';
+}
+
+function unpaidSourceMonthTabs_(src) {
+  var re = /^(\d{2})年(\d{1,2})月$/;
+  var out = [];
+  var sheets = src.getSheets();
+  var i;
+  for (i = 0; i < sheets.length; i++) {
+    var n = sheets[i].getName();
+    var m = n.match(re);
+    if (!m) continue;
+    out.push({
+      name: n,
+      sh: sheets[i],
+      y: 2000 + Number(m[1]),
+      m: Number(m[2])
+    });
+  }
+  out.sort(function (a, b) { return a.y - b.y || a.m - b.m; });
+  return out;
+}
+
+function unpaidReadMonthValuesFast_(srcSh) {
+  if (!srcSh) return null;
+  var lastR = Number(srcSh.getLastRow()) || 0;
+  var lastC = Number(srcSh.getLastColumn()) || 0;
+  if (lastR < 3 || lastC < 1) return null;
+  lastR = Math.min(lastR, 500);
+  lastC = Math.min(lastC, 40);
+  return srcSh.getRange(1, 1, lastR, lastC).getValues();
+}
+
+function unpaidEnsureTrendSheet_(ss) {
+  ss = ss || openWorkspaceSpreadsheet_();
+  var tr = ss.getSheetByName(UNPAID_TREND_SHEET_);
+  if (!tr) tr = ss.insertSheet(UNPAID_TREND_SHEET_);
+  if (tr.getMaxColumns() < 12) tr.insertColumnsAfter(tr.getMaxColumns(), 12 - tr.getMaxColumns());
+  if (tr.getMaxRows() < 80) tr.insertRowsAfter(tr.getMaxRows(), 80 - tr.getMaxRows());
+  try { tr.showSheet(); } catch (eShow) {}
+  return tr;
+}
+
+function unpaidClearTrendCharts_(tr) {
+  var charts = tr.getCharts();
+  var i;
+  for (i = charts.length - 1; i >= 0; i--) {
+    try { tr.removeChart(charts[i]); } catch (e0) {}
+  }
+}
+
+function unpaidChartStyle_() {
+  var t = dnTheme_();
+  return {
+    backgroundColor: t.paper,
+    titleTextStyle: { color: t.ink, fontName: 'Noto Sans JP', italic: true, fontSize: 12, bold: true },
+    legend: { position: 'bottom', textStyle: { color: t.ash, fontName: 'Noto Sans JP', fontSize: 9 } },
+    hAxis: { textStyle: { color: t.ash, fontSize: 8, fontName: 'Noto Sans JP' }, slantedText: true, slantedTextAngle: 45 },
+    vAxis: { textStyle: { color: t.ash, fontSize: 9, fontName: 'Noto Sans JP' }, gridlines: { color: t.paper }, minorGridlines: { count: 0 } },
+    chartArea: { left: 56, top: 36, width: '78%', height: '58%' }
+  };
+}
+
+function unpaidInsertTrendChart_(tr, spec) {
+  try {
+    var t = dnTheme_();
+    var b = tr.newChart()
+      .setChartType(spec.type)
+      .addRange(spec.domain)
+      .addRange(spec.values)
+      .setNumHeaders(1)
+      .setPosition(spec.row, spec.col, 8, 8)
+      .setOption('title', spec.title)
+      .setOption('width', spec.width || 460)
+      .setOption('height', spec.height || 250)
+      .setOption('colors', spec.colors || [t.ink, t.blood, t.ash])
+      .setOption('backgroundColor', t.paper)
+      .setOption('titleTextStyle', unpaidChartStyle_().titleTextStyle)
+      .setOption('legend', unpaidChartStyle_().legend)
+      .setOption('hAxis', unpaidChartStyle_().hAxis)
+      .setOption('vAxis', spec.vAxis || unpaidChartStyle_().vAxis)
+      .setOption('chartArea', unpaidChartStyle_().chartArea)
+      .setOption('useFirstColumnAsDomain', true);
+    if (spec.series) b = b.setOption('series', spec.series);
+    tr.insertChart(b.build());
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
+function unpaidTrendTableBounds_(tr) {
+  var head = UNPAID_TREND_HEAD_ROW_;
+  var last = Math.max(tr.getLastRow(), head);
+  var labels = tr.getRange(head, 1, Math.max(last - head + 1, 1), 1).getDisplayValues();
+  if (String(labels[0][0] || '') !== '年月') {
+    var r;
+    for (r = 1; r <= last; r++) {
+      if (String(tr.getRange(r, 1).getDisplayValue() || '') === '年月') {
+        head = r;
+        labels = tr.getRange(head, 1, Math.max(last - head + 1, 1), 1).getDisplayValues();
+        break;
+      }
+    }
+  }
+  var n = 0;
+  var i;
+  for (i = 1; i < labels.length; i++) {
+    if (/^\d{2}年\d{1,2}月$/.test(String(labels[i][0] || ''))) n = i;
+  }
+  return { head: head, n: n, last: head + n };
+}
+
+function unpaidEnsureTrendCharts_(tr) {
+  if (!tr) return;
+  unpaidClearTrendCharts_(tr);
+  var b = unpaidTrendTableBounds_(tr);
+  if (!b.n) return;
+  var t = dnTheme_();
+  var rows = b.n + 1;
+  var domain = tr.getRange(b.head, 1, rows, 1);
+  unpaidInsertTrendChart_(tr, {
+    type: Charts.ChartType.COMBO,
+    domain: domain,
+    values: tr.getRange(b.head, 3, rows, 2),
+    title: '未納総額と回収額',
+    row: 5,
+    col: 1,
+    colors: [t.ink, t.blood],
+    series: { 1: { type: 'line', targetAxisIndex: 0 } }
+  });
+  unpaidInsertTrendChart_(tr, {
+    type: Charts.ChartType.LINE,
+    domain: domain,
+    values: tr.getRange(b.head, 5, rows, 1),
+    title: '回収率',
+    row: 5,
+    col: 7,
+    colors: [t.blood],
+    vAxis: {
+      textStyle: unpaidChartStyle_().vAxis.textStyle,
+      gridlines: { color: t.paper },
+      minorGridlines: { count: 0 },
+      format: '0%',
+      viewWindow: { min: 0, max: 1 }
+    }
+  });
+  unpaidInsertTrendChart_(tr, {
+    type: Charts.ChartType.COLUMN,
+    domain: domain,
+    values: tr.getRange(b.head, 2, rows, 1),
+    title: '未納件数',
+    row: 13,
+    col: 1,
+    colors: [t.ink]
+  });
+  unpaidInsertTrendChart_(tr, {
+    type: Charts.ChartType.LINE,
+    domain: domain,
+    values: tr.getRange(b.head, 9, rows, 3),
+    title: '1ヶ月 / 2ヶ月 / 貸倒 の回収率',
+    row: 13,
+    col: 7,
+    colors: [t.ink, t.ash, t.blood],
+    vAxis: {
+      textStyle: unpaidChartStyle_().vAxis.textStyle,
+      gridlines: { color: t.paper },
+      minorGridlines: { count: 0 },
+      format: '0%',
+      viewWindow: { min: 0, max: 1 }
+    }
+  });
+}
+
+function unpaidStyleTrendSheet_(tr) {
+  if (!tr) return;
+  var t = dnTheme_();
+  var b = unpaidTrendTableBounds_(tr);
+  var paintRows = Math.max(b.last, 40);
+  var cols = Math.min(tr.getMaxColumns(), 12);
+  hubType_(tr.getRange(1, 1, paintRows, cols))
+    .setBackground(t.paper).setFontColor(t.ink).setFontSize(10)
+    .setFontWeight('normal').setVerticalAlignment('middle').setWrap(false);
+  try { tr.getRange(1, 1, paintRows, cols).setBorder(false, false, false, false, false, false); } catch (eB) {}
+  hubPaintOpenSourceCell_(tr, 1, 1, 3, {
+    url: 'https://docs.google.com/spreadsheets/d/' + UNPAID_SOURCE_ID_ + '/edit',
+    label: '元の未納管理ドライブを開く ↗'
+  });
+  hubType_(tr.getRange(1, 4, 1, 5))
+    .setBackground(t.ink).setFontColor(t.paper).setFontWeight('bold')
+    .setFontSize(14).setHorizontalAlignment('center')
+    .setBorder(false, false, true, false, false, false, t.blood, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
+  tr.getRange(1, 9, 1, 3).setBackground(t.paper).setFontColor(t.ash).setFontSize(9)
+    .setHorizontalAlignment('right').setFontWeight('normal');
+  var i;
+  for (i = 0; i < 6; i++) {
+    var c1 = i * 2 + 1;
+    tr.getRange(2, c1, 1, 2).setBackground(t.ink).setFontColor(t.paper).setFontSize(8)
+      .setFontWeight('bold').setHorizontalAlignment('center');
+    tr.getRange(3, c1, 1, 2).setBackground(t.paper).setFontColor(t.ink).setFontSize(16)
+      .setFontWeight('bold').setHorizontalAlignment('center');
+  }
+  tr.getRange(4, 1, 1, 12).setBackground(t.paper).setFontColor(t.ash).setFontSize(9)
+    .setHorizontalAlignment('left');
+  if (b.n > 0) {
+    var head = tr.getRange(b.head, 1, 1, 11);
+    hubType_(head).setBackground(t.ink).setFontColor(t.paper).setFontWeight('bold')
+      .setFontSize(9).setHorizontalAlignment('center').setWrap(true)
+      .setBorder(false, false, true, false, false, false, t.blood, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
+    tr.getRange(b.head, 6).setBackground(t.blood).setFontColor(t.paper);
+    var body = tr.getRange(b.head + 1, 1, b.n, 11);
+    hubType_(body).setBackground(t.paper).setFontColor(t.ink).setFontSize(10)
+      .setHorizontalAlignment('center');
+    tr.getRange(b.head + 1, 2, b.n, 10).setHorizontalAlignment('right');
+    tr.getRange(b.head + 1, 1, b.n, 1).setFontWeight('bold').setHorizontalAlignment('center').setNumberFormat('@');
+    tr.getRange(b.head + 1, 2, b.n, 1).setNumberFormat('0"件"');
+    tr.getRange(b.head + 1, 3, b.n, 2).setNumberFormat('¥#,##0');
+    tr.getRange(b.head + 1, 5, b.n, 1).setNumberFormat('0.0%');
+    tr.getRange(b.head + 1, 7, b.n, 1).setNumberFormat('¥#,##0');
+    tr.getRange(b.head + 1, 8, b.n, 1).setNumberFormat('0"件"');
+    tr.getRange(b.head + 1, 9, b.n, 3).setNumberFormat('0.0%');
+    try { tr.getRange(b.head + 1, 1, b.n, 11).setBorder(null, null, null, null, null, true, t.line, SpreadsheetApp.BorderStyle.SOLID); } catch (eL) {}
+    var tz = 'Asia/Tokyo';
+    var cur = Utilities.formatDate(new Date(), tz, 'yy') + '年' + Number(Utilities.formatDate(new Date(), tz, 'M')) + '月';
+    var names = tr.getRange(b.head + 1, 1, b.n, 1).getDisplayValues();
+    var r;
+    for (r = 0; r < names.length; r++) {
+      if (String(names[r][0]) === cur) {
+        tr.getRange(b.head + 1 + r, 1, 1, 11)
+          .setBorder(false, false, true, false, false, false, t.blood, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
+      }
+    }
+  }
+  tr.getRange('A3:D3').setNumberFormat('@');
+  tr.getRange('E3:F3').setNumberFormat('0"件"');
+  tr.getRange('G3:H3').setNumberFormat('¥#,##0');
+  tr.getRange('I3:J3').setNumberFormat('0.0%');
+  tr.getRange('K3:L3').setNumberFormat('¥#,##0');
+  tr.setFrozenRows(3);
+  tr.setHiddenGridlines(true);
+  tr.setTabColor(t.blood);
+  tr.setRowHeight(1, 28);
+  tr.setRowHeight(2, 22);
+  tr.setRowHeight(3, 36);
+  tr.setRowHeight(4, 28);
+  tr.setColumnWidth(1, 92);
+  tr.setColumnWidths(2, 4, 100);
+  tr.setColumnWidth(6, 150);
+  tr.setColumnWidths(7, 5, 100);
+  try { if (b.n > 0) tr.setRowHeightsForced(b.head + 1, b.n, 26); } catch (eH) {}
 }
 
 function unpaidWriteTrendMonth_(tr, monthName, st) {
   if (!tr || !monthName || !st) return;
-  var months = unpaidMonthListChrono_();
-  var idx = months.indexOf(monthName);
-  if (idx < 0) return;
-  var row = idx + 3;
-  var vals = unpaidTrendRowFromStats_(monthName, st);
-  tr.getRange(row, 1, 1, 11).setValues([vals]);
+  var b = unpaidTrendTableBounds_(tr);
+  if (!b.n) return;
+  var names = tr.getRange(b.head + 1, 1, b.n, 1).getDisplayValues();
+  var i;
+  for (i = 0; i < names.length; i++) {
+    if (String(names[i][0]) === monthName) {
+      var row = b.head + 1 + i;
+      tr.getRange(row, 1, 1, 11).setValues([unpaidTrendRowFromStats_(monthName, st)]);
+      tr.getRange(row, 6).setFormula(unpaidSparkFormula_(row));
+      return;
+    }
+  }
 }
 
-function setupUnpaidTrend_(ss, options) {
-  var tr = ss.getSheetByName(UNPAID_TREND_SHEET_);
-  if (!tr) tr = ss.insertSheet(UNPAID_TREND_SHEET_);
-  var months = unpaidMonthListChrono_();
-  var need = months.length + 2;
+function unpaidPaintTrend_(tr, body, totals, latest) {
+  var t = dnTheme_();
+  unpaidClearTrendCharts_(tr);
+  try { tr.getRange(1, 1, Math.min(tr.getMaxRows(), 80), 12).breakApart(); } catch (e0) {}
+  try { tr.getRange(1, 1, Math.min(tr.getMaxRows(), 80), 12).clearContent(); } catch (e1) {}
+  try { tr.getRange(1, 1, Math.min(tr.getMaxRows(), 80), 12).clearDataValidations(); } catch (e2) {}
+  var head = UNPAID_TREND_HEAD_ROW_;
+  var need = head + Math.max(body.length, 1) + 2;
   if (tr.getMaxRows() < need) tr.insertRowsAfter(tr.getMaxRows(), need - tr.getMaxRows());
-  if (tr.getMaxColumns() < 11) tr.insertColumnsAfter(tr.getMaxColumns(), 11 - tr.getMaxColumns());
-  tr.clear();
-  tr.getRange(1, 1, 1, 11).setValues([[
+  var srcUrl = 'https://docs.google.com/spreadsheets/d/' + UNPAID_SOURCE_ID_ + '/edit';
+  hubPaintOpenSourceCell_(tr, 1, 1, 3, { url: srcUrl, label: '元の未納管理ドライブを開く ↗' });
+  tr.getRange(1, 4, 1, 5).merge().setValue('未納 月別推移');
+  var nowText = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm');
+  tr.getRange(1, 9, 1, 3).merge().setValue('更新 ' + nowText);
+  var latestName = latest && latest.name ? latest.name : '—';
+  var ls = latest && latest.st ? latest.st : { n: 0, sp: 0, sr: 0 };
+  var latestRate = ls.sp ? ls.sr / ls.sp : '';
+  tr.getRange(2, 1, 1, 12).setValues([[
+    '対象月', '', '直近月', '', '直近 件数', '', '直近 未納総額', '', '直近 回収率', '', '直近 未回収', ''
+  ]]);
+  tr.getRange(3, 1, 1, 12).setValues([[
+    body.length ? body.length + 'ヶ月' : '0ヶ月', '',
+    latestName, '',
+    ls.n || 0, '',
+    ls.sp || 0, '',
+    latestRate, '',
+    (ls.sp || 0) - (ls.sr || 0), ''
+  ]]);
+  var mi;
+  for (mi = 0; mi < 6; mi++) {
+    try { tr.getRange(2, mi * 2 + 1, 1, 2).merge(); } catch (eM1) {}
+    try { tr.getRange(3, mi * 2 + 1, 1, 2).merge(); } catch (eM2) {}
+  }
+  var totRate = totals.sp ? totals.sr / totals.sp : '';
+  tr.getRange(4, 1, 1, 12).merge().setValue(
+    '各月タブのスナップショットです。繰越があると月をまたいで二重計上されます。グラフは実データ月だけ。空の月タブは出しません。　月合計 ' +
+    (totals.n || 0) + '件 / 未納 ' + unpaidYen_(totals.sp) + ' / 回収 ' + unpaidYen_(totals.sr) +
+    (totRate === '' ? '' : ' / 合計回収率 ' + (Math.round(totRate * 1000) / 10).toFixed(1) + '%')
+  );
+  tr.getRange(head, 1, 1, 11).setValues([[
     '年月', '未納件数', '未納総額', '回収額', '回収率', '全体回収率バー', '未回収額', '回収済み件数',
     '1ヶ月未納 回収率', '2ヶ月未納 回収率', '貸倒候補 回収率'
   ]]);
-  tr.getRange(2, 1, 1, 11).setValues([[
-    '累計', '=SUM(B3:B)', '=SUM(C3:C)', '=SUM(D3:D)', '', '', '', '=SUM(H3:H)', '', '', ''
-  ]]);
-  var body = [];
-  var spark = [];
-  var tBar = dnTheme_().blood;
-  var i;
-  for (i = 0; i < months.length; i++) {
-    body.push([months[i], '', '', '', '', '', '', '', '', '', '']);
-    spark.push(['=IF(OR(E' + (i + 3) + '="",ISTEXT(E' + (i + 3) + ')),"",SPARKLINE(E' + (i + 3) + ',{"charttype","bar";"max",1;"color1","' + tBar + '"}))']);
+  if (body.length) {
+    tr.getRange(head + 1, 1, body.length, 11).setValues(body);
+    var spark = [];
+    var i;
+    for (i = 0; i < body.length; i++) spark.push([unpaidSparkFormula_(head + 1 + i)]);
+    tr.getRange(head + 1, 6, body.length, 1).setFormulas(spark);
   }
-  tr.getRange(3, 1, body.length, 1).setNumberFormat('@');
-  tr.getRange(3, 1, body.length, 11).setValues(body);
-  tr.getRange(3, 6, spark.length, 1).setFormulas(spark);
+  unpaidStyleTrendSheet_(tr);
+  if (latestRate !== '' && latestRate < 0.5) {
+    tr.getRange(3, 9, 1, 2).setBackground(t.blood).setFontColor(t.paper);
+  }
+  unpaidEnsureTrendCharts_(tr);
+}
 
-  var t = dnTheme_();
-  var solid = SpreadsheetApp.BorderStyle.SOLID;
-  var all = tr.getRange(1, 1, tr.getMaxRows(), 11);
-  all.setBackground(t.paper).setFontColor(t.ink).setFontSize(10).setVerticalAlignment('middle')
-    .setBorder(false, false, false, false, false, false);
-  tr.getRange(3, 1, body.length, 11).setBorder(null, null, null, null, null, true, t.line, solid);
-  tr.getRange(1, 1, 1, 11).setBackground(t.ink).setFontColor(t.paper).setFontWeight('bold')
-    .setFontSize(9).setWrap(true).setHorizontalAlignment('center');
-  tr.getRange(1, 6, 1, 1).setBackground(t.blood).setFontColor(t.paper);
-  tr.getRange(2, 1, 1, 11).setBackground(t.cream).setFontWeight('bold');
-  tr.getRange(3, 1, body.length, 1).setFontWeight('bold').setHorizontalAlignment('center');
-  tr.getRange(2, 2, body.length + 1, 10).setHorizontalAlignment('right');
-  tr.getRange(3, 2, body.length, 1).setNumberFormat('0"件"');
-  tr.getRange(2, 3, body.length + 1, 2).setNumberFormat('¥#,##0');
-  tr.getRange(3, 5, body.length, 1).setNumberFormat('0.0%');
-  tr.getRange(3, 7, body.length, 1).setNumberFormat('¥#,##0');
-  tr.getRange(2, 8, body.length + 1, 1).setNumberFormat('0"件"');
-  tr.getRange(3, 9, body.length, 3).setNumberFormat('0.0%');
-  tr.setFrozenRows(2);
-  tr.setColumnWidth(1, 90);
-  tr.setColumnWidths(2, 4, 105);
-  tr.setColumnWidth(6, 180);
-  tr.setColumnWidths(7, 5, 105);
-  tr.setRowHeight(1, 36);
-  tr.setHiddenGridlines(true);
-  tr.setTabColor(dnTheme_().blood);
-  return tr;
+function unpaidFillTrendAll_(ss) {
+  ss = ss || openWorkspaceSpreadsheet_();
+  var tr = unpaidEnsureTrendSheet_(ss);
+  try {
+    var src = SpreadsheetApp.openById(UNPAID_SOURCE_ID_);
+    var months = unpaidSourceMonthTabs_(src);
+    var body = [];
+    var scanned = [];
+    var totals = { n: 0, sp: 0, sr: 0, nr: 0 };
+    var latest = null;
+    var i;
+    for (i = 0; i < months.length; i++) {
+      var name = months[i].name;
+      var st = { n: 0, sp: 0, sr: 0, nr: 0, kone: { pay: 0, rec: 0 }, ktwo: { pay: 0, rec: 0 }, kbad: { pay: 0, rec: 0 } };
+      try {
+        var vals = unpaidReadMonthValuesFast_(months[i].sh);
+        if (vals) st = unpaidStatsFromValues_(vals);
+      } catch (eM) {
+        scanned.push({ name: name, ok: false, message: String(eM && eM.message ? eM.message : eM) });
+        body.push(unpaidTrendRowFromStats_(name, st));
+        continue;
+      }
+      body.push(unpaidTrendRowFromStats_(name, st));
+      totals.n += st.n;
+      totals.sp += st.sp;
+      totals.sr += st.sr;
+      totals.nr += st.nr;
+      latest = { name: name, st: st };
+      scanned.push({ name: name, ok: true, n: st.n, sp: st.sp, sr: st.sr });
+    }
+    unpaidPaintTrend_(tr, body, totals, latest);
+    return {
+      ok: true,
+      months: scanned.length,
+      filled: scanned.filter(function (x) { return x.ok; }).length,
+      latest: latest ? latest.name : '',
+      totals: totals,
+      sheet: tr,
+      gid: tr.getSheetId(),
+      scanned: scanned
+    };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err), sheet: tr };
+  }
+}
+
+function setupUnpaidTrend_(ss, options) {
+  var out = unpaidFillTrendAll_(ss);
+  return (out && out.sheet) || unpaidEnsureTrendSheet_(ss);
 }
 
 function applyUnpaidNotes_(sh, tr) {
+  try {
     sh.getRange('A1').setNote('レジ送信・ゲートストップ・SMS のチェックは Workspace から押せます。元の未納管理ドライブに保存します。支払額など元データは変えません。');
-  sh.getRange('B1').setNote('元ファイルの月タブ名です。いまの月が一番上、あとは新しい順です。');
-  sh.getRange('D1').setNote('会員番号があり、支払額が1円以上の行の件数。');
-  sh.getRange('E1').setNote('支払額の合計（手数料は含まない）。');
-  sh.getRange('F1').setNote('回収金額の合計。空でも右隣に「〇〇入金」があれば支払額を回収済みとみなす。');
-  sh.getRange('G1').setNote('回収額÷未納総額（支払額ベース）。このシート上部で血色に反転している数字。');
-  sh.getRange('J1').setNote('A列区分が「1ヶ月未納」の行だけを集計した回収率。');
-  sh.getRange('K1').setNote('A列区分が「2ヶ月未納」の行だけを集計した回収率。');
-  sh.getRange('L1').setNote('A列に「貸倒」または「貸し倒れ」を含む行の回収率。該当者がいなければ対象なし。');
-  tr.getRange('E1').setNote('その月全体の回収率（回収額÷未納総額＝支払額ベース）。右のバーと同じ数字です。');
-  tr.getRange('F1').setNote('左の「回収率」を0〜100%の横棒にしたもの。貸倒や1ヶ月未納の率ではありません。');
-  tr.getRange('K1').setNote('A列が貸倒／貸し倒れの行の回収率。該当者がいなければ「対象なし」。25年11月のように表記が「貸し倒れ」でも集計します。');
-  tr.getRange('A2').setNote('各月の回収額の単純合計。繰越があると二重計上の可能性があります。');
+    sh.getRange('B1').setNote('元ファイルの月タブ名です。いまの月が一番上、あとは新しい順です。');
+    sh.getRange('D1').setNote('会員番号があり、支払額が1円以上の行の件数。');
+    sh.getRange('E1').setNote('支払額の合計（手数料は含まない）。');
+    sh.getRange('F1').setNote('回収金額の合計。空でも右隣に「〇〇入金」があれば支払額を回収済みとみなす。');
+    sh.getRange('G1').setNote('回収額÷未納総額（支払額ベース）。このシート上部で血色に反転している数字。');
+    sh.getRange('J1').setNote('A列区分が「1ヶ月未納」の行だけを集計した回収率。');
+    sh.getRange('K1').setNote('A列区分が「2ヶ月未納」の行だけを集計した回収率。');
+    sh.getRange('L1').setNote('A列に「貸倒」または「貸し倒れ」を含む行の回収率。該当者がいなければ対象なし。');
+  } catch (eN) {}
+  if (!tr) return;
+  try {
+    tr.getRange(UNPAID_TREND_HEAD_ROW_, 5).setNote('その月全体の回収率（回収額÷未納総額＝支払額ベース）。右のバーと同じ数字です。');
+    tr.getRange(UNPAID_TREND_HEAD_ROW_, 6).setNote('左の「回収率」を0〜100%の横棒にしたもの。貸倒や1ヶ月未納の率ではありません。');
+    tr.getRange(UNPAID_TREND_HEAD_ROW_, 11).setNote('A列が貸倒／貸し倒れの行の回収率。該当がなければ空欄（グラフが壊れないように「対象なし」は出さない）。');
+    tr.getRange('A4').setNote('各月タブの単純合計。繰越があると二重計上の可能性があります。');
+  } catch (eT) {}
 }
 
 function fillUnpaidNow_() {
@@ -6648,12 +6962,17 @@ function fillUnpaidNow_() {
     try { unpaidHideNoiseCols_(sh); } catch (eH) {}
     try { sh.setColumnWidths(14, 7, 44); } catch (eW) {}
     var tr = ss.getSheetByName(UNPAID_TREND_SHEET_);
-    if (tr && filled && filled.ok && filled.stats) {
-      try { unpaidWriteTrendMonth_(tr, filled.month, filled.stats); } catch (eTr) {}
+    var trend = null;
+    try { trend = unpaidFillTrendAll_(ss); tr = trend && trend.sheet ? trend.sheet : tr; } catch (eTr) {
+      trend = { ok: false, message: String(eTr && eTr.message ? eTr.message : eTr) };
+      if (tr && filled && filled.ok && filled.stats) {
+        try { unpaidWriteTrendMonth_(tr, filled.month, filled.stats); } catch (eOne) {}
+      }
     }
     return {
       ok: !!(filled && filled.ok),
       filled: filled,
+      trend: trend,
       dash: sh.getRange('D1:M3').getDisplayValues(),
       head: sh.getRange(UNPAID_DATA_ROW_, 1, 12, 12).getDisplayValues()
     };
