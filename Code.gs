@@ -744,7 +744,7 @@ function removeSheetFilterSafe_(sheet) {
   } catch (e) {}
 }
 
-/** 入会者一覧：名前は IMPORTRANGE、チェックは元スプシと同期 */
+/** 入会者一覧：経堂・FIT365とも A:E を一塊で値コピー（行が増えても名前とチェックがずれない） */
 function formatJoinListMirrorKeepImport_() {
   return setupJoinListLinked_();
 }
@@ -1492,6 +1492,7 @@ function ensureReceptionLiveTrigger_() {
 function syncReceptionLiveTriggered_() {
   try { syncReceptionLiveSheet_(); } catch (e1) {}
   try { syncReceptionJoinMirrors_(); } catch (e2) {}
+  try { joinListRefresh_(); } catch (e3) {}
 }
 
 
@@ -1692,14 +1693,37 @@ function joinListToBool_(v) {
 }
 
 var FIT365_JOIN_SOURCE_ID_ = '1BbExBUCfyq1cfNqw4TvlwUriL-AfvghU9XT6McdzGTQ';
+var JOIN_LIST_BODY_START_ = 3;
+var JOIN_LIST_BLOCK_COLS_ = 5;
 
 function joinListOnEditSimple_(e) {
   return;
 }
 
+function joinListCheckboxRule_() {
+  return SpreadsheetApp.newDataValidation().requireCheckbox().setAllowInvalid(true).build();
+}
+
+function joinListPaintChrome_(sh) {
+  if (!sh) return;
+  var t = dnTheme_();
+  var kyodoUrl = 'https://docs.google.com/spreadsheets/d/' + MACHINE_SOURCE_ID_ + '/edit';
+  var fitUrl = 'https://docs.google.com/spreadsheets/d/' + FIT365_JOIN_SOURCE_ID_ + '/edit';
+  hubPaintOpenSourceCell_(sh, 1, 1, 3, { url: kyodoUrl, label: '元のシートを開く ↗' });
+  hubPaintOpenSourceCell_(sh, 1, 6, 3, { url: fitUrl, label: 'FIT365 のシートを開く ↗' });
+  try { sh.getRange('D1:E1').breakApart(); } catch (e1) {}
+  try { sh.getRange('I1:J1').breakApart(); } catch (e2) {}
+  sh.getRange('D1:E1').merge().setValue('チェックは「今日の作業 → チェックを元へ反映」')
+    .setFontSize(8).setFontColor(t.ash).setFontWeight('normal')
+    .setBackground(t.paper).setHorizontalAlignment('center').setVerticalAlignment('middle');
+  sh.getRange('I1:J1').merge().setValue('チェックは「今日の作業 → チェックを元へ反映」')
+    .setFontSize(8).setFontColor(t.ash).setFontWeight('normal')
+    .setBackground(t.paper).setHorizontalAlignment('center').setVerticalAlignment('middle');
+}
+
 /**
- * 名前・メールは IMPORTRANGE のまま。D/E・I/J のチェックだけ元スプシの値を置き、反映で戻す。
- * IMPORTRANGE の上にチェックを重ねると、元が TRUE でも空に見える。
+ * 経堂 A:E / FIT365 F:J を元スプシから一塊で値コピーする。
+ * IMPORTRANGE の名前 + 別置きチェックだと、元に新規行が入った瞬間に位置がずれる。
  */
 function setupJoinListLinked_() {
   try {
@@ -1707,45 +1731,15 @@ function setupJoinListLinked_() {
     var sh = dest.getSheetByName(JOIN_LIST_SHEET_);
     if (!sh) sh = dest.insertSheet(JOIN_LIST_SHEET_);
     if (sh.getMaxColumns() < 10) sh.insertColumnsAfter(sh.getMaxColumns(), 10 - sh.getMaxColumns());
-    try { permitImportRange_(dest, MACHINE_SOURCE_ID_); } catch (eP1) {}
-    try { permitImportRange_(dest, FIT365_JOIN_SOURCE_ID_); } catch (eP2) {}
     try { sh.getRange(1, 1, 1, 10).breakApart(); } catch (eB) {}
-    try { sh.getRange(2, 1, Math.max(sh.getMaxRows() - 1, 1), 10).clearDataValidations(); } catch (eV) {}
-
-    var kyodoUrl = 'https://docs.google.com/spreadsheets/d/' + MACHINE_SOURCE_ID_ + '/edit';
-    var fitUrl = 'https://docs.google.com/spreadsheets/d/' + FIT365_JOIN_SOURCE_ID_ + '/edit';
-    hubPaintOpenSourceCell_(sh, 1, 1, 3, { url: kyodoUrl, label: '元のシートを開く ↗' });
-    hubPaintOpenSourceCell_(sh, 1, 6, 3, { url: fitUrl, label: 'FIT365 のシートを開く ↗' });
-    sh.getRange('D1:E1').merge().setValue('チェックは「今日の作業 → チェックを元へ反映」')
-      .setFontSize(8).setFontColor(dnTheme_().ash).setHorizontalAlignment('center');
-    sh.getRange('I1:J1').merge().setValue('チェックは「今日の作業 → チェックを元へ反映」')
-      .setFontSize(8).setFontColor(dnTheme_().ash).setHorizontalAlignment('center');
-
-    sh.getRange('A2').setFormula(
-      '=IMPORTRANGE("' + MACHINE_SOURCE_ID_ + '","' + JOIN_LIST_SHEET_ + '!A:C")'
-    );
-    sh.getRange('F2').setFormula(
-      '=IMPORTRANGE("' + FIT365_JOIN_SOURCE_ID_ + '","' + JOIN_LIST_SHEET_ + '!A:C")'
-    );
-    sh.getRange('D2:E2').setValues([['入会1週間アンケート', 'マシンレクチャーメール']]);
-    sh.getRange('I2:J2').setValues([['入会1週間アンケート', 'アンケート済']]);
-    SpreadsheetApp.flush();
-
-    var pulled = joinListPullChecks_(sh);
-    styleJoinListLinked_(sh);
+    var pulled = joinListRefresh_(sh);
     try { removeSheetFilterSafe_(sh); } catch (eFil) {}
     var lecture = dest.getSheetByName('マシンレクチャー申込');
     var lectureOut = lecture ? tidyImportMirrorKeepLook_(lecture) : null;
     return {
       ok: true,
       pulled: pulled,
-      a2: String(sh.getRange('A2').getFormula() || ''),
-      e3: sh.getRange('E3').getValue(),
-      e9: sh.getRange('E9').getValue(),
-      e9check: (function () {
-        var dv = sh.getRange('E9').getDataValidation();
-        return dv ? String(dv.getCriteriaType()) : '';
-      })(),
+      snap: joinListSnapshot_(sh),
       machineLecture: lectureOut
     };
   } catch (err) {
@@ -1753,20 +1747,105 @@ function setupJoinListLinked_() {
   }
 }
 
-function styleJoinListLinked_(sh) {
+function joinListRefresh_(sh) {
+  if (!sh) {
+    var ss = openWorkspaceSpreadsheet_();
+    sh = ss.getSheetByName(JOIN_LIST_SHEET_);
+  }
+  if (!sh) return { ok: false, message: 'missing join list' };
+  if (sh.getMaxColumns() < 10) sh.insertColumnsAfter(sh.getMaxColumns(), 10 - sh.getMaxColumns());
+  joinListPaintChrome_(sh);
+  var kyodo = joinListCopyBlock_(sh, MACHINE_SOURCE_ID_, 1);
+  var fit = joinListCopyBlock_(sh, FIT365_JOIN_SOURCE_ID_, 6);
+  styleJoinListLinked_(sh, kyodo.rows || 0, fit.rows || 0);
+  try { removeSheetFilterSafe_(sh); } catch (eFil) {}
+  return { ok: !!(kyodo.ok && fit.ok), kyodo: kyodo, fit365: fit, snap: joinListSnapshot_(sh) };
+}
+
+function joinListCopyBlock_(destSh, srcId, destStartCol) {
+  var src = SpreadsheetApp.openById(srcId);
+  var srcSh = src.getSheetByName(JOIN_LIST_SHEET_);
+  if (!srcSh) return { ok: false, message: 'no source sheet' };
+  var srcLast = Math.max(srcSh.getLastRow(), 1);
+  var srcCols = Math.min(Math.max(srcSh.getLastColumn(), 1), JOIN_LIST_BLOCK_COLS_);
+  var raw = srcSh.getRange(1, 1, srcLast, JOIN_LIST_BLOCK_COLS_).getValues();
+  var headers = raw[0];
+  while (headers.length < JOIN_LIST_BLOCK_COLS_) headers.push('');
+  var body = [];
+  var i;
+  for (i = 1; i < raw.length; i++) {
+    var row = raw[i];
+    var has = false;
+    var c;
+    for (c = 0; c < JOIN_LIST_BLOCK_COLS_; c++) {
+      if (String(row[c] == null ? '' : row[c]).trim() !== '') has = true;
+    }
+    if (!has) continue;
+    body.push([
+      row[0],
+      row[1],
+      row[2],
+      joinListToBool_(row[3]),
+      joinListToBool_(row[4])
+    ]);
+  }
+  var need = JOIN_LIST_BODY_START_ - 1 + Math.max(body.length, 1);
+  if (destSh.getMaxRows() < need) destSh.insertRowsAfter(destSh.getMaxRows(), need - destSh.getMaxRows());
+  var oldLast = Math.max(destSh.getLastRow(), JOIN_LIST_BODY_START_);
+  var clearFrom = 2;
+  var clearN = Math.max(oldLast, need) - clearFrom + 1;
+  destSh.getRange(clearFrom, destStartCol, clearN, JOIN_LIST_BLOCK_COLS_).clearContent();
+  destSh.getRange(clearFrom, destStartCol, clearN, JOIN_LIST_BLOCK_COLS_).clearDataValidations();
+  destSh.getRange(2, destStartCol, 1, JOIN_LIST_BLOCK_COLS_).setValues([headers.slice(0, JOIN_LIST_BLOCK_COLS_)]);
+  if (body.length) {
+    destSh.getRange(JOIN_LIST_BODY_START_, destStartCol, body.length, JOIN_LIST_BLOCK_COLS_).setValues(body);
+    destSh.getRange(JOIN_LIST_BODY_START_, destStartCol, body.length, 1).setNumberFormat('yyyy/mm/dd');
+    var checkRng = destSh.getRange(JOIN_LIST_BODY_START_, destStartCol + 3, body.length, 2);
+    checkRng.setDataValidation(joinListCheckboxRule_());
+    checkRng.setHorizontalAlignment('center');
+  }
+  return {
+    ok: true,
+    srcCols: srcCols,
+    rows: body.length,
+    true1: body.filter(function (x) { return x[3]; }).length,
+    true2: body.filter(function (x) { return x[4]; }).length
+  };
+}
+
+function joinListCountBlock_(sh, startCol) {
+  var last = Math.max(sh.getLastRow(), 2);
+  if (last < JOIN_LIST_BODY_START_) return 0;
+  var n = last - 2;
+  var vals = sh.getRange(JOIN_LIST_BODY_START_, startCol, n, 3).getDisplayValues();
+  var count = 0;
+  var i;
+  for (i = 0; i < vals.length; i++) {
+    if (String(vals[i][0] || '').trim() || String(vals[i][1] || '').trim() || String(vals[i][2] || '').trim()) {
+      count = i + 1;
+    }
+  }
+  return count;
+}
+
+function styleJoinListLinked_(sh, kyodoRows, fitRows) {
   if (!sh) return;
   var t = dnTheme_();
-  var last = Math.max(sh.getLastRow(), 20);
-  var bodyRows = Math.max(last - 2, 1);
+  kyodoRows = Math.max(0, Number(kyodoRows) || 0);
+  fitRows = Math.max(0, Number(fitRows) || 0);
+  if (!kyodoRows) kyodoRows = joinListCountBlock_(sh, 1);
+  if (!fitRows) fitRows = joinListCountBlock_(sh, 6);
+  var bodyRows = Math.max(kyodoRows, fitRows, 1);
+  var paintRows = Math.max(bodyRows, Math.min(sh.getMaxRows() - 2, bodyRows + 40));
   try { sh.clearConditionalFormatRules(); } catch (e0) {}
   try { sh.getRange(1, 1, sh.getMaxRows(), 10).setBorder(false, false, false, false, false, false); } catch (eB) {}
-  hubType_(sh.getRange(3, 1, bodyRows, 10))
+  hubType_(sh.getRange(3, 1, paintRows, 10))
     .setBackground(t.paper).setFontColor(t.ink).setFontSize(10).setFontWeight('normal')
     .setVerticalAlignment('middle').setHorizontalAlignment('center').setWrap(false);
-  sh.getRange(3, 2, bodyRows, 1).setHorizontalAlignment('left');
-  sh.getRange(3, 7, bodyRows, 1).setHorizontalAlignment('left');
-  sh.getRange(3, 3, bodyRows, 1).setHorizontalAlignment('left');
-  sh.getRange(3, 8, bodyRows, 1).setHorizontalAlignment('left');
+  sh.getRange(3, 2, paintRows, 1).setHorizontalAlignment('left');
+  sh.getRange(3, 7, paintRows, 1).setHorizontalAlignment('left');
+  sh.getRange(3, 3, paintRows, 1).setHorizontalAlignment('left');
+  sh.getRange(3, 8, paintRows, 1).setHorizontalAlignment('left');
   hubType_(sh.getRange('A2:J2'))
     .setBackground(t.ink).setFontColor(t.paper).setFontWeight('bold')
     .setFontSize(10).setHorizontalAlignment('center').setVerticalAlignment('middle')
@@ -1778,7 +1857,7 @@ function styleJoinListLinked_(sh) {
   sh.setTabColor(t.ink);
   sh.setRowHeight(1, 28);
   sh.setRowHeight(2, 32);
-  try { sh.setRowHeightsForced(3, bodyRows, 26); } catch (eH) {}
+  try { sh.setRowHeightsForced(3, paintRows, 26); } catch (eH) {}
   sh.setColumnWidth(1, 150);
   sh.setColumnWidth(2, 110);
   sh.setColumnWidth(3, 220);
@@ -1787,55 +1866,68 @@ function styleJoinListLinked_(sh) {
   sh.setColumnWidth(7, 110);
   sh.setColumnWidth(8, 220);
   sh.setColumnWidths(9, 2, 72);
-  var sent = [
-    sh.getRange(3, 4, bodyRows, 2),
-    sh.getRange(3, 9, bodyRows, 2)
-  ];
-  var rules = [
-    SpreadsheetApp.newConditionalFormatRule()
-      .whenFormulaSatisfied('=D3=TRUE')
-      .setBackground(t.ink)
-      .setFontColor(t.paper)
-      .setBold(true)
-      .setRanges([sent[0]])
-      .build(),
-    SpreadsheetApp.newConditionalFormatRule()
-      .whenFormulaSatisfied('=I3=TRUE')
-      .setBackground(t.ink)
-      .setFontColor(t.paper)
-      .setBold(true)
-      .setRanges([sent[1]])
-      .build()
-  ];
-  sh.setConditionalFormatRules(rules);
+  var rules = [];
+  if (kyodoRows > 0) {
+    rules.push(
+      SpreadsheetApp.newConditionalFormatRule()
+        .whenFormulaSatisfied('=D3=TRUE')
+        .setBackground(t.ink)
+        .setFontColor(t.paper)
+        .setBold(true)
+        .setRanges([sh.getRange(3, 4, kyodoRows, 2)])
+        .build()
+    );
+  }
+  if (fitRows > 0) {
+    rules.push(
+      SpreadsheetApp.newConditionalFormatRule()
+        .whenFormulaSatisfied('=I3=TRUE')
+        .setBackground(t.ink)
+        .setFontColor(t.paper)
+        .setBold(true)
+        .setRanges([sh.getRange(3, 9, fitRows, 2)])
+        .build()
+    );
+  }
+  if (rules.length) sh.setConditionalFormatRules(rules);
+}
+
+function joinListSnapshot_(sh) {
+  if (!sh) return null;
+  var cell = function (a1) {
+    var r = sh.getRange(a1);
+    var dv = r.getDataValidation();
+    return {
+      v: r.getValue(),
+      d: String(r.getDisplayValue() || ''),
+      f: String(r.getFormula() || ''),
+      check: dv ? String(dv.getCriteriaType()) : ''
+    };
+  };
+  return {
+    last: sh.getLastRow(),
+    kyodoRows: joinListCountBlock_(sh, 1),
+    fitRows: joinListCountBlock_(sh, 6),
+    a2: cell('A2'),
+    f2: cell('F2'),
+    a3: cell('A3'),
+    b3: cell('B3'),
+    e3: cell('E3'),
+    e9: cell('E9'),
+    f3: cell('F3'),
+    g3: cell('G3'),
+    i3: cell('I3'),
+    j3: cell('J3'),
+    eTail: cell('E' + (joinListCountBlock_(sh, 1) + 4)),
+    jTail: cell('J' + (joinListCountBlock_(sh, 6) + 4)),
+    a2imp: /IMPORTRANGE/i.test(String(sh.getRange('A2').getFormula() || '')),
+    f2imp: /IMPORTRANGE/i.test(String(sh.getRange('F2').getFormula() || ''))
+  };
 }
 
 function joinListPullChecks_(sh) {
   sh = sh || openWorkspaceSpreadsheet_().getSheetByName(JOIN_LIST_SHEET_);
-  if (!sh) return { ok: false, message: 'missing join list' };
-  var kyodo = joinListPullBlock_(sh, MACHINE_SOURCE_ID_, 4);
-  var fit = joinListPullBlock_(sh, FIT365_JOIN_SOURCE_ID_, 9);
-  return { ok: true, kyodo: kyodo, fit365: fit };
-}
-
-function joinListPullBlock_(destSh, srcId, destCheckCol) {
-  var src = SpreadsheetApp.openById(srcId);
-  var srcSh = src.getSheetByName(JOIN_LIST_SHEET_);
-  if (!srcSh) return { ok: false, message: 'no source sheet' };
-  var srcLast = Math.max(srcSh.getLastRow(), 2);
-  var n = srcLast - 1;
-  if (n < 1) return { ok: true, rows: 0 };
-  var raw = srcSh.getRange(2, 4, n, 2).getValues();
-  var body = [];
-  var i;
-  for (i = 0; i < raw.length; i++) {
-    body.push([joinListToBool_(raw[i][0]), joinListToBool_(raw[i][1])]);
-  }
-  var rng = destSh.getRange(3, destCheckCol, body.length, 2);
-  rng.setValues(body);
-  rng.setDataValidation(SpreadsheetApp.newDataValidation().requireCheckbox().setAllowInvalid(true).build());
-  rng.setHorizontalAlignment('center');
-  return { ok: true, rows: body.length, true2: body.filter(function (x) { return x[1]; }).length };
+  return joinListRefresh_(sh);
 }
 
 function joinListPushChecks_(ss) {
@@ -1851,11 +1943,10 @@ function joinListPushBlock_(destSh, emailCol, destCheckCol, srcId) {
   var src = SpreadsheetApp.openById(srcId);
   var srcSh = src.getSheetByName(JOIN_LIST_SHEET_);
   if (!srcSh) return { ok: false, message: 'no source sheet' };
-  var last = Math.max(destSh.getLastRow(), 3);
-  var n = last - 2;
+  var n = joinListCountBlock_(destSh, emailCol === 3 ? 1 : 6);
   if (n < 1) return { ok: true, pushed: 0 };
-  var emails = destSh.getRange(3, emailCol, n, 1).getDisplayValues();
-  var checks = destSh.getRange(3, destCheckCol, n, 2).getValues();
+  var emails = destSh.getRange(JOIN_LIST_BODY_START_, emailCol, n, 1).getDisplayValues();
+  var checks = destSh.getRange(JOIN_LIST_BODY_START_, destCheckCol, n, 2).getValues();
   var srcLast = Math.max(srcSh.getLastRow(), 2);
   var srcEmails = srcSh.getRange(2, 3, srcLast - 1, 1).getDisplayValues();
   var map = {};
@@ -1880,7 +1971,7 @@ function joinListPushBlock_(destSh, emailCol, destCheckCol, srcId) {
   return { ok: true, pushed: pushed, missed: missed };
 }
 
-/** マシンレクチャー／入会者一覧 → Workspace（同名シート・内容そのまま・IMPORTRANGE） */
+/** マシンレクチャー／入会者一覧 → Workspace（入会者一覧は値コピーで名前とチェックを一塊同期） */
 var MACHINE_SOURCE_ID_ = '1wntzhyPGcz9hW4saswppYmVG-zHINbjAibu9VkCyEQ8';
 
 function setupMachineImport_() {
@@ -1926,7 +2017,7 @@ function setupMachineImport_() {
       imported: imported,
       joinList: setupJoinListLinked_(),
       workspaceUrl: dest.getUrl(),
-      note: 'シート名そのまま / 入会者一覧のチェックは元スプシと同期。'
+      note: 'シート名そのまま / 入会者一覧は経堂・FIT365とも名前とチェックを一塊で同期。'
     };
   } catch (err) {
     return { ok: false, message: String(err && err.message ? err.message : err) };
@@ -2180,9 +2271,13 @@ function handleApiGet_(e) {
     }
     if (api === 'flushUnpaidQueue') {
       var ssFlush = openWorkspaceSpreadsheet_();
+      var joinPush = joinListPushChecks_(ssFlush);
+      var joinRef = null;
+      try { joinRef = joinListRefresh_(ssFlush.getSheetByName(JOIN_LIST_SHEET_)); } catch (eJR) {}
       return jsonOutput_({
         unpaid: unpaidFlushQueue_(ssFlush),
-        joinList: joinListPushChecks_(ssFlush)
+        joinList: joinPush,
+        joinRefresh: joinRef
       });
     }
     if (api === 'styleUnpaidNow') {
@@ -5754,7 +5849,11 @@ function restyleHubLook_() {
       var n = sh.getName();
       if (n === HUB_HOME_SHEET_ || n === '経堂マスタ' || n === UNPAID_SHEET_ || n === UNPAID_TREND_SHEET_ || n === 'URL一覧' || n === '学割' || n === '販促_学校関係者') continue;
       if (/backup|シート\d+/.test(n)) continue;
-      if (/^販促_/.test(n) || n === 'マシンレクチャー申込' || n === '入会者一覧＋自動メール管理' ||
+      if (n === JOIN_LIST_SHEET_) {
+        try { joinListRefresh_(sh); } catch (eJ) {}
+        continue;
+      }
+      if (/^販促_/.test(n) || n === 'マシンレクチャー申込' ||
           n === '口コミ_経堂' || n === '【経堂】会員動向' || n === '見学体験申請' ||
           /^経堂_/.test(n) || n === 'Tasks' || n === 'WorkspaceSync') {
         try { restyleHeaderBody_(sh); } catch (e1) {}
@@ -6209,8 +6308,10 @@ function fillUnpaidFromMenu() {
   try { ensureUnpaidEditTrigger_(); } catch (eT) {}
   var filled = unpaidFillFromSource_(sh);
   try { styleUnpaidView_(sh); styleUnpaidDashboard_(sh); unpaidHideNoiseCols_(sh); } catch (eS) {}
-  ss.toast(filled && filled.ok ? ('再取得しました（' + filled.d2 + '）') : String(filled && filled.message ? filled.message : '失敗'), '未納', 8);
-  return filled;
+  var join = null;
+  try { join = joinListRefresh_(ss.getSheetByName(JOIN_LIST_SHEET_)); } catch (eJ) {}
+  ss.toast(filled && filled.ok ? ('再取得しました（' + filled.d2 + '）') : String(filled && filled.message ? filled.message : '失敗'), '再取得', 8);
+  return { unpaid: filled, joinList: join };
 }
 
 function flushUnpaidFromMenu() {
@@ -6219,6 +6320,7 @@ function flushUnpaidFromMenu() {
   var r = unpaidFlushQueue_(ss);
   var j = { ok: true, kyodo: { pushed: 0 }, fit365: { pushed: 0 } };
   try { j = joinListPushChecks_(ss); } catch (eJ) { j = { ok: false, message: String(eJ) }; }
+  try { joinListRefresh_(ss.getSheetByName(JOIN_LIST_SHEET_)); } catch (eR) {}
   var jp = ((j.kyodo && j.kyodo.pushed) || 0) + ((j.fit365 && j.fit365.pushed) || 0);
   var total = (r.pushed || 0) + jp;
   ss.toast(total ? ('元ファイルへ ' + total + ' 件送りました') : (r.errors || !j.ok ? '送れなかったマスがあります' : '送るチェックはありません'), '反映', 8);
@@ -6686,8 +6788,8 @@ function kengakuJoinDateFormula_() {
     "jd,'経堂_入会'!A2:A," +
     "jn,REGEXREPLACE('経堂_入会'!B2:B&\"\",\"[\\s　]\",\"\")," +
     "jm,LOWER(TRIM('経堂_入会'!F2:F&\"\"))," +
-    "ld,'" + JOIN_LIST_SHEET_ + "'!A2:A," +
-    "lm,LOWER(TRIM('" + JOIN_LIST_SHEET_ + "'!C2:C&\"\"))," +
+    "ld,'" + JOIN_LIST_SHEET_ + "'!A3:A," +
+    "lm,LOWER(TRIM('" + JOIN_LIST_SHEET_ + "'!C3:C&\"\"))," +
     'MAP(A2:A,B2:B,C2:C,D2:D,LAMBDA(t,k,n,m,' +
     'IF(OR(t="",NOT(REGEXMATCH(k&"","見学|体験"))),"",IFERROR(LET(' +
     'nn,REGEXREPLACE(n&"","[\\s　]",""),mm,LOWER(TRIM(m&"")),lo,INT(t)-1,hi,t+' + d + ',' +
@@ -6944,12 +7046,17 @@ function previewTourToJoinFunnel_(days) {
       });
     }
     var listSh = ss.getSheetByName(JOIN_LIST_SHEET_);
-    if (listSh && listSh.getLastRow() > 1) {
-      listSh.getRange(2, 1, listSh.getLastRow() - 1, 3).getValues().forEach(function (r) {
+    var collectJoinList = function (startCol) {
+      if (!listSh || listSh.getLastRow() < JOIN_LIST_BODY_START_) return;
+      var n = listSh.getLastRow() - 2;
+      listSh.getRange(JOIN_LIST_BODY_START_, startCol, n, 3).getValues().forEach(function (r) {
+        if (String(r[0] || '') === '入会日') return;
         var d = toDate(r[0]);
         if (d && (r[1] || r[2])) joins.push({ at: d, name: norm(r[1]), email: norm(r[2]), kind: '' });
       });
-    }
+    };
+    collectJoinList(1);
+    collectJoinList(6);
 
     var tourSh = ss.getSheetByName('見学体験申請');
     var tours = tourSh.getRange(2, 1, Math.max(tourSh.getLastRow() - 1, 1), 9).getValues();
