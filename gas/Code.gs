@@ -1700,7 +1700,60 @@ var JOIN_LIST_BODY_START_ = 3;
 var JOIN_LIST_BLOCK_COLS_ = 5;
 
 function joinListOnEditSimple_(e) {
-  return;
+  if (!e || !e.range) return;
+  var sh = e.range.getSheet();
+  if (!sh || sh.getName() !== JOIN_LIST_SHEET_) return;
+  if (e.range.getRow() < JOIN_LIST_BODY_START_) return;
+  var lastCol = e.range.getColumn() + e.range.getNumColumns() - 1;
+  if (e.range.getColumn() > 10 || lastCol < 1) return;
+  joinListQueueRange_(sh, e);
+}
+
+function joinListOldValueAt_(e) {
+  if (!e) return '';
+  if (e.range && e.range.getNumRows() === 1 && e.range.getNumColumns() === 1) {
+    return String(e.oldValue == null ? '' : e.oldValue);
+  }
+  return '';
+}
+
+function joinListQueueRange_(sh, e) {
+  var range = e.range;
+  var q = unpaidQueueSheet_(sh.getParent());
+  var last = Math.max(q.getLastRow(), 1);
+  var rows = [];
+  var r0 = range.getRow();
+  var nR = range.getNumRows();
+  var c0 = range.getColumn();
+  var lastCol = c0 + range.getNumColumns() - 1;
+  var seen = {};
+  var r;
+  for (r = 0; r < nR; r++) {
+    var destRow = r0 + r;
+    if (destRow < JOIN_LIST_BODY_START_) continue;
+    var blocks = [];
+    if (c0 <= 5) blocks.push({ start: 1, key: 'kyodo', emailCol: 3 });
+    if (lastCol >= 6 && c0 <= 10) blocks.push({ start: 6, key: 'fit365', emailCol: 8 });
+    var b;
+    for (b = 0; b < blocks.length; b++) {
+      var block = blocks[b];
+      var id = destRow + ':' + block.start;
+      if (seen[id]) continue;
+      seen[id] = true;
+      var oldEmail = '';
+      if (c0 <= block.emailCol && lastCol >= block.emailCol) oldEmail = joinListOldValueAt_(e);
+      rows.push([
+        new Date(),
+        'join',
+        block.key,
+        destRow,
+        block.start,
+        JSON.stringify({ oldEmail: oldEmail }),
+        'queued'
+      ]);
+    }
+  }
+  if (rows.length) q.getRange(last + 1, 1, rows.length, 7).setValues(rows);
 }
 
 function joinListCheckboxRule_() {
@@ -1716,12 +1769,14 @@ function joinListPaintChrome_(sh) {
   hubPaintOpenSourceCell_(sh, 1, 6, 3, { url: fitUrl, label: 'FIT365 のシートを開く ↗' });
   try { sh.getRange('D1:E1').breakApart(); } catch (e1) {}
   try { sh.getRange('I1:J1').breakApart(); } catch (e2) {}
-  sh.getRange('D1:E1').merge().setValue('チェックは「今日の作業 → チェックを元へ反映」')
+  sh.getRange('D1:E1').merge().setValue('変更は自動で元シートへ')
     .setFontSize(8).setFontColor(t.ash).setFontWeight('normal')
-    .setBackground(t.paper).setHorizontalAlignment('center').setVerticalAlignment('middle');
-  sh.getRange('I1:J1').merge().setValue('チェックは「今日の作業 → チェックを元へ反映」')
+    .setBackground(t.paper).setHorizontalAlignment('center').setVerticalAlignment('middle')
+    .setNote('チェック・名前・メール・入会日を変えると、未納のゲートストップと同じく元のスプシへ自動で送ります。メニューの「チェックを元へ反映」は予備です。');
+  sh.getRange('I1:J1').merge().setValue('変更は自動で元シートへ')
     .setFontSize(8).setFontColor(t.ash).setFontWeight('normal')
-    .setBackground(t.paper).setHorizontalAlignment('center').setVerticalAlignment('middle');
+    .setBackground(t.paper).setHorizontalAlignment('center').setVerticalAlignment('middle')
+    .setNote('チェック・名前・メール・入会日を変えると、FIT365 の元スプシへ自動で送ります。メニューの「チェックを元へ反映」は予備です。');
 }
 
 /**
@@ -1735,6 +1790,7 @@ function setupJoinListLinked_() {
     if (!sh) sh = dest.insertSheet(JOIN_LIST_SHEET_);
     if (sh.getMaxColumns() < 10) sh.insertColumnsAfter(sh.getMaxColumns(), 10 - sh.getMaxColumns());
     try { sh.getRange(1, 1, 1, 10).breakApart(); } catch (eB) {}
+    try { ensureUnpaidEditTrigger_(); } catch (eT) {}
     var pulled = joinListRefresh_(sh);
     try { removeSheetFilterSafe_(sh); } catch (eFil) {}
     var lecture = dest.getSheetByName('マシンレクチャー申込');
@@ -1851,24 +1907,25 @@ function styleJoinListLinked_(sh, kyodoRows, fitRows) {
   sh.getRange(3, 8, paintRows, 1).setHorizontalAlignment('left');
   hubType_(sh.getRange('A2:J2'))
     .setBackground(t.ink).setFontColor(t.paper).setFontWeight('bold')
-    .setFontSize(10).setHorizontalAlignment('center').setVerticalAlignment('middle')
+    .setFontSize(9).setHorizontalAlignment('center').setVerticalAlignment('middle')
+    .setWrap(true)
     .setBorder(false, false, true, false, false, false, t.blood, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
-  sh.getRange('D1:E1').setBackground(t.paper).setFontColor(t.ash).setFontWeight('normal').setFontSize(8);
-  sh.getRange('I1:J1').setBackground(t.paper).setFontColor(t.ash).setFontWeight('normal').setFontSize(8);
+  sh.getRange('D1:E1').setBackground(t.paper).setFontColor(t.ash).setFontWeight('normal').setFontSize(8).setWrap(true);
+  sh.getRange('I1:J1').setBackground(t.paper).setFontColor(t.ash).setFontWeight('normal').setFontSize(8).setWrap(true);
   sh.setFrozenRows(2);
   sh.setHiddenGridlines(true);
   sh.setTabColor(t.ink);
   sh.setRowHeight(1, 28);
-  sh.setRowHeight(2, 32);
+  sh.setRowHeight(2, 48);
   try { sh.setRowHeightsForced(3, paintRows, 26); } catch (eH) {}
   sh.setColumnWidth(1, 150);
   sh.setColumnWidth(2, 110);
   sh.setColumnWidth(3, 220);
-  sh.setColumnWidths(4, 2, 72);
+  sh.setColumnWidths(4, 2, 118);
   sh.setColumnWidth(6, 150);
   sh.setColumnWidth(7, 110);
   sh.setColumnWidth(8, 220);
-  sh.setColumnWidths(9, 2, 72);
+  sh.setColumnWidths(9, 2, 118);
   var rules = [];
   if (kyodoRows > 0) {
     rules.push(
@@ -1937,19 +1994,12 @@ function joinListPushChecks_(ss) {
   ss = ss || openWorkspaceSpreadsheet_();
   var sh = ss.getSheetByName(JOIN_LIST_SHEET_);
   if (!sh) return { ok: false, message: 'missing join list' };
-  var kyodo = joinListPushBlock_(sh, 3, 4, MACHINE_SOURCE_ID_);
-  var fit = joinListPushBlock_(sh, 8, 9, FIT365_JOIN_SOURCE_ID_);
+  var kyodo = joinListPushBlock_(sh, 1, MACHINE_SOURCE_ID_);
+  var fit = joinListPushBlock_(sh, 6, FIT365_JOIN_SOURCE_ID_);
   return { ok: !!(kyodo.ok && fit.ok), kyodo: kyodo, fit365: fit };
 }
 
-function joinListPushBlock_(destSh, emailCol, destCheckCol, srcId) {
-  var src = SpreadsheetApp.openById(srcId);
-  var srcSh = src.getSheetByName(JOIN_LIST_SHEET_);
-  if (!srcSh) return { ok: false, message: 'no source sheet' };
-  var n = joinListCountBlock_(destSh, emailCol === 3 ? 1 : 6);
-  if (n < 1) return { ok: true, pushed: 0 };
-  var emails = destSh.getRange(JOIN_LIST_BODY_START_, emailCol, n, 1).getDisplayValues();
-  var checks = destSh.getRange(JOIN_LIST_BODY_START_, destCheckCol, n, 2).getValues();
+function joinListSrcEmailMap_(srcSh) {
   var srcLast = Math.max(srcSh.getLastRow(), 2);
   var srcEmails = srcSh.getRange(2, 3, srcLast - 1, 1).getDisplayValues();
   var map = {};
@@ -1958,17 +2008,117 @@ function joinListPushBlock_(destSh, emailCol, destCheckCol, srcId) {
     var k = String(srcEmails[i][0] || '').trim().toLowerCase();
     if (k) map[k] = i + 2;
   }
+  return map;
+}
+
+function joinListRowPayload_(row) {
+  return [
+    row[0],
+    row[1],
+    row[2],
+    joinListToBool_(row[3]),
+    joinListToBool_(row[4])
+  ];
+}
+
+function joinListPushOneRow_(destSh, destRow, destStartCol, srcId, oldEmail) {
+  if (!destSh || destRow < JOIN_LIST_BODY_START_) return { ok: true, pushed: 0 };
+  var row = destSh.getRange(destRow, destStartCol, 1, 5).getValues()[0];
+  var emailNow = String(row[2] == null ? '' : row[2]).trim().toLowerCase();
+  var lookup = String(oldEmail || '').trim().toLowerCase() || emailNow;
+  if (!lookup || lookup === 'メールアドレス') return { ok: true, pushed: 0 };
+  var src = SpreadsheetApp.openById(srcId);
+  var srcSh = src.getSheetByName(JOIN_LIST_SHEET_);
+  if (!srcSh) return { ok: false, message: 'no source sheet' };
+  var map = joinListSrcEmailMap_(srcSh);
+  var srcRow = map[lookup] || (emailNow && emailNow !== lookup ? map[emailNow] : 0);
+  if (!srcRow) return { ok: true, pushed: 0, missed: 1 };
+  srcSh.getRange(srcRow, 1, 1, 5).setValues([joinListRowPayload_(row)]);
+  return { ok: true, pushed: 1 };
+}
+
+function joinListPushEdited_(e) {
+  if (!e || !e.range) return { ok: true, pushed: 0 };
+  var sh = e.range.getSheet();
+  var r0 = e.range.getRow();
+  var nR = e.range.getNumRows();
+  var c0 = e.range.getColumn();
+  var lastCol = c0 + e.range.getNumColumns() - 1;
   var pushed = 0;
   var missed = 0;
-  for (i = 0; i < emails.length; i++) {
-    var em = String(emails[i][0] || '').trim().toLowerCase();
+  var r;
+  for (r = 0; r < nR; r++) {
+    var destRow = r0 + r;
+    if (destRow < JOIN_LIST_BODY_START_) continue;
+    if (c0 <= 5) {
+      var oldK = (c0 <= 3 && lastCol >= 3) ? joinListOldValueAt_(e) : '';
+      var ky = joinListPushOneRow_(sh, destRow, 1, MACHINE_SOURCE_ID_, oldK);
+      pushed += (ky && ky.pushed) || 0;
+      missed += (ky && ky.missed) || 0;
+    }
+    if (lastCol >= 6 && c0 <= 10) {
+      var oldF = (c0 <= 8 && lastCol >= 8) ? joinListOldValueAt_(e) : '';
+      var fit = joinListPushOneRow_(sh, destRow, 6, FIT365_JOIN_SOURCE_ID_, oldF);
+      pushed += (fit && fit.pushed) || 0;
+      missed += (fit && fit.missed) || 0;
+    }
+  }
+  return { ok: true, pushed: pushed, missed: missed };
+}
+
+function joinListFlushQueue_(ss) {
+  ss = ss || openWorkspaceSpreadsheet_();
+  var q = ss.getSheetByName(UNPAID_QUEUE_SHEET_);
+  if (!q || q.getLastRow() < 2) return { ok: true, pushed: 0 };
+  var n = q.getLastRow() - 1;
+  var data = q.getRange(2, 1, n, 7).getValues();
+  var sh = ss.getSheetByName(JOIN_LIST_SHEET_);
+  if (!sh) return { ok: false, message: 'missing join list' };
+  var pushed = 0;
+  var missed = 0;
+  var i;
+  for (i = 0; i < data.length; i++) {
+    if (String(data[i][1] || '') !== 'join') continue;
+    if (String(data[i][6] || '') !== 'queued') continue;
+    var destRow = Number(data[i][3]);
+    var startCol = Number(data[i][4]) || (String(data[i][2] || '') === 'fit365' ? 6 : 1);
+    var payload = {};
+    try { payload = JSON.parse(data[i][5]); } catch (eJ) { payload = {}; }
+    var srcId = startCol === 6 ? FIT365_JOIN_SOURCE_ID_ : MACHINE_SOURCE_ID_;
+    var r = joinListPushOneRow_(sh, destRow, startCol, srcId, payload && payload.oldEmail);
+    if (r && r.pushed) {
+      q.getRange(i + 2, 7).setValue('done');
+      pushed += 1;
+    } else if (r && r.missed) {
+      q.getRange(i + 2, 7).setValue('missed');
+      missed += 1;
+    } else {
+      q.getRange(i + 2, 7).setValue('done');
+    }
+  }
+  return { ok: true, pushed: pushed, missed: missed };
+}
+
+function joinListPushBlock_(destSh, destStartCol, srcId) {
+  var src = SpreadsheetApp.openById(srcId);
+  var srcSh = src.getSheetByName(JOIN_LIST_SHEET_);
+  if (!srcSh) return { ok: false, message: 'no source sheet' };
+  var n = joinListCountBlock_(destSh, destStartCol);
+  if (n < 1) return { ok: true, pushed: 0 };
+  var block = destSh.getRange(JOIN_LIST_BODY_START_, destStartCol, n, 5).getValues();
+  var map = joinListSrcEmailMap_(srcSh);
+  var pushed = 0;
+  var missed = 0;
+  var i;
+  for (i = 0; i < block.length; i++) {
+    var em = String(block[i][2] == null ? '' : block[i][2]).trim().toLowerCase();
     if (!em || em === 'メールアドレス') continue;
     var srcRow = map[em];
     if (!srcRow) {
       missed += 1;
       continue;
     }
-    srcSh.getRange(srcRow, 4, 1, 2).setValues([[joinListToBool_(checks[i][0]), joinListToBool_(checks[i][1])]]);
+    srcSh.getRange(srcRow, 1, 1, 5).setValues([joinListRowPayload_(block[i])]);
     pushed += 1;
   }
   return { ok: true, pushed: pushed, missed: missed };
@@ -2277,11 +2427,14 @@ function handleApiGet_(e) {
     }
     if (api === 'flushUnpaidQueue') {
       var ssFlush = openWorkspaceSpreadsheet_();
+      var joinQ = null;
+      try { joinQ = joinListFlushQueue_(ssFlush); } catch (eJQ) { joinQ = { ok: false, message: String(eJQ) }; }
       var joinPush = joinListPushChecks_(ssFlush);
       var joinRef = null;
       try { joinRef = joinListRefresh_(ssFlush.getSheetByName(JOIN_LIST_SHEET_)); } catch (eJR) {}
       return jsonOutput_({
         unpaid: unpaidFlushQueue_(ssFlush),
+        joinQueue: joinQ,
         joinList: joinPush,
         joinRefresh: joinRef
       });
@@ -5842,6 +5995,8 @@ function restyleHubLook_() {
       if (n === HUB_HOME_SHEET_ || n === '経堂マスタ' || n === UNPAID_SHEET_ || n === UNPAID_TREND_SHEET_ || n === 'URL一覧' || n === '学割' || n === '販促_学校関係者') continue;
       if (/backup|シート\d+/.test(n)) continue;
       if (n === JOIN_LIST_SHEET_) {
+        try { joinListFlushQueue_(ss); } catch (eJQ) {}
+        try { joinListPushChecks_(ss); } catch (eJP) {}
         try { joinListRefresh_(sh); } catch (eJ) {}
         continue;
       }
@@ -6068,6 +6223,7 @@ function unpaidDetectBoolCols_(vals) {
 
 function unpaidIsPushCol_(col1, boolCols) {
   if (col1 === UNPAID_REC_COL_) return true;
+  if (col1 === UNPAID_NAME_COL_) return true;
   return boolCols.indexOf(col1 - 1) >= 0;
 }
 
@@ -6159,7 +6315,9 @@ function unpaidFlushQueue_(ss) {
   var pending = [];
   var i;
   for (i = 0; i < data.length; i++) {
-    if (String(data[i][6] || '') === 'queued') pending.push({ i: i, row: data[i] });
+    if (String(data[i][6] || '') === 'queued' && String(data[i][1] || '') !== 'join') {
+      pending.push({ i: i, row: data[i] });
+    }
   }
   if (!pending.length) return { ok: true, pushed: 0, pending: 0 };
   var byMonth = {};
@@ -6283,7 +6441,14 @@ function ensureUnpaidEditTrigger_() {
 function unpaidOnEditInstalled_(e) {
   if (!e || !e.range) return;
   var sh = e.range.getSheet();
-  if (!sh || sh.getName() !== UNPAID_SHEET_) return;
+  if (!sh) return;
+  var name = sh.getName();
+  if (name === JOIN_LIST_SHEET_) {
+    try { joinListPushEdited_(e); } catch (e1) {}
+    try { joinListFlushQueue_(sh.getParent()); } catch (e2) {}
+    return;
+  }
+  if (name !== UNPAID_SHEET_) return;
   if (e.range.getRow() === 1 && e.range.getColumn() === 2) {
     var filledEd = unpaidFillFromSource_(sh);
     styleUnpaidView_(sh);
@@ -6311,6 +6476,8 @@ function fillUnpaidFromMenu() {
   var trend = null;
   try { trend = unpaidFillTrendAll_(ss); } catch (eTr) { trend = { ok: false, message: String(eTr) }; }
   var join = null;
+  try { joinListFlushQueue_(ss); } catch (eJQ) {}
+  try { joinListPushChecks_(ss); } catch (eJP) {}
   try { join = joinListRefresh_(ss.getSheetByName(JOIN_LIST_SHEET_)); } catch (eJ) {}
   ss.toast(filled && filled.ok ? ('再取得しました（' + filled.d2 + '）') : String(filled && filled.message ? filled.message : '失敗'), '再取得', 8);
   return { unpaid: filled, trend: trend, joinList: join };
@@ -6320,13 +6487,15 @@ function flushUnpaidFromMenu() {
   var ss = SpreadsheetApp.getActiveSpreadsheet() || openWorkspaceSpreadsheet_();
   try { ensureUnpaidEditTrigger_(); } catch (eT) {}
   var r = unpaidFlushQueue_(ss);
+  var jq = { ok: true, pushed: 0 };
+  try { jq = joinListFlushQueue_(ss); } catch (eJQ) { jq = { ok: false, message: String(eJQ) }; }
   var j = { ok: true, kyodo: { pushed: 0 }, fit365: { pushed: 0 } };
   try { j = joinListPushChecks_(ss); } catch (eJ) { j = { ok: false, message: String(eJ) }; }
   try { joinListRefresh_(ss.getSheetByName(JOIN_LIST_SHEET_)); } catch (eR) {}
-  var jp = ((j.kyodo && j.kyodo.pushed) || 0) + ((j.fit365 && j.fit365.pushed) || 0);
+  var jp = ((j.kyodo && j.kyodo.pushed) || 0) + ((j.fit365 && j.fit365.pushed) || 0) + ((jq && jq.pushed) || 0);
   var total = (r.pushed || 0) + jp;
-  ss.toast(total ? ('元ファイルへ ' + total + ' 件送りました') : (r.errors || !j.ok ? '送れなかったマスがあります' : '送るチェックはありません'), '反映', 8);
-  return { unpaid: r, joinList: j };
+  ss.toast(total ? ('元ファイルへ ' + total + ' 件送りました') : (r.errors || !j.ok ? '送れなかったマスがあります' : '送る変更はありません'), '反映', 8);
+  return { unpaid: r, joinQueue: jq, joinList: j };
 }
 
 /**
@@ -6538,7 +6707,7 @@ function styleUnpaidDashboard_(sh) {
   sh.getRange('G1:G3').setBackground(t.blood).setFontColor(t.paper);
   sh.getRange('G1').setFontColor(t.paper);
   sh.getRange('G3').setFontColor(t.paper);
-  sh.getRange('A4:C4').merge().setValue('チェックと回収金額はこちらで編集できます。元の未納管理ドライブに保存します。')
+  sh.getRange('A4:C4').merge().setValue('チェック・会員名・回収金額はこちらで編集できます。変えたら元の未納管理ドライブへ自動で送ります。')
     .setFontSize(8).setFontColor(t.ash).setHorizontalAlignment('left').setFontWeight('normal')
     .setBackground(t.paper);
 
@@ -6548,7 +6717,9 @@ function styleUnpaidDashboard_(sh) {
   sh.setRowHeight(4, 20);
 }
 
-var UNPAID_TREND_HEAD_ROW_ = 21;
+var UNPAID_TREND_HEAD_ROW_ = 6;
+var UNPAID_TREND_CHART_SRC_COL_ = 14;
+var UNPAID_TREND_CHART_GAP_ROWS_ = 15;
 
 function unpaidTrendRowFromStats_(monthName, st) {
   st = st || { n: 0, sp: 0, sr: 0, nr: 0, kone: { pay: 0, rec: 0 }, ktwo: { pay: 0, rec: 0 }, kbad: { pay: 0, rec: 0 } };
@@ -6608,8 +6779,9 @@ function unpaidEnsureTrendSheet_(ss) {
   ss = ss || openWorkspaceSpreadsheet_();
   var tr = ss.getSheetByName(UNPAID_TREND_SHEET_);
   if (!tr) tr = ss.insertSheet(UNPAID_TREND_SHEET_);
-  if (tr.getMaxColumns() < 12) tr.insertColumnsAfter(tr.getMaxColumns(), 12 - tr.getMaxColumns());
-  if (tr.getMaxRows() < 80) tr.insertRowsAfter(tr.getMaxRows(), 80 - tr.getMaxRows());
+  var needCols = UNPAID_TREND_CHART_SRC_COL_ + 10;
+  if (tr.getMaxColumns() < needCols) tr.insertColumnsAfter(tr.getMaxColumns(), needCols - tr.getMaxColumns());
+  if (tr.getMaxRows() < 90) tr.insertRowsAfter(tr.getMaxRows(), 90 - tr.getMaxRows());
   try { tr.showSheet(); } catch (eShow) {}
   return tr;
 }
@@ -6639,13 +6811,12 @@ function unpaidInsertTrendChart_(tr, spec) {
     var t = dnTheme_();
     var b = tr.newChart()
       .setChartType(spec.type)
-      .addRange(spec.domain)
-      .addRange(spec.values)
+      .addRange(spec.range)
       .setNumHeaders(1)
       .setPosition(spec.row, spec.col, 8, 8)
       .setOption('title', spec.title)
-      .setOption('width', spec.width || 460)
-      .setOption('height', spec.height || 250)
+      .setOption('width', spec.width || 540)
+      .setOption('height', spec.height || 280)
       .setOption('colors', spec.colors || [t.ink, t.blood, t.ash])
       .setOption('backgroundColor', t.paper)
       .setOption('titleTextStyle', unpaidChartStyle_().titleTextStyle)
@@ -6653,8 +6824,10 @@ function unpaidInsertTrendChart_(tr, spec) {
       .setOption('hAxis', unpaidChartStyle_().hAxis)
       .setOption('vAxis', spec.vAxis || unpaidChartStyle_().vAxis)
       .setOption('chartArea', unpaidChartStyle_().chartArea)
-      .setOption('useFirstColumnAsDomain', true);
+      .setOption('useFirstColumnAsDomain', true)
+      .setOption('interpolateNulls', true);
     if (spec.series) b = b.setOption('series', spec.series);
+    if (spec.seriesType) b = b.setOption('seriesType', spec.seriesType);
     tr.insertChart(b.build());
     return true;
   } catch (err) {
@@ -6662,94 +6835,130 @@ function unpaidInsertTrendChart_(tr, spec) {
   }
 }
 
+function unpaidChartNum_(v) {
+  if (v === '' || v == null) return null;
+  var n = Number(v);
+  return isNaN(n) ? null : n;
+}
+
+function unpaidWriteTrendChartSource_(tr, body, head) {
+  var start = UNPAID_TREND_CHART_SRC_COL_;
+  var clearTo = Math.max(tr.getMaxRows(), head + Math.max(body.length, 1) + 2);
+  tr.getRange(1, start, clearTo, 10).clearContent();
+  if (!body.length) return { ok: true, rows: 0 };
+  var headers = [[
+    '年月', '未納総額', '回収額',
+    '年月', '回収率',
+    '年月', '未納件数',
+    '年月', '1ヶ月未納 回収率', '2ヶ月未納 回収率', '貸倒候補 回収率'
+  ]];
+  var rows = [];
+  var i;
+  for (i = 0; i < body.length; i++) {
+    var r = body[i];
+    rows.push([
+      r[0], unpaidChartNum_(r[2]), unpaidChartNum_(r[3]),
+      r[0], unpaidChartNum_(r[4]),
+      r[0], unpaidChartNum_(r[1]),
+      r[0], unpaidChartNum_(r[8]), unpaidChartNum_(r[9]), unpaidChartNum_(r[10])
+    ]);
+  }
+  tr.getRange(head, start, 1, 11).setValues(headers);
+  tr.getRange(head + 1, start, rows.length, 11).setValues(rows);
+  try { tr.hideColumns(start, 11); } catch (eH) {}
+  return { ok: true, rows: rows.length };
+}
+
 function unpaidTrendTableBounds_(tr) {
   var head = UNPAID_TREND_HEAD_ROW_;
-  var last = Math.max(tr.getLastRow(), head);
-  var labels = tr.getRange(head, 1, Math.max(last - head + 1, 1), 1).getDisplayValues();
-  if (String(labels[0][0] || '') !== '年月') {
+  var scanLast = Math.min(Math.max(tr.getLastRow(), head), 60);
+  if (String(tr.getRange(head, 1).getDisplayValue() || '') !== '年月') {
     var r;
-    for (r = 1; r <= last; r++) {
+    for (r = 1; r <= scanLast; r++) {
       if (String(tr.getRange(r, 1).getDisplayValue() || '') === '年月') {
         head = r;
-        labels = tr.getRange(head, 1, Math.max(last - head + 1, 1), 1).getDisplayValues();
         break;
       }
     }
   }
+  var labels = tr.getRange(head, 1, Math.max(scanLast - head + 1, 1), 1).getDisplayValues();
   var n = 0;
   var i;
   for (i = 1; i < labels.length; i++) {
     if (/^\d{2}年\d{1,2}月$/.test(String(labels[i][0] || ''))) n = i;
+    else if (n > 0) break;
   }
   return { head: head, n: n, last: head + n };
 }
 
 function unpaidEnsureTrendCharts_(tr) {
-  if (!tr) return;
+  if (!tr) return { ok: false, charts: 0 };
   unpaidClearTrendCharts_(tr);
   var b = unpaidTrendTableBounds_(tr);
-  if (!b.n) return;
+  if (!b.n) return { ok: true, charts: 0 };
+  try {
+    var tableBody = tr.getRange(b.head + 1, 1, b.n, 11).getValues();
+    unpaidWriteTrendChartSource_(tr, tableBody, b.head);
+  } catch (eSrc) {}
   var t = dnTheme_();
   var rows = b.n + 1;
-  var domain = tr.getRange(b.head, 1, rows, 1);
-  unpaidInsertTrendChart_(tr, {
+  var src = UNPAID_TREND_CHART_SRC_COL_;
+  var chartTop = b.last + 3;
+  var gap = UNPAID_TREND_CHART_GAP_ROWS_;
+  var need = chartTop + gap * 2 + 2;
+  if (tr.getMaxRows() < need) tr.insertRowsAfter(tr.getMaxRows(), need - tr.getMaxRows());
+  var pctAxis = {
+    textStyle: unpaidChartStyle_().vAxis.textStyle,
+    gridlines: { color: t.paper },
+    minorGridlines: { count: 0 },
+    format: '0%',
+    viewWindow: { min: 0, max: 1 }
+  };
+  var placed = 0;
+  if (unpaidInsertTrendChart_(tr, {
     type: Charts.ChartType.COMBO,
-    domain: domain,
-    values: tr.getRange(b.head, 3, rows, 2),
+    range: tr.getRange(b.head, src, rows, 3),
     title: '未納総額と回収額',
-    row: 5,
+    row: chartTop,
     col: 1,
     colors: [t.ink, t.blood],
+    seriesType: 'bars',
     series: { 1: { type: 'line', targetAxisIndex: 0 } }
-  });
-  unpaidInsertTrendChart_(tr, {
+  })) placed += 1;
+  if (unpaidInsertTrendChart_(tr, {
     type: Charts.ChartType.LINE,
-    domain: domain,
-    values: tr.getRange(b.head, 5, rows, 1),
+    range: tr.getRange(b.head, src + 3, rows, 2),
     title: '回収率',
-    row: 5,
+    row: chartTop,
     col: 7,
     colors: [t.blood],
-    vAxis: {
-      textStyle: unpaidChartStyle_().vAxis.textStyle,
-      gridlines: { color: t.paper },
-      minorGridlines: { count: 0 },
-      format: '0%',
-      viewWindow: { min: 0, max: 1 }
-    }
-  });
-  unpaidInsertTrendChart_(tr, {
+    vAxis: pctAxis
+  })) placed += 1;
+  if (unpaidInsertTrendChart_(tr, {
     type: Charts.ChartType.COLUMN,
-    domain: domain,
-    values: tr.getRange(b.head, 2, rows, 1),
+    range: tr.getRange(b.head, src + 5, rows, 2),
     title: '未納件数',
-    row: 13,
+    row: chartTop + gap,
     col: 1,
     colors: [t.ink]
-  });
-  unpaidInsertTrendChart_(tr, {
+  })) placed += 1;
+  if (unpaidInsertTrendChart_(tr, {
     type: Charts.ChartType.LINE,
-    domain: domain,
-    values: tr.getRange(b.head, 9, rows, 3),
+    range: tr.getRange(b.head, src + 7, rows, 4),
     title: '1ヶ月 / 2ヶ月 / 貸倒 の回収率',
-    row: 13,
+    row: chartTop + gap,
     col: 7,
     colors: [t.ink, t.ash, t.blood],
-    vAxis: {
-      textStyle: unpaidChartStyle_().vAxis.textStyle,
-      gridlines: { color: t.paper },
-      minorGridlines: { count: 0 },
-      format: '0%',
-      viewWindow: { min: 0, max: 1 }
-    }
-  });
+    vAxis: pctAxis
+  })) placed += 1;
+  return { ok: placed > 0, charts: placed, chartTop: chartTop };
 }
 
 function unpaidStyleTrendSheet_(tr) {
   if (!tr) return;
   var t = dnTheme_();
   var b = unpaidTrendTableBounds_(tr);
-  var paintRows = Math.max(b.last, 40);
+  var paintRows = Math.max(b.last + UNPAID_TREND_CHART_GAP_ROWS_ * 2 + 8, 70);
   var cols = Math.min(tr.getMaxColumns(), 12);
   hubType_(tr.getRange(1, 1, paintRows, cols))
     .setBackground(t.paper).setFontColor(t.ink).setFontSize(10)
@@ -6816,6 +7025,7 @@ function unpaidStyleTrendSheet_(tr) {
   tr.setRowHeight(2, 22);
   tr.setRowHeight(3, 36);
   tr.setRowHeight(4, 28);
+  tr.setRowHeight(5, 12);
   tr.setColumnWidth(1, 92);
   tr.setColumnWidths(2, 4, 100);
   tr.setColumnWidth(6, 150);
@@ -6834,6 +7044,10 @@ function unpaidWriteTrendMonth_(tr, monthName, st) {
       var row = b.head + 1 + i;
       tr.getRange(row, 1, 1, 11).setValues([unpaidTrendRowFromStats_(monthName, st)]);
       tr.getRange(row, 6).setFormula(unpaidSparkFormula_(row));
+      try {
+        var bodyNow = tr.getRange(b.head + 1, 1, b.n, 11).getValues();
+        unpaidWriteTrendChartSource_(tr, bodyNow, b.head);
+      } catch (eC) {}
       return;
     }
   }
@@ -6842,11 +7056,13 @@ function unpaidWriteTrendMonth_(tr, monthName, st) {
 function unpaidPaintTrend_(tr, body, totals, latest) {
   var t = dnTheme_();
   unpaidClearTrendCharts_(tr);
-  try { tr.getRange(1, 1, Math.min(tr.getMaxRows(), 80), 12).breakApart(); } catch (e0) {}
-  try { tr.getRange(1, 1, Math.min(tr.getMaxRows(), 80), 12).clearContent(); } catch (e1) {}
-  try { tr.getRange(1, 1, Math.min(tr.getMaxRows(), 80), 12).clearDataValidations(); } catch (e2) {}
+  var wipeRows = Math.min(tr.getMaxRows(), 90);
+  var wipeCols = Math.min(tr.getMaxColumns(), UNPAID_TREND_CHART_SRC_COL_ + 10);
+  try { tr.getRange(1, 1, wipeRows, wipeCols).breakApart(); } catch (e0) {}
+  try { tr.getRange(1, 1, wipeRows, wipeCols).clearContent(); } catch (e1) {}
+  try { tr.getRange(1, 1, wipeRows, wipeCols).clearDataValidations(); } catch (e2) {}
   var head = UNPAID_TREND_HEAD_ROW_;
-  var need = head + Math.max(body.length, 1) + 2;
+  var need = head + Math.max(body.length, 1) + UNPAID_TREND_CHART_GAP_ROWS_ * 2 + 8;
   if (tr.getMaxRows() < need) tr.insertRowsAfter(tr.getMaxRows(), need - tr.getMaxRows());
   var srcUrl = 'https://docs.google.com/spreadsheets/d/' + UNPAID_SOURCE_ID_ + '/edit';
   hubPaintOpenSourceCell_(tr, 1, 1, 3, { url: srcUrl, label: '元の未納管理ドライブを開く ↗' });
@@ -6874,7 +7090,7 @@ function unpaidPaintTrend_(tr, body, totals, latest) {
   }
   var totRate = totals.sp ? totals.sr / totals.sp : '';
   tr.getRange(4, 1, 1, 12).merge().setValue(
-    '各月タブのスナップショットです。繰越があると月をまたいで二重計上されます。グラフは実データ月だけ。空の月タブは出しません。　月合計 ' +
+    '各月タブのスナップショットです。繰越があると月をまたいで二重計上されます。表の下にグラフがあります。空の月タブは出しません。　月合計 ' +
     (totals.n || 0) + '件 / 未納 ' + unpaidYen_(totals.sp) + ' / 回収 ' + unpaidYen_(totals.sr) +
     (totRate === '' ? '' : ' / 合計回収率 ' + (Math.round(totRate * 1000) / 10).toFixed(1) + '%')
   );
@@ -6888,12 +7104,17 @@ function unpaidPaintTrend_(tr, body, totals, latest) {
     var i;
     for (i = 0; i < body.length; i++) spark.push([unpaidSparkFormula_(head + 1 + i)]);
     tr.getRange(head + 1, 6, body.length, 1).setFormulas(spark);
+    tr.getRange(head + body.length + 2, 1, 1, 11).merge()
+      .setValue('月ごとの推移グラフ')
+      .setFontSize(10).setFontColor(t.ash).setFontWeight('bold')
+      .setHorizontalAlignment('left').setBackground(t.paper);
   }
+  unpaidWriteTrendChartSource_(tr, body, head);
   unpaidStyleTrendSheet_(tr);
   if (latestRate !== '' && latestRate < 0.5) {
     tr.getRange(3, 9, 1, 2).setBackground(t.blood).setFontColor(t.paper);
   }
-  unpaidEnsureTrendCharts_(tr);
+  return unpaidEnsureTrendCharts_(tr);
 }
 
 function unpaidFillTrendAll_(ss) {
@@ -6927,6 +7148,7 @@ function unpaidFillTrendAll_(ss) {
       scanned.push({ name: name, ok: true, n: st.n, sp: st.sp, sr: st.sr });
     }
     unpaidPaintTrend_(tr, body, totals, latest);
+    var bNow = unpaidTrendTableBounds_(tr);
     return {
       ok: true,
       months: scanned.length,
@@ -6936,8 +7158,12 @@ function unpaidFillTrendAll_(ss) {
       sheet: tr,
       gid: tr.getSheetId(),
       charts: tr.getCharts().length,
+      headRow: bNow.head,
+      tableLast: bNow.last,
       a1: String(tr.getRange('A1').getDisplayValue() || ''),
       d1: String(tr.getRange('D1').getDisplayValue() || ''),
+      a6: String(tr.getRange('A6').getDisplayValue() || ''),
+      a7: String(tr.getRange('A7').getDisplayValue() || ''),
       c3: String(tr.getRange('C3').getDisplayValue() || ''),
       i3: String(tr.getRange('I3').getDisplayValue() || ''),
       scanned: scanned
@@ -6954,7 +7180,7 @@ function setupUnpaidTrend_(ss, options) {
 
 function applyUnpaidNotes_(sh, tr) {
   try {
-    sh.getRange('A1').setNote('レジ送信・ゲートストップ・SMS のチェックは Workspace から押せます。元の未納管理ドライブに保存します。支払額など元データは変えません。');
+    sh.getRange('A1').setNote('レジ送信・ゲートストップ・SMS のチェックと会員名は Workspace から変えられます。変えたら元の未納管理ドライブへ自動で送ります。支払額など元データは変えません。');
     sh.getRange('B1').setNote('元ファイルの月タブ名です。いまの月が一番上、あとは新しい順です。');
     sh.getRange('D1').setNote('会員番号があり、支払額が1円以上の行の件数。');
     sh.getRange('E1').setNote('支払額の合計（手数料は含まない）。');
