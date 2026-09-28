@@ -1,5 +1,11 @@
 {
-  "updated": "2026-09-27",
+  "updated": "2026-09-28",
+  "snapshot": {
+    "memo": "docs/SNAPSHOT_2026-09-28.md",
+    "pr": "https://github.com/ryuta3162-a11y/RYUTA-WORKSPACE/pull/12",
+    "branch": "cursor/hub-field-7e8b",
+    "note": "Live hub uses SPARKLINE cards (not embedded charts). Frozen web app stays at version 200; HEAD is clasp push."
+  },
   "purpose": "RYUTA Workspace aggregation hub — shared spreadsheet IDs and sync map for handoff",
   "policy": {
     "sync": "IMPORTRANGE",
@@ -18,10 +24,13 @@
     "localRoot": "gas-remote",
     "serverFile": "gas-remote/r.js",
     "webAppExec": "https://script.google.com/macros/s/AKfycbzMELimQThNdPUShwo2_KBzJd8kGy9BNdRyOYNgu_sg41t2SleVRiWXFztZJ48e2l9L/exec",
+    "webAppHead": "https://script.google.com/macros/s/AKfycbztH7Vs24mmNisVosxyKdy35a82qAh2JlUqWUnDwFY/exec",
     "deploymentId": "AKfycbzMELimQThNdPUShwo2_KBzJd8kGy9BNdRyOYNgu_sg41t2SleVRiWXFztZJ48e2l9L",
+    "headDeploymentId": "AKfycbztH7Vs24mmNisVosxyKdy35a82qAh2JlUqWUnDwFY",
     "executeAs": "USER_DEPLOYING",
     "setupApis": [
       "setupPromoImport",
+      "setupSchoolDiscountImport",
       "setupReviewImport",
       "setupMachineImport",
       "listSheets",
@@ -29,6 +38,8 @@
       "inspectBook",
       "rebuildUrlIndex",
       "setupUnpaidView",
+      "fillUnpaidTrendNow",
+      "setupMasterKpiCharts",
       "setupKengakuJoinLive",
       "readRange",
       "peekExternal"
@@ -43,7 +54,7 @@
       "role": "unpaid_billing_source",
       "sourceSheets": ["25年8月 ... 26年9月（月ごとのタブ）"],
       "workspaceSheets": ["未納管理", "未納管理_推移"],
-      "sync": "IMPORTRANGE",
+      "sync": "value copy from month tabs + SPARKLINE cards on 未納管理_推移",
       "owner": "other (r-kusaka is editor)",
       "setupApi": "setupUnpaidView"
     },
@@ -79,20 +90,35 @@
       "sourceSheets": [
         "乗り換え",
         "紹介・ペア入会",
-        "学校関係者",
         "ラグビー割",
         "6ヶ月継続"
       ],
       "workspaceSheets": [
         "販促_乗り換え",
         "販促_紹介・ペア入会",
-        "販促_学校関係者",
         "販促_ラグビー割",
         "販促_6ヶ月継続"
       ],
       "sync": "IMPORTRANGE",
       "setupApi": "setupPromoImport",
-      "shareWith": ["r-kusaka@okamoto-group.co.jp"]
+      "shareWith": ["r-kusaka@okamoto-group.co.jp"],
+      "notes": "Source book may still have a 学校関係者 stub. Workspace ignores it and pulls the Google Form instead."
+    },
+    {
+      "key": "school",
+      "name": "学校関係者割フォーム　JOYFIT24（回答）",
+      "spreadsheetId": "1mmG_xM1WoWFKgpmOl5obsKXo_0GjWLnAnLY9hTGanVg",
+      "url": "https://docs.google.com/spreadsheets/d/1mmG_xM1WoWFKgpmOl5obsKXo_0GjWLnAnLY9hTGanVg/edit",
+      "role": "all_stores_form_read_only_from_workspace",
+      "sourceSheet": "フォームの回答 1",
+      "filter": "Col2 = 'JOYFIT24 経堂'",
+      "importRange": "A:P",
+      "workspaceSheet": "学割",
+      "masterPanel": "経堂マスタ P+ = 当月の申請. Row 2 chips switch 見学体験/紹介/学割/ラグビー割/乗り換え/6ヶ月/レクチャー/口コミ/入会メール/入会/退会 for the month in B2. Full detail stays on named sheets.",
+      "sync": "QUERY(IMPORTRANGE(...))",
+      "setupApi": "setupSchoolDiscountImport",
+      "shareWith": ["r-kusaka@okamoto-group.co.jp"],
+      "notes": "Sheet name is 学割 (renamed from 販促_学校関係者). Do not edit the form book. order by timestamp desc."
     },
     {
       "key": "review_east",
