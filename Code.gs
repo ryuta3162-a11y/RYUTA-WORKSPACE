@@ -5984,7 +5984,7 @@ function masterWriteKpiChartSource_(sh) {
     for (r = 0; r < 5; r++) {
       var srcCol = columnLetter_(2 + r);
       forms.push([
-        '=' + srcCol + head,
+        '=TEXT(' + srcCol + head + ',"m月")',
         '=' + srcCol + plan,
         '=' + srcCol + act
       ]);
@@ -5998,20 +5998,56 @@ function masterWriteKpiChartSource_(sh) {
   return { ok: true, head: head, startCol: startCol, blocks: out };
 }
 
-function masterReplaceMomSpark_(sh, head) {
-  var t = dnTheme_();
+function masterRestoreMomCol_(sh, head) {
   var last = Math.min(Math.max(sh.getLastRow(), head + 8), 80);
   var labels = sh.getRange(head, 1, last - head + 1, 1).getDisplayValues();
-  sh.getRange(head, 10).setValue('5ヶ月').setFontWeight('bold').setHorizontalAlignment('center');
+  sh.getRange(head, 10).setValue('対前月').setFontWeight('bold').setHorizontalAlignment('center');
   var i;
   for (i = 1; i < labels.length; i++) {
     var name = String(labels[i][0] || '');
-    if (!name) continue;
     var row = head + i;
-    var color = /解除実績|退会実績/.test(name) ? t.blood : t.ink;
+    if (!name) {
+      sh.getRange(row, 10).clearContent();
+      continue;
+    }
     sh.getRange(row, 10).setFormula(
-      '=IFERROR(SPARKLINE(B' + row + ':F' + row + ',{"charttype","line";"color","' + color + '";"linewidth",2}),)'
+      '=IF(AND(ISNUMBER(F' + row + '),ISNUMBER(E' + row + ')),F' + row + '-E' + row + ',)'
     );
+  }
+}
+
+function masterInsertKpiChart_(sh, spec) {
+  try {
+    var b = sh.newChart()
+      .addRange(spec.range)
+      .setNumHeaders(1)
+      .setPosition(spec.row, spec.col, 2, 2)
+      .asColumnChart()
+      .setOption('title', spec.title)
+      .setOption('width', spec.width || 560)
+      .setOption('height', spec.height || 300)
+      .setOption('colors', spec.colors)
+      .setOption('backgroundColor', '#FFFFFF')
+      .setOption('titleTextStyle', { color: '#171717', fontSize: 16, bold: true, fontName: 'Arial' })
+      .setOption('legend', { position: 'bottom', alignment: 'center', textStyle: { color: '#171717', fontSize: 12, fontName: 'Arial' } })
+      .setOption('hAxis', {
+        slantedText: false,
+        showTextEvery: 1,
+        textStyle: { fontSize: 12, color: '#171717', fontName: 'Arial' }
+      })
+      .setOption('vAxis', {
+        minValue: 0,
+        textStyle: { fontSize: 12, color: '#171717', fontName: 'Arial' },
+        gridlines: { color: '#EDEDED', count: 5 },
+        minorGridlines: { count: 0 }
+      })
+      .setOption('chartArea', { left: 52, top: 44, width: '84%', height: '70%' })
+      .setOption('bar', { groupWidth: '62%' })
+      .setOption('useFirstColumnAsDomain', true);
+    sh.insertChart(b.build());
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
   }
 }
 
@@ -6020,11 +6056,11 @@ function masterEnsureKpiCharts_(sh) {
   masterClearKpiCharts_(sh);
   var src = masterWriteKpiChartSource_(sh);
   var head = src.head || 16;
-  try { masterReplaceMomSpark_(sh, head); } catch (eSp) {}
+  try { masterRestoreMomCol_(sh, head); } catch (eMom) {}
   var t = dnTheme_();
   var start = src.startCol || 35;
   var chartTop = head;
-  var gap = 12;
+  var gap = 16;
   var titles = [
     { title: '入会 計画と実績', colors: [t.ash, t.ink] },
     { title: '退会 計画と実績', colors: [t.ash, t.blood] },
@@ -6037,14 +6073,13 @@ function masterEnsureKpiCharts_(sh) {
   var i;
   for (i = 0; i < titles.length; i++) {
     var col = start + i * 4;
-    var r = unpaidInsertTrendChart_(sh, {
-      kind: 'column',
+    var r = masterInsertKpiChart_(sh, {
       range: sh.getRange(1, col, 6, 3),
       title: titles[i].title,
       row: chartTop + i * gap,
       col: 11,
-      width: 460,
-      height: 230,
+      width: 560,
+      height: 300,
       colors: titles[i].colors
     });
     if (r && r.ok) placed += 1;
