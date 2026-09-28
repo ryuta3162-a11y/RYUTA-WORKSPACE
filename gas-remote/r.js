@@ -634,8 +634,10 @@ function formatImportMirrorChrome_(sheet, cols, checkCols, headers) {
         sheet.setColumnWidth(col, 140);
         rules.push(
           SpreadsheetApp.newConditionalFormatRule()
-            .whenFormulaSatisfied('=$' + colLetter + '2=TRUE')
-            .setBackground(dnTheme_().cream)
+            .whenFormulaSatisfied('=' + colLetter + '2=TRUE')
+            .setBackground(dnTheme_().ink)
+            .setFontColor(dnTheme_().paper)
+            .setBold(true)
             .setRanges([range])
             .build()
         );
@@ -1730,22 +1732,7 @@ function setupJoinListLinked_() {
     SpreadsheetApp.flush();
 
     var pulled = joinListPullChecks_(sh);
-    var t = dnTheme_();
-    sh.getRange('A2:J2')
-      .setBackground(t.ink).setFontColor(t.paper).setFontWeight('bold')
-      .setFontFamily('Noto Sans JP').setFontStyle('italic')
-      .setFontSize(10).setHorizontalAlignment('center')
-      .setBorder(false, false, true, false, false, false, t.blood, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
-    sh.setFrozenRows(2);
-    sh.setHiddenGridlines(true);
-    sh.setColumnWidth(1, 160);
-    sh.setColumnWidth(2, 120);
-    sh.setColumnWidth(3, 220);
-    sh.setColumnWidths(4, 2, 140);
-    sh.setColumnWidth(6, 160);
-    sh.setColumnWidth(7, 120);
-    sh.setColumnWidth(8, 220);
-    sh.setColumnWidths(9, 2, 140);
+    styleJoinListLinked_(sh);
     try { removeSheetFilterSafe_(sh); } catch (eFil) {}
     var lecture = dest.getSheetByName('マシンレクチャー申込');
     var lectureOut = lecture ? tidyImportMirrorKeepLook_(lecture) : null;
@@ -1764,6 +1751,63 @@ function setupJoinListLinked_() {
   } catch (err) {
     return { ok: false, message: String(err && err.message ? err.message : err) };
   }
+}
+
+function styleJoinListLinked_(sh) {
+  if (!sh) return;
+  var t = dnTheme_();
+  var last = Math.max(sh.getLastRow(), 20);
+  var bodyRows = Math.max(last - 2, 1);
+  try { sh.clearConditionalFormatRules(); } catch (e0) {}
+  try { sh.getRange(1, 1, sh.getMaxRows(), 10).setBorder(false, false, false, false, false, false); } catch (eB) {}
+  hubType_(sh.getRange(3, 1, bodyRows, 10))
+    .setBackground(t.paper).setFontColor(t.ink).setFontSize(10).setFontWeight('normal')
+    .setVerticalAlignment('middle').setHorizontalAlignment('center').setWrap(false);
+  sh.getRange(3, 2, bodyRows, 1).setHorizontalAlignment('left');
+  sh.getRange(3, 7, bodyRows, 1).setHorizontalAlignment('left');
+  sh.getRange(3, 3, bodyRows, 1).setHorizontalAlignment('left');
+  sh.getRange(3, 8, bodyRows, 1).setHorizontalAlignment('left');
+  hubType_(sh.getRange('A2:J2'))
+    .setBackground(t.ink).setFontColor(t.paper).setFontWeight('bold')
+    .setFontSize(10).setHorizontalAlignment('center').setVerticalAlignment('middle')
+    .setBorder(false, false, true, false, false, false, t.blood, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
+  sh.getRange('D1:E1').setBackground(t.paper).setFontColor(t.ash).setFontWeight('normal').setFontSize(8);
+  sh.getRange('I1:J1').setBackground(t.paper).setFontColor(t.ash).setFontWeight('normal').setFontSize(8);
+  sh.setFrozenRows(2);
+  sh.setHiddenGridlines(true);
+  sh.setTabColor(t.ink);
+  sh.setRowHeight(1, 28);
+  sh.setRowHeight(2, 32);
+  try { sh.setRowHeightsForced(3, bodyRows, 26); } catch (eH) {}
+  sh.setColumnWidth(1, 150);
+  sh.setColumnWidth(2, 110);
+  sh.setColumnWidth(3, 220);
+  sh.setColumnWidths(4, 2, 72);
+  sh.setColumnWidth(6, 150);
+  sh.setColumnWidth(7, 110);
+  sh.setColumnWidth(8, 220);
+  sh.setColumnWidths(9, 2, 72);
+  var sent = [
+    sh.getRange(3, 4, bodyRows, 2),
+    sh.getRange(3, 9, bodyRows, 2)
+  ];
+  var rules = [
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenFormulaSatisfied('=D3=TRUE')
+      .setBackground(t.ink)
+      .setFontColor(t.paper)
+      .setBold(true)
+      .setRanges([sent[0]])
+      .build(),
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenFormulaSatisfied('=I3=TRUE')
+      .setBackground(t.ink)
+      .setFontColor(t.paper)
+      .setBold(true)
+      .setRanges([sent[1]])
+      .build()
+  ];
+  sh.setConditionalFormatRules(rules);
 }
 
 function joinListPullChecks_(sh) {
@@ -1791,30 +1835,6 @@ function joinListPullBlock_(destSh, srcId, destCheckCol) {
   rng.setValues(body);
   rng.setDataValidation(SpreadsheetApp.newDataValidation().requireCheckbox().setAllowInvalid(true).build());
   rng.setHorizontalAlignment('center');
-  var rules = destSh.getConditionalFormatRules() || [];
-  rules = rules.filter(function (r) {
-    return r.getRanges().every(function (x) {
-      var c = x.getColumn();
-      return !(x.getSheet().getName() === JOIN_LIST_SHEET_ && c >= destCheckCol && c <= destCheckCol + 1);
-    });
-  });
-  var colLetter = columnLetter_(destCheckCol);
-  var colLetter2 = columnLetter_(destCheckCol + 1);
-  rules.push(
-    SpreadsheetApp.newConditionalFormatRule()
-      .whenFormulaSatisfied('=' + colLetter + '3=TRUE')
-      .setBackground(dnTheme_().cream)
-      .setRanges([destSh.getRange(3, destCheckCol, body.length, 1)])
-      .build()
-  );
-  rules.push(
-    SpreadsheetApp.newConditionalFormatRule()
-      .whenFormulaSatisfied('=' + colLetter2 + '3=TRUE')
-      .setBackground(dnTheme_().cream)
-      .setRanges([destSh.getRange(3, destCheckCol + 1, body.length, 1)])
-      .build()
-  );
-  destSh.setConditionalFormatRules(rules);
   return { ok: true, rows: body.length, true2: body.filter(function (x) { return x[1]; }).length };
 }
 
