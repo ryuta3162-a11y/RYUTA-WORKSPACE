@@ -2451,6 +2451,13 @@ function handleApiGet_(e) {
     if (api === 'setupMasterKpiCharts') {
       return jsonOutput_(setupMasterKpiCharts_());
     }
+    if (api === 'peekCharts') {
+      return jsonOutput_({
+        ok: true,
+        master: peekEmbeddedCharts_('経堂マスタ'),
+        trend: peekEmbeddedCharts_(UNPAID_TREND_SHEET_)
+      });
+    }
     if (api === 'setupMasterIntroKpi') {
       return jsonOutput_(setupMasterIntroKpi_());
     }
@@ -5990,17 +5997,18 @@ function masterWriteKpiChartSource_(sh) {
     for (r = 0; r < 5; r++) {
       var srcCol = columnLetter_(2 + r);
       forms.push([
-        '=TEXT(' + srcCol + head + ',"m月")',
-        '=' + srcCol + plan,
-        '=' + srcCol + act
+        '=TEXT(' + srcCol + head + ',"M")&"月"',
+        '=N(' + srcCol + plan + ')',
+        '=N(' + srcCol + act + ')'
       ]);
     }
     sh.getRange(2, col, 5, 3).setFormulas(forms);
+    sh.getRange(2, col, 5, 1).setNumberFormat('@');
     sh.getRange(2, col + 1, 5, 2).setNumberFormat('0');
     out.push({ key: blocks[b].key, ok: true, col: col, plan: plan, act: act });
   }
-  sh.getRange(1, startCol, 6, 15).setFontColor(t.paper).setBackground(t.paper).setFontSize(8);
-  try { sh.setColumnWidths(startCol, 15, 10); } catch (eW) {}
+  sh.getRange(1, startCol, 6, 15).setFontColor(t.ash).setBackground(t.paper).setFontSize(8);
+  try { sh.setColumnWidths(startCol, 15, 48); } catch (eW) {}
   return { ok: true, head: head, startCol: startCol, blocks: out };
 }
 
@@ -6045,6 +6053,7 @@ function masterInsertKpiChart_(sh, spec) {
       })
       .setOption('vAxis', {
         minValue: 0,
+        viewWindow: { min: 0 },
         textStyle: { fontSize: 11, color: '#171717' },
         gridlines: { color: '#D4D4D4', count: 5 },
         minorGridlines: { count: 0 }
@@ -6052,6 +6061,7 @@ function masterInsertKpiChart_(sh, spec) {
       .setOption('chartArea', { backgroundColor: gray, left: 44, top: 36, width: '82%', height: '68%' })
       .setOption('bar', { groupWidth: '62%' })
       .setOption('useFirstColumnAsDomain', true);
+    try { b = b.setHiddenDimensionStrategy(Charts.ChartHiddenDimensionStrategy.SHOW_ALL); } catch (eH) {}
     sh.insertChart(b.build());
     return { ok: true };
   } catch (err) {
@@ -6111,7 +6121,8 @@ function setupMasterKpiCharts_() {
       j16: String(sh.getRange('J16').getDisplayValue() || ''),
       a17: String(sh.getRange('A17').getDisplayValue() || ''),
       k16: String(sh.getRange('K16').getBackground() || ''),
-      ai2: String(sh.getRange(2, 35).getDisplayValue() || '')
+      ai2: String(sh.getRange(2, 35).getDisplayValue() || ''),
+      peek: peekEmbeddedCharts_('経堂マスタ')
     };
   } catch (err) {
     return { ok: false, message: String(err && err.message ? err.message : err) };
@@ -6976,15 +6987,68 @@ function unpaidEnsureTrendSheet_(ss) {
   return tr;
 }
 
-function unpaidEnsureTrendChartSheet_(ss) {
+function unpaidDropTrendChartSheet_(ss) {
   ss = ss || openWorkspaceSpreadsheet_();
-  var sh = ss.getSheetByName(UNPAID_TREND_CHART_SHEET_);
-  if (!sh) sh = ss.insertSheet(UNPAID_TREND_CHART_SHEET_);
-  if (sh.getMaxColumns() < 14) sh.insertColumnsAfter(sh.getMaxColumns(), 14 - sh.getMaxColumns());
-  if (sh.getMaxRows() < 40) sh.insertRowsAfter(sh.getMaxRows(), 40 - sh.getMaxRows());
-  try { sh.hideSheet(); } catch (eH) {}
-  sh.setTabColor(dnTheme_().ash);
-  return sh;
+  try {
+    var sh = ss.getSheetByName(UNPAID_TREND_CHART_SHEET_);
+    if (sh) ss.deleteSheet(sh);
+  } catch (e0) {}
+}
+
+function unpaidEnsureTrendChartSheet_(ss) {
+  unpaidDropTrendChartSheet_(ss);
+  return null;
+}
+
+function peekEmbeddedCharts_(name) {
+  try {
+    var ss = openWorkspaceSpreadsheet_();
+    var sh = ss.getSheetByName(name);
+    if (!sh) return { ok: false, message: 'no sheet: ' + name };
+    var charts = sh.getCharts();
+    var hidden = [];
+    var c;
+    for (c = 1; c <= Math.min(sh.getMaxColumns(), 50); c++) {
+      try {
+        if (sh.isColumnHiddenByUser(c)) hidden.push(c);
+      } catch (eH) {}
+    }
+    var widths = {};
+    var want = [10, 11, 14, 16, 18, 35, 36];
+    var i;
+    for (i = 0; i < want.length; i++) {
+      if (want[i] <= sh.getMaxColumns()) {
+        try { widths[String(want[i])] = sh.getColumnWidth(want[i]); } catch (eW) {}
+      }
+    }
+    var out = [];
+    for (i = 0; i < charts.length; i++) {
+      var ch = charts[i];
+      var info = ch.getContainerInfo();
+      var title = '';
+      try { title = String(ch.getOptions().get('title') || ''); } catch (eT) {}
+      out.push({
+        i: i,
+        title: title,
+        row: info.getAnchorRow(),
+        col: info.getAnchorColumn(),
+        ranges: ch.getRanges().map(function (r) { return r.getA1Notation(); })
+      });
+    }
+    return {
+      ok: true,
+      name: name,
+      charts: out,
+      hiddenCols: hidden,
+      widths: widths,
+      lastRow: sh.getLastRow(),
+      lastCol: sh.getLastColumn(),
+      maxRows: sh.getMaxRows(),
+      maxCols: sh.getMaxColumns()
+    };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
 }
 
 function unpaidClearTrendCharts_(tr) {
@@ -7009,6 +7073,7 @@ function unpaidChartStyle_() {
 
 function unpaidInsertTrendChart_(tr, spec) {
   try {
+    var gray = '#EDEDED';
     var b = tr.newChart()
       .addRange(spec.range)
       .setNumHeaders(1)
@@ -7017,13 +7082,28 @@ function unpaidInsertTrendChart_(tr, spec) {
       .setOption('width', spec.width || 540)
       .setOption('height', spec.height || 280)
       .setOption('colors', spec.colors || ['#171717', '#DA0037', '#444444'])
-      .setOption('backgroundColor', '#EDEDED')
-      .setOption('legend', { position: 'bottom' })
-      .setOption('hAxis', { slantedText: true, slantedTextAngle: 45 })
+      .setOption('backgroundColor', gray)
+      .setOption('legend', { position: 'bottom', textStyle: { color: '#171717', fontSize: 10 } })
+      .setOption('hAxis', {
+        slantedText: true,
+        slantedTextAngle: 45,
+        textStyle: { fontSize: 9, color: '#171717' }
+      })
+      .setOption('chartArea', { backgroundColor: gray, left: 56, top: 40, width: '78%', height: '58%' })
       .setOption('useFirstColumnAsDomain', true);
     if (spec.kind === 'line') b = b.asLineChart();
     else b = b.asColumnChart();
     if (spec.vAxis) b = b.setOption('vAxis', spec.vAxis);
+    else {
+      b = b.setOption('vAxis', {
+        minValue: 0,
+        viewWindow: { min: 0 },
+        textStyle: { fontSize: 10, color: '#171717' },
+        gridlines: { color: '#D4D4D4', count: 5 },
+        minorGridlines: { count: 0 }
+      });
+    }
+    try { b = b.setHiddenDimensionStrategy(Charts.ChartHiddenDimensionStrategy.SHOW_ALL); } catch (eH) {}
     tr.insertChart(b.build());
     return { ok: true };
   } catch (err) {
@@ -7032,10 +7112,18 @@ function unpaidInsertTrendChart_(tr, spec) {
 }
 
 function unpaidChartNum_(v) {
-  if (v === '' || v == null) return null;
+  if (v === '' || v == null) return 0;
   if (typeof v === 'number' && !isNaN(v)) return v;
-  var n = Number(v);
-  return isNaN(n) ? null : n;
+  var s = String(v).replace(/[¥,\s件%]/g, '');
+  var n = Number(s);
+  return isNaN(n) ? 0 : n;
+}
+
+function unpaidChartMonthLabel_(name) {
+  var m = String(name || '').match(/^(\d{2})年(\d{1,2})月$/);
+  if (!m) return String(name || '');
+  var mm = ('0' + m[2]).slice(-2);
+  return m[1] + '/' + mm;
 }
 
 function unpaidWriteTrendChartSource_(tr, body) {
@@ -7044,43 +7132,43 @@ function unpaidWriteTrendChartSource_(tr, body) {
     tr.insertColumnsAfter(tr.getMaxColumns(), start + 13 - tr.getMaxColumns());
   }
   try { tr.showColumns(1, tr.getMaxColumns()); } catch (eShow) {}
+  unpaidDropTrendChartSheet_(tr.getParent());
   var clearTo = Math.max(tr.getMaxRows(), (body && body.length ? body.length : 1) + 2);
   tr.getRange(1, start, clearTo, 14).clearContent();
-  var src = unpaidEnsureTrendChartSheet_(tr.getParent());
-  src.clear();
-  if (!body || !body.length) return { ok: true, rows: 0, sheet: src, start: start };
+  if (!body || !body.length) return { ok: true, rows: 0, start: start };
   var headers = [[
-    '年月', '未納総額', '回収額', '',
-    '年月', '回収率', '',
-    '年月', '未納件数', '',
-    '年月', '1ヶ月未納', '2ヶ月未納', '貸倒候補'
+    '月', '未納総額', '回収額', '',
+    '月', '回収率', '',
+    '月', '未納件数', '',
+    '月', '1ヶ月未納', '2ヶ月未納', '貸倒候補'
   ]];
   var rows = [];
   var i;
   for (i = 0; i < body.length; i++) {
     var r = body[i];
+    var lab = unpaidChartMonthLabel_(r[0]);
     rows.push([
-      r[0], unpaidChartNum_(r[2]), unpaidChartNum_(r[3]), '',
-      r[0], unpaidChartNum_(r[4]), '',
-      r[0], unpaidChartNum_(r[1]), '',
-      r[0], unpaidChartNum_(r[8]), unpaidChartNum_(r[9]), unpaidChartNum_(r[10])
+      lab, unpaidChartNum_(r[2]), unpaidChartNum_(r[3]), '',
+      lab, unpaidChartNum_(r[4]), '',
+      lab, unpaidChartNum_(r[1]), '',
+      lab, unpaidChartNum_(r[8]), unpaidChartNum_(r[9]), unpaidChartNum_(r[10])
     ]);
   }
-  src.getRange(1, 1, 1, 14).setValues(headers);
-  src.getRange(2, 1, rows.length, 14).setValues(rows);
-  try { src.hideSheet(); } catch (eH) {}
-  // 同じシートの見える列にも置く（非表示列だとグラフが空になる）
   var t = dnTheme_();
   tr.getRange(1, start, 1, 14).setValues(headers);
+  tr.getRange(2, start, rows.length, 1).setNumberFormat('@');
+  tr.getRange(2, start + 4, rows.length, 1).setNumberFormat('@');
+  tr.getRange(2, start + 7, rows.length, 1).setNumberFormat('@');
+  tr.getRange(2, start + 10, rows.length, 1).setNumberFormat('@');
   tr.getRange(2, start, rows.length, 14).setValues(rows);
   tr.getRange(2, start + 1, rows.length, 2).setNumberFormat('0');
-  tr.getRange(2, start + 5, rows.length, 1).setNumberFormat('0.000');
+  tr.getRange(2, start + 5, rows.length, 1).setNumberFormat('0.0%');
   tr.getRange(2, start + 8, rows.length, 1).setNumberFormat('0');
-  tr.getRange(2, start + 11, rows.length, 3).setNumberFormat('0.000');
+  tr.getRange(2, start + 11, rows.length, 3).setNumberFormat('0.0%');
   tr.getRange(1, start, rows.length + 1, 14)
-    .setFontColor(t.paper).setBackground(t.paper).setFontSize(8);
-  try { tr.setColumnWidths(start, 14, 10); } catch (eW) {}
-  return { ok: true, rows: rows.length, sheet: src, start: start };
+    .setFontColor(t.ash).setBackground(t.paper).setFontSize(8);
+  try { tr.setColumnWidths(start, 14, 56); } catch (eW) {}
+  return { ok: true, rows: rows.length, start: start, sample: rows[0] };
 }
 
 function unpaidTrendTableBounds_(tr) {
@@ -7121,7 +7209,14 @@ function unpaidEnsureTrendCharts_(tr) {
   var need = chartTop + gap * 2 + 2;
   if (tr.getMaxRows() < need) tr.insertRowsAfter(tr.getMaxRows(), need - tr.getMaxRows());
   SpreadsheetApp.flush();
-  var pctAxis = { format: '0%', viewWindow: { min: 0, max: 1 } };
+  var pctAxis = {
+    format: '0%',
+    minValue: 0,
+    viewWindow: { min: 0, max: 1 },
+    textStyle: { fontSize: 10, color: '#171717' },
+    gridlines: { color: '#D4D4D4', count: 5 },
+    minorGridlines: { count: 0 }
+  };
   var errors = [];
   var placed = 0;
   var specs = [
@@ -7388,6 +7483,9 @@ function unpaidFillTrendAll_(ss) {
       d1: String(tr.getRange('D1').getDisplayValue() || ''),
       a6: String(tr.getRange('A6').getDisplayValue() || ''),
       a7: String(tr.getRange('A7').getDisplayValue() || ''),
+      n2: String(tr.getRange(2, 14).getDisplayValue() || ''),
+      o2: String(tr.getRange(2, 15).getDisplayValue() || ''),
+      peek: peekEmbeddedCharts_(UNPAID_TREND_SHEET_),
       c3: String(tr.getRange('C3').getDisplayValue() || ''),
       i3: String(tr.getRange('I3').getDisplayValue() || ''),
       scanned: scanned
