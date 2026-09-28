@@ -7241,7 +7241,7 @@ function unpaidEnsureTrendCharts_(tr) {
       kind: 'column',
       range: tr.getRange(1, start + 7, srcRows, 2),
       title: '未納件数',
-      row: chartTop,
+      row: chartTop + gap,
       col: 1,
       colors: [t.ink]
     },
