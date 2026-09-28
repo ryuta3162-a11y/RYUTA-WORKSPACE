@@ -878,6 +878,8 @@ function diagnoseImportsHealth_() {
       '販促_乗り換え',
       '販促_紹介・ペア入会',
       '学割',
+      '未納管理',
+      '未納管理_推移',
       '経堂_入会',
       '経堂_退会',
       '経堂_OP'
@@ -2365,7 +2367,9 @@ function handleApiGet_(e) {
       return jsonOutput_(styleMembershipMirrors_());
     }
     if (api === 'setupKengakuJoinLive') {
-      return jsonOutput_(setupKengakuJoinLive_(String((e.parameter && e.parameter.confirm) || '')));
+      var kConfirm = String((e.parameter && e.parameter.confirm) || '');
+      if (kConfirm === 'repair') return jsonOutput_(repairKengakuMirror_());
+      return jsonOutput_(setupKengakuJoinLive_(kConfirm));
     }
     if (api === 'funnelPreview') {
       return jsonOutput_(previewTourToJoinFunnel_(Number((e.parameter && e.parameter.days) || 60)));
@@ -5160,6 +5164,16 @@ function setupSchoolDiscountSheet_(ss) {
     if (c !== 6) sh.setColumnWidth(c, 120);
   }
   hubStampType_(sh, 200, SCHOOL_FORM_COLS_);
+  try {
+    if (sh.getMaxColumns() < SCHOOL_FORM_COLS_ + 1) {
+      sh.insertColumnsAfter(sh.getMaxColumns(), SCHOOL_FORM_COLS_ + 1 - sh.getMaxColumns());
+    }
+    hubPaintOpenSourceCell_(sh, 1, SCHOOL_FORM_COLS_ + 1, 1, {
+      url: schoolFormOpenUrl_(),
+      label: '元のシートを開く ↗'
+    });
+    sh.setColumnWidth(SCHOOL_FORM_COLS_ + 1, 168);
+  } catch (eSrc) {}
   return sh;
 }
 
@@ -5831,8 +5845,12 @@ function restyleHubLook_() {
         try { joinListRefresh_(sh); } catch (eJ) {}
         continue;
       }
+      if (n === '見学体験申請') {
+        try { repairKengakuMirror_(); } catch (eK) {}
+        continue;
+      }
       if (/^販促_/.test(n) || n === 'マシンレクチャー申込' ||
-          n === '口コミ_経堂' || n === '【経堂】会員動向' || n === '見学体験申請' ||
+          n === '口コミ_経堂' || n === '【経堂】会員動向' ||
           /^経堂_/.test(n) || n === 'Tasks' || n === 'WorkspaceSync') {
         try { restyleHeaderBody_(sh); } catch (e1) {}
         try { hubEnsureSourceBanner_(sh); } catch (e2) {}
@@ -7102,19 +7120,27 @@ function setupUnpaidView_() {
 var KENGAKU_SOURCE_ID_ = '1RPUw0slNCit9ZwJgINGfv89oc2Hxw8zzAZyMt6g_QuY';
 var KENGAKU_JOIN_WINDOW_DAYS_ = 180;
 
+var KENGAKU_JOIN_LAST_ROW_ = 400;
+
+function kengakuImportFormula_() {
+  return '=IMPORTRANGE("' + KENGAKU_SOURCE_ID_ + '","見学体験申請!A2:I")';
+}
+
 /**
  * 見学体験申請の K 列（入会日）。申込の前日〜180日以内で、氏名かメールが一致する最初の入会日。
  * 経堂_入会（氏名・メール）と入会者一覧（メール）の早い方。J 列はこの K 列から入会／未入会を出す。
+ * 元フォームの見出し行は取り込まない（A2 からデータ）。配列は 400 行で止めてシートを膨らませない。
  */
 function kengakuJoinDateFormula_() {
   var d = KENGAKU_JOIN_WINDOW_DAYS_;
+  var last = KENGAKU_JOIN_LAST_ROW_;
   return '={"入会日";ARRAYFORMULA(LET(' +
     "jd,'経堂_入会'!A2:A," +
     "jn,REGEXREPLACE('経堂_入会'!B2:B&\"\",\"[\\s　]\",\"\")," +
     "jm,LOWER(TRIM('経堂_入会'!F2:F&\"\"))," +
     "ld,'" + JOIN_LIST_SHEET_ + "'!A3:A," +
     "lm,LOWER(TRIM('" + JOIN_LIST_SHEET_ + "'!C3:C&\"\"))," +
-    'MAP(A2:A,B2:B,C2:C,D2:D,LAMBDA(t,k,n,m,' +
+    'MAP(A2:A' + last + ',B2:B' + last + ',C2:C' + last + ',D2:D' + last + ',LAMBDA(t,k,n,m,' +
     'IF(OR(t="",NOT(REGEXMATCH(k&"","見学|体験"))),"",IFERROR(LET(' +
     'nn,REGEXREPLACE(n&"","[\\s　]",""),mm,LOWER(TRIM(m&"")),lo,INT(t)-1,hi,t+' + d + ',' +
     'djoin,IFERROR(MIN(FILTER(jd,jd>=lo,jd<=hi,((nn<>"")*(jn=nn)+(mm<>"")*(jm=mm))>0)),0),' +
@@ -7124,7 +7150,42 @@ function kengakuJoinDateFormula_() {
 
 /** 見学体験申請の J 列（入会／未入会）。K 列に入会日があれば「入会」 */
 function kengakuJoinFormula_() {
-  return '={"入会";ARRAYFORMULA(IF(REGEXMATCH(B2:B&"","見学|体験"),IF(K2:K<>"","入会","未入会"),""))}';
+  var last = KENGAKU_JOIN_LAST_ROW_;
+  return '={"入会";ARRAYFORMULA(IF(REGEXMATCH(B2:B' + last + '&"","見学|体験"),IF(K2:K' + last + '<>"","入会","未入会"),""))}';
+}
+
+function repairKengakuMirror_() {
+  try {
+    var ss = openWorkspaceSpreadsheet_();
+    var sh = ss.getSheetByName('見学体験申請');
+    if (!sh) return { ok: false, message: 'missing 見学体験申請' };
+    if (sh.getMaxColumns() < 12) sh.insertColumnsAfter(sh.getMaxColumns(), 12 - sh.getMaxColumns());
+    sh.getRange(2, 1).setFormula(kengakuImportFormula_());
+    sh.getRange(1, 10).setFormula(kengakuJoinFormula_());
+    sh.getRange(1, 11).setFormula(kengakuJoinDateFormula_());
+    var src = hubSourceForName_('見学体験申請');
+    if (src) {
+      hubPaintOpenSourceCell_(sh, 1, 12, 1, src);
+      sh.setColumnWidth(12, 168);
+    }
+    try { restyleHeaderBody_(sh); } catch (eSt) {}
+    sh.getRange(1, 10).setFormula(kengakuJoinFormula_());
+    sh.getRange(1, 11).setFormula(kengakuJoinDateFormula_());
+    var n = Math.min(Math.max(sh.getMaxRows() - 1, 1), KENGAKU_JOIN_LAST_ROW_);
+    sh.getRange(2, 10, n, 2).setHorizontalAlignment('center');
+    sh.getRange(2, 11, n, 1).setNumberFormat('yyyy/mm/dd');
+    SpreadsheetApp.flush();
+    return {
+      ok: true,
+      a2: String(sh.getRange('A2').getFormula() || ''),
+      b2: String(sh.getRange('B2').getDisplayValue() || ''),
+      j2: String(sh.getRange('J2').getDisplayValue() || ''),
+      k2: String(sh.getRange('K2').getDisplayValue() || ''),
+      last: sh.getLastRow()
+    };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
 }
 
 /**
@@ -7315,8 +7376,9 @@ function setupKengakuJoinLive_(confirm) {
 
     var lastRow = Math.max(sh.getLastRow(), 2);
     sh.getRange(2, 1, lastRow - 1, 9).clearContent();
-    sh.getRange(2, 1).setFormula('=IMPORTRANGE("' + KENGAKU_SOURCE_ID_ + '","見学体験申請!A1:I")');
+    sh.getRange(2, 1).setFormula(kengakuImportFormula_());
     sh.getRange(1, 10).setFormula(kengakuJoinFormula_());
+    sh.getRange(1, 11).setFormula(kengakuJoinDateFormula_());
     sh.getRange(1, 10).copyFormatToRange(sh, 10, 10, 1, 1);
     try { sh.getRange(1, 9).copyFormatToRange(sh, 10, 10, 1, 1); } catch (eFmt) {}
     sh.getRange(2, 10, sh.getMaxRows() - 1, 1).setHorizontalAlignment('center');
