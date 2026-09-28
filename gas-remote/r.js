@@ -5960,11 +5960,66 @@ function masterClearKpiCharts_(sh) {
   var charts = sh.getCharts();
   var i;
   for (i = charts.length - 1; i >= 0; i--) {
-    try {
-      var info = charts[i].getContainerInfo();
-      if (info.getAnchorColumn() >= 11 && info.getAnchorRow() >= 15) sh.removeChart(charts[i]);
-    } catch (e0) {}
+    try { sh.removeChart(charts[i]); } catch (e0) {}
   }
+}
+
+function sparkColumnFormula_(a1, color, ymaxExpr) {
+  return '=IFERROR(SPARKLINE(' + a1 + ',{"charttype","column";"ymin",0;"ymax",' + ymaxExpr +
+    ';"color","' + color + '";"empty","zero"}),"")';
+}
+
+function sparkLineFormula_(a1, color, ymaxExpr) {
+  return '=IFERROR(SPARKLINE(' + a1 + ',{"charttype","line";"ymin",0;"ymax",' + (ymaxExpr || 1) +
+    ';"color","' + color + '";"linewidth",3;"empty","zero"}),"")';
+}
+
+function masterPaintKpiSparkCard_(sh, spec) {
+  var t = dnTheme_();
+  var row = spec.row;
+  var col = 11;
+  var w = 5;
+  var rMonth = row + 1;
+  var rPlan = row + 2;
+  var rPlanCh = row + 3;
+  var rAct = row + 8;
+  var rActCh = row + 9;
+  var rLeg = row + 13;
+  hubType_(sh.getRange(row, col, 14, w))
+    .setBackground(t.paper).setFontColor(t.ink).setVerticalAlignment('middle');
+  sh.getRange(row, col, 1, w).merge().setValue(spec.title)
+    .setFontWeight('bold').setFontSize(12).setHorizontalAlignment('left')
+    .setBorder(false, false, true, false, false, false, t.blood, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
+  var c;
+  for (c = 0; c < 5; c++) {
+    var src = columnLetter_(2 + c);
+    sh.getRange(rMonth, col + c)
+      .setFormula('=TEXT(' + src + spec.head + ',"M")&"月"')
+      .setFontSize(9).setFontColor(t.ash).setHorizontalAlignment('center').setNumberFormat('@');
+    sh.getRange(rPlan, col + c)
+      .setFormula('=N(' + src + spec.plan + ')')
+      .setNumberFormat('0').setFontSize(10).setFontColor(t.ash).setHorizontalAlignment('center');
+    sh.getRange(rAct, col + c)
+      .setFormula('=N(' + src + spec.act + ')')
+      .setNumberFormat('0').setFontSize(10).setFontColor(spec.actColor).setFontWeight('bold')
+      .setHorizontalAlignment('center');
+  }
+  var planA1 = columnLetter_(col) + rPlan + ':' + columnLetter_(col + 4) + rPlan;
+  var actA1 = columnLetter_(col) + rAct + ':' + columnLetter_(col + 4) + rAct;
+  var ymax = 'MAX(' + planA1 + ',' + actA1 + ')';
+  sh.getRange(rPlanCh, col, 5, w).merge()
+    .setFormula(sparkColumnFormula_(planA1, t.ash, ymax))
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
+  sh.getRange(rActCh, col, 4, w).merge()
+    .setFormula(sparkColumnFormula_(actA1, spec.actColor, ymax))
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
+  sh.getRange(rLeg, col, 1, w).merge()
+    .setValue('上＝計画　下＝実績')
+    .setFontSize(9).setFontColor(t.ash).setHorizontalAlignment('left');
+  try { sh.setRowHeight(row, 26); } catch (e0) {}
+  try { sh.setRowHeightsForced(rPlanCh, 5, 22); } catch (e1) {}
+  try { sh.setRowHeightsForced(rActCh, 4, 22); } catch (e2) {}
+  return { ok: true, formula: sh.getRange(rPlanCh, col).getFormula() };
 }
 
 function masterWriteKpiChartSource_(sh) {
@@ -6071,42 +6126,46 @@ function masterInsertKpiChart_(sh, spec) {
 
 function masterEnsureKpiCharts_(sh) {
   if (!sh) return { ok: false };
-  masterClearKpiCharts_(sh);
-  var src = masterWriteKpiChartSource_(sh);
-  var head = src.head || 16;
+  var head = masterFindALabel_(sh, '項目') || 16;
   try { masterRestoreMomCol_(sh, head); } catch (eMom) {}
+  masterClearKpiCharts_(sh);
   var t = dnTheme_();
-  try {
-    sh.getRange(Math.max(head - 1, 15), 11, 72, 5).setBackground(t.paper).setFontColor(t.ink);
-  } catch (eRail) {}
-  var start = src.startCol || 35;
-  var chartTop = head;
-  var gap = 14;
-  var titles = [
-    { title: '入会 計画と実績', colors: [t.ash, t.ink] },
-    { title: '退会 計画と実績', colors: [t.ash, t.blood] },
-    { title: '月初 計画と実績', colors: [t.ash, t.ink] },
-    { title: '月末 計画と実績', colors: [t.ash, t.ink] }
+  var top = Math.max(head - 1, 15);
+  try { sh.getRange(top, 11, 72, 5).breakApart(); } catch (eB) {}
+  sh.getRange(top, 11, 72, 5).clearContent().setBackground(t.paper).setFontColor(t.ink)
+    .setFontFamily(hubFontFamily_()).setFontStyle('italic');
+  try { sh.setColumnWidths(11, 5, 84); } catch (eW) {}
+  var cards = [
+    { title: '入会 計画と実績', plan: masterFindALabel_(sh, '入会計画'), act: masterFindALabel_(sh, '入会実績'), actColor: t.ink },
+    { title: '退会 計画と実績', plan: masterFindALabel_(sh, '解除計画'), act: masterFindALabel_(sh, '解除実績'), actColor: t.blood },
+    { title: '月初 計画と実績', plan: masterFindALabel_(sh, '月初計画'), act: masterFindALabel_(sh, '月初実績'), actColor: t.ink },
+    { title: '月末 計画と実績', plan: masterFindALabel_(sh, '月末計画'), act: masterFindALabel_(sh, '月末実績'), actColor: t.ink }
   ];
-  SpreadsheetApp.flush();
   var placed = 0;
   var errors = [];
+  var spark = [];
   var i;
-  for (i = 0; i < titles.length; i++) {
-    var col = start + i * 4;
-    var r = masterInsertKpiChart_(sh, {
-      range: sh.getRange(1, col, 6, 3),
-      title: titles[i].title,
-      row: chartTop + i * gap,
-      col: 11,
-      width: 420,
-      height: 250,
-      colors: titles[i].colors
+  for (i = 0; i < cards.length; i++) {
+    if (!cards[i].plan || !cards[i].act) {
+      errors.push(cards[i].title + ': 行なし');
+      continue;
+    }
+    var r = masterPaintKpiSparkCard_(sh, {
+      row: head + i * 14,
+      head: head,
+      plan: cards[i].plan,
+      act: cards[i].act,
+      title: cards[i].title,
+      actColor: cards[i].actColor
     });
-    if (r && r.ok) placed += 1;
-    else errors.push(titles[i].title + ': ' + ((r && r.message) || 'fail'));
+    if (r && r.ok) {
+      placed += 1;
+      spark.push(r.formula);
+    } else {
+      errors.push(cards[i].title + ': fail');
+    }
   }
-  return { ok: placed > 0, charts: placed, errors: errors, head: head, src: src };
+  return { ok: placed > 0, charts: placed, errors: errors, head: head, spark: spark };
 }
 
 function setupMasterKpiCharts_() {
@@ -6120,9 +6179,12 @@ function setupMasterKpiCharts_() {
       charts: sh.getCharts().length,
       j16: String(sh.getRange('J16').getDisplayValue() || ''),
       a17: String(sh.getRange('A17').getDisplayValue() || ''),
-      k16: String(sh.getRange('K16').getBackground() || ''),
-      ai2: String(sh.getRange(2, 35).getDisplayValue() || ''),
-      peek: peekEmbeddedCharts_('経堂マスタ')
+      k16: String(sh.getRange('K16').getDisplayValue() || ''),
+      k17: String(sh.getRange('K17').getDisplayValue() || ''),
+      k18: String(sh.getRange('K18').getDisplayValue() || ''),
+      k19: String(sh.getRange('K19').getFormula() || ''),
+      k27: String(sh.getRange('K27').getDisplayValue() || ''),
+      k16bg: String(sh.getRange('K16').getBackground() || '')
     };
   } catch (err) {
     return { ok: false, message: String(err && err.message ? err.message : err) };
@@ -7193,75 +7255,113 @@ function unpaidTrendTableBounds_(tr) {
   return { head: head, n: n, last: head + n };
 }
 
+function unpaidPaintSparkCard_(tr, spec) {
+  var t = dnTheme_();
+  var row = spec.row;
+  var col = spec.col;
+  var w = spec.w;
+  var h = spec.h;
+  var parts = spec.parts || [];
+  hubType_(tr.getRange(row, col, h, w))
+    .setBackground(t.paper).setFontColor(t.ink).setVerticalAlignment('middle');
+  tr.getRange(row, col, 1, w).merge().setValue(spec.title)
+    .setFontWeight('bold').setFontSize(12).setHorizontalAlignment('left')
+    .setBorder(false, false, true, false, false, false, t.blood, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
+  var pw = Math.max(1, Math.floor(w / Math.max(parts.length, 1)));
+  var p;
+  var firstFormula = '';
+  for (p = 0; p < parts.length; p++) {
+    var pc = col + p * pw;
+    var pwNow = (p === parts.length - 1) ? (col + w - pc) : pw;
+    tr.getRange(row + 1, pc, 1, pwNow).merge().setValue(parts[p].label)
+      .setFontSize(9).setFontColor(parts[p].color).setHorizontalAlignment('center').setFontWeight('bold');
+    var formula = parts[p].kind === 'line'
+      ? sparkLineFormula_(parts[p].a1, parts[p].color, parts[p].ymax || 1)
+      : sparkColumnFormula_(parts[p].a1, parts[p].color, parts[p].ymax);
+    tr.getRange(row + 2, pc, h - 3, pwNow).merge().setFormula(formula)
+      .setHorizontalAlignment('center').setVerticalAlignment('middle');
+    if (p === 0) firstFormula = formula;
+  }
+  tr.getRange(row + h - 1, col, 1, w).merge()
+    .setValue(spec.axis || '')
+    .setFontSize(8).setFontColor(t.ash).setHorizontalAlignment('left');
+  try { tr.setRowHeight(row, 26); } catch (e0) {}
+  try { tr.setRowHeightsForced(row + 2, h - 3, 22); } catch (e1) {}
+  return { ok: true, formula: firstFormula };
+}
+
 function unpaidEnsureTrendCharts_(tr) {
   if (!tr) return { ok: false, charts: 0 };
   unpaidClearTrendCharts_(tr);
   var b = unpaidTrendTableBounds_(tr);
   if (!b.n) return { ok: true, charts: 0 };
-  var tableBody = tr.getRange(b.head + 1, 1, b.n, 11).getValues();
-  var srcPack = unpaidWriteTrendChartSource_(tr, tableBody);
-  var start = (srcPack && srcPack.start) || 14;
   var t = dnTheme_();
-  var nSrc = Math.max((srcPack && srcPack.rows) || b.n, 1);
-  var srcRows = nSrc + 1;
+  var first = b.head + 1;
+  var last = b.last;
   var chartTop = b.last + 3;
   var gap = UNPAID_TREND_CHART_GAP_ROWS_;
+  var cardH = gap - 1;
   var need = chartTop + gap * 2 + 2;
   if (tr.getMaxRows() < need) tr.insertRowsAfter(tr.getMaxRows(), need - tr.getMaxRows());
-  SpreadsheetApp.flush();
-  var pctAxis = {
-    format: '0%',
-    minValue: 0,
-    viewWindow: { min: 0, max: 1 },
-    textStyle: { fontSize: 10, color: '#171717' },
-    gridlines: { color: '#D4D4D4', count: 5 },
-    minorGridlines: { count: 0 }
-  };
-  var errors = [];
-  var placed = 0;
-  var specs = [
-    {
-      kind: 'column',
-      range: tr.getRange(1, start, srcRows, 3),
+  try { tr.getRange(Math.max(chartTop - 1, 1), 1, gap * 2 + 4, 12).breakApart(); } catch (eB) {}
+  tr.getRange(Math.max(chartTop - 1, 1), 1, gap * 2 + 4, 12)
+    .clearContent().setBackground(t.paper).setFontColor(t.ink);
+  tr.getRange(b.last + 2, 1, 1, 11).merge()
+    .setValue('月ごとの推移グラフ')
+    .setFontSize(10).setFontColor(t.ash).setFontWeight('bold')
+    .setHorizontalAlignment('left').setBackground(t.paper);
+  var axis = String(tr.getRange(first, 1).getDisplayValue() || '') + ' → ' +
+    String(tr.getRange(last, 1).getDisplayValue() || '');
+  var yenMax = 'MAX($C$' + first + ':$D$' + last + ')';
+  var nMax = 'MAX($B$' + first + ':$B$' + last + ')';
+  var cards = [
+    unpaidPaintSparkCard_(tr, {
+      row: chartTop, col: 1, w: 6, h: cardH,
       title: '未納総額と回収額',
-      row: chartTop,
-      col: 1,
-      colors: [t.ink, t.blood]
-    },
-    {
-      kind: 'line',
-      range: tr.getRange(1, start + 4, srcRows, 2),
+      axis: axis,
+      parts: [
+        { label: '未納総額', a1: '$C$' + first + ':$C$' + last, color: t.ink, kind: 'column', ymax: yenMax },
+        { label: '回収額', a1: '$D$' + first + ':$D$' + last, color: t.blood, kind: 'column', ymax: yenMax }
+      ]
+    }),
+    unpaidPaintSparkCard_(tr, {
+      row: chartTop, col: 7, w: 6, h: cardH,
       title: '回収率',
-      row: chartTop,
-      col: 7,
-      colors: [t.blood],
-      vAxis: pctAxis
-    },
-    {
-      kind: 'column',
-      range: tr.getRange(1, start + 7, srcRows, 2),
+      axis: axis,
+      parts: [
+        { label: '全体回収率', a1: '$E$' + first + ':$E$' + last, color: t.blood, kind: 'line', ymax: 1 }
+      ]
+    }),
+    unpaidPaintSparkCard_(tr, {
+      row: chartTop + gap, col: 1, w: 6, h: cardH,
       title: '未納件数',
-      row: chartTop + gap,
-      col: 1,
-      colors: [t.ink]
-    },
-    {
-      kind: 'line',
-      range: tr.getRange(1, start + 10, srcRows, 4),
+      axis: axis,
+      parts: [
+        { label: '件数', a1: '$B$' + first + ':$B$' + last, color: t.ink, kind: 'column', ymax: nMax }
+      ]
+    }),
+    unpaidPaintSparkCard_(tr, {
+      row: chartTop + gap, col: 7, w: 6, h: cardH,
       title: '1ヶ月 / 2ヶ月 / 貸倒 の回収率',
-      row: chartTop + gap,
-      col: 7,
-      colors: [t.ink, t.ash, t.blood],
-      vAxis: pctAxis
-    }
+      axis: axis,
+      parts: [
+        { label: '1ヶ月', a1: '$I$' + first + ':$I$' + last, color: t.ink, kind: 'line', ymax: 1 },
+        { label: '2ヶ月', a1: '$J$' + first + ':$J$' + last, color: t.ash, kind: 'line', ymax: 1 },
+        { label: '貸倒', a1: '$K$' + first + ':$K$' + last, color: t.blood, kind: 'line', ymax: 1 }
+      ]
+    })
   ];
-  var i;
-  for (i = 0; i < specs.length; i++) {
-    var r = unpaidInsertTrendChart_(tr, specs[i]);
-    if (r && r.ok) placed += 1;
-    else errors.push((specs[i].title || '') + ': ' + ((r && r.message) || 'fail'));
+  if (tr.getMaxColumns() > 13) {
+    try { tr.hideColumns(14, tr.getMaxColumns() - 13); } catch (eH) {}
   }
-  return { ok: placed > 0, charts: placed, chartTop: chartTop, errors: errors, srcRows: nSrc };
+  return {
+    ok: true,
+    charts: cards.length,
+    chartTop: chartTop,
+    errors: [],
+    srcRows: b.n,
+    spark: cards[0] && cards[0].formula
+  };
 }
 
 function unpaidStyleTrendSheet_(tr) {
@@ -7483,9 +7583,12 @@ function unpaidFillTrendAll_(ss) {
       d1: String(tr.getRange('D1').getDisplayValue() || ''),
       a6: String(tr.getRange('A6').getDisplayValue() || ''),
       a7: String(tr.getRange('A7').getDisplayValue() || ''),
-      n2: String(tr.getRange(2, 14).getDisplayValue() || ''),
-      o2: String(tr.getRange(2, 15).getDisplayValue() || ''),
-      peek: peekEmbeddedCharts_(UNPAID_TREND_SHEET_),
+      a23: String(tr.getRange('A23').getDisplayValue() || ''),
+      a24: String(tr.getRange('A24').getDisplayValue() || ''),
+      a25: String(tr.getRange('A25').getFormula() || ''),
+      g23: String(tr.getRange('G23').getDisplayValue() || ''),
+      g25: String(tr.getRange('G25').getFormula() || ''),
+      embedded: tr.getCharts().length,
       c3: String(tr.getRange('C3').getDisplayValue() || ''),
       i3: String(tr.getRange('I3').getDisplayValue() || ''),
       scanned: scanned
