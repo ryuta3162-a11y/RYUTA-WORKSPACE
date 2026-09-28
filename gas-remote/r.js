@@ -55,7 +55,7 @@ function onOpen() {
     .addItem('トップを表示', 'hubShowHome_')
     .addItem('見た目を整える', 'applyFourColorFromMenu')
     .addItem('未納を再取得', 'fillUnpaidFromMenu')
-    .addItem('未納のチェックを元へ反映', 'flushUnpaidFromMenu')
+    .addItem('チェックを元へ反映', 'flushUnpaidFromMenu')
     .addToUi();
   ui.createMenu('数値更新')
     .addItem('受付状況表の数値を更新（入会・退会・OP）', 'refreshReceptionNumbersFromMenu')
@@ -70,6 +70,7 @@ function onOpen() {
 function onEdit(e) {
   try { masterMonthTabSelect_(e); } catch (err) {}
   try { unpaidOnEditSimple_(e); } catch (errU) {}
+  try { joinListOnEditSimple_(e); } catch (errJ) {}
 }
 
 function onSelectionChange(e) {
@@ -741,57 +742,9 @@ function removeSheetFilterSafe_(sheet) {
   } catch (e) {}
 }
 
-/** 入会者一覧：IMPORTRANGE 維持のまま枠線削除＋チェック列を整列 */
+/** 入会者一覧：名前は IMPORTRANGE、チェックは元スプシと同期 */
 function formatJoinListMirrorKeepImport_() {
-  try {
-    var dest = openWorkspaceSpreadsheet_();
-    var sh = dest.getSheetByName(JOIN_LIST_SHEET_);
-    if (!sh) sh = dest.getSheetByName('入会者一覧+自動メール管理');
-    if (!sh) return { ok: false, message: 'sheet not found: ' + JOIN_LIST_SHEET_ };
-
-    var a1 = '';
-    try {
-      a1 = String(sh.getRange(1, 1).getFormula() || '');
-    } catch (eF) {}
-    if (!/IMPORTRANGE/i.test(a1)) {
-      return {
-        ok: false,
-        message: 'A1 が IMPORTRANGE ではありません（値同期シートの可能性）。数式を確認してください。',
-        a1: a1.slice(0, 120)
-      };
-    }
-
-    var cols = Math.max(sh.getLastColumn(), 5);
-    var headers = sh.getRange(1, 1, 1, cols).getDisplayValues()[0];
-    var joinChecks = resolveJoinListCheckCols_(headers, cols);
-    var out = formatImportMirrorChrome_(sh, cols, joinChecks, headers);
-    try {
-      removeSheetFilterSafe_(sh);
-    } catch (eFil) {}
-
-    // マシンレクチャー申込：手直しした見た目を尊重。枠線・変なフィルタだけ掃除（色や列幅は触らない）
-    var lecture = dest.getSheetByName('マシンレクチャー申込');
-    var lectureOut = null;
-    if (lecture) {
-      lectureOut = tidyImportMirrorKeepLook_(lecture);
-    }
-
-    return {
-      ok: true,
-      joinList: out,
-      checkCols: joinChecks,
-      layout: {
-        kyodo: 'A:E（D/E=チェック）',
-        fit365: cols >= 10 ? 'F起点（I/J=チェック＝元D/E）' : '未接続または列不足'
-      },
-      machineLecture: lectureOut,
-      tip:
-        '経堂 D/E と FIT365 I/J を同じチェックボックス表示にしています。' +
-        '値は各 IMPORTRANGE のまま自動更新。操作は元スプシ側。'
-    };
-  } catch (err) {
-    return { ok: false, message: String(err && err.message ? err.message : err) };
-  }
+  return setupJoinListLinked_();
 }
 
 function isCheckboxHeader_(title) {
@@ -1537,7 +1490,6 @@ function ensureReceptionLiveTrigger_() {
 function syncReceptionLiveTriggered_() {
   try { syncReceptionLiveSheet_(); } catch (e1) {}
   try { syncReceptionJoinMirrors_(); } catch (e2) {}
-  try { formatJoinListMirrorKeepImport_(); } catch (e3) {}
 }
 
 
@@ -1730,6 +1682,184 @@ function syncReviewKyodo_() {
   return setupReviewImport_();
 }
 
+function joinListToBool_(v) {
+  if (v === true) return true;
+  if (v === false) return false;
+  var s = String(v == null ? '' : v).trim().toUpperCase();
+  return s === 'TRUE' || s === '☑' || s === '1' || s === 'CHECKED';
+}
+
+var FIT365_JOIN_SOURCE_ID_ = '1BbExBUCfyq1cfNqw4TvlwUriL-AfvghU9XT6McdzGTQ';
+
+function joinListOnEditSimple_(e) {
+  return;
+}
+
+/**
+ * 名前・メールは IMPORTRANGE のまま。D/E・I/J のチェックだけ元スプシの値を置き、反映で戻す。
+ * IMPORTRANGE の上にチェックを重ねると、元が TRUE でも空に見える。
+ */
+function setupJoinListLinked_() {
+  try {
+    var dest = openWorkspaceSpreadsheet_();
+    var sh = dest.getSheetByName(JOIN_LIST_SHEET_);
+    if (!sh) sh = dest.insertSheet(JOIN_LIST_SHEET_);
+    if (sh.getMaxColumns() < 10) sh.insertColumnsAfter(sh.getMaxColumns(), 10 - sh.getMaxColumns());
+    try { permitImportRange_(dest, MACHINE_SOURCE_ID_); } catch (eP1) {}
+    try { permitImportRange_(dest, FIT365_JOIN_SOURCE_ID_); } catch (eP2) {}
+    try { sh.getRange(1, 1, 1, 10).breakApart(); } catch (eB) {}
+    try { sh.getRange(2, 1, Math.max(sh.getMaxRows() - 1, 1), 10).clearDataValidations(); } catch (eV) {}
+
+    var kyodoUrl = 'https://docs.google.com/spreadsheets/d/' + MACHINE_SOURCE_ID_ + '/edit';
+    var fitUrl = 'https://docs.google.com/spreadsheets/d/' + FIT365_JOIN_SOURCE_ID_ + '/edit';
+    hubPaintOpenSourceCell_(sh, 1, 1, 3, { url: kyodoUrl, label: '元のシートを開く ↗' });
+    hubPaintOpenSourceCell_(sh, 1, 6, 3, { url: fitUrl, label: 'FIT365 のシートを開く ↗' });
+    sh.getRange('D1:E1').merge().setValue('チェックは「今日の作業 → チェックを元へ反映」')
+      .setFontSize(8).setFontColor(dnTheme_().ash).setHorizontalAlignment('center');
+    sh.getRange('I1:J1').merge().setValue('チェックは「今日の作業 → チェックを元へ反映」')
+      .setFontSize(8).setFontColor(dnTheme_().ash).setHorizontalAlignment('center');
+
+    sh.getRange('A2').setFormula(
+      '=IMPORTRANGE("' + MACHINE_SOURCE_ID_ + '","' + JOIN_LIST_SHEET_ + '!A:C")'
+    );
+    sh.getRange('F2').setFormula(
+      '=IMPORTRANGE("' + FIT365_JOIN_SOURCE_ID_ + '","' + JOIN_LIST_SHEET_ + '!A:C")'
+    );
+    sh.getRange('D2:E2').setValues([['入会1週間アンケート', 'マシンレクチャーメール']]);
+    sh.getRange('I2:J2').setValues([['入会1週間アンケート', 'アンケート済']]);
+    SpreadsheetApp.flush();
+
+    var pulled = joinListPullChecks_(sh);
+    var t = dnTheme_();
+    sh.getRange('A2:J2')
+      .setBackground(t.ink).setFontColor(t.paper).setFontWeight('bold')
+      .setFontFamily('Noto Sans JP').setFontStyle('italic')
+      .setFontSize(10).setHorizontalAlignment('center')
+      .setBorder(false, false, true, false, false, false, t.blood, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
+    sh.setFrozenRows(2);
+    sh.setHiddenGridlines(true);
+    sh.setColumnWidth(1, 160);
+    sh.setColumnWidth(2, 120);
+    sh.setColumnWidth(3, 220);
+    sh.setColumnWidths(4, 2, 140);
+    sh.setColumnWidth(6, 160);
+    sh.setColumnWidth(7, 120);
+    sh.setColumnWidth(8, 220);
+    sh.setColumnWidths(9, 2, 140);
+    try { removeSheetFilterSafe_(sh); } catch (eFil) {}
+    var lecture = dest.getSheetByName('マシンレクチャー申込');
+    var lectureOut = lecture ? tidyImportMirrorKeepLook_(lecture) : null;
+    return {
+      ok: true,
+      pulled: pulled,
+      a2: String(sh.getRange('A2').getFormula() || ''),
+      e3: sh.getRange('E3').getValue(),
+      e9: sh.getRange('E9').getValue(),
+      e9check: (function () {
+        var dv = sh.getRange('E9').getDataValidation();
+        return dv ? String(dv.getCriteriaType()) : '';
+      })(),
+      machineLecture: lectureOut
+    };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
+function joinListPullChecks_(sh) {
+  sh = sh || openWorkspaceSpreadsheet_().getSheetByName(JOIN_LIST_SHEET_);
+  if (!sh) return { ok: false, message: 'missing join list' };
+  var kyodo = joinListPullBlock_(sh, MACHINE_SOURCE_ID_, 4);
+  var fit = joinListPullBlock_(sh, FIT365_JOIN_SOURCE_ID_, 9);
+  return { ok: true, kyodo: kyodo, fit365: fit };
+}
+
+function joinListPullBlock_(destSh, srcId, destCheckCol) {
+  var src = SpreadsheetApp.openById(srcId);
+  var srcSh = src.getSheetByName(JOIN_LIST_SHEET_);
+  if (!srcSh) return { ok: false, message: 'no source sheet' };
+  var srcLast = Math.max(srcSh.getLastRow(), 2);
+  var n = srcLast - 1;
+  if (n < 1) return { ok: true, rows: 0 };
+  var raw = srcSh.getRange(2, 4, n, 2).getValues();
+  var body = [];
+  var i;
+  for (i = 0; i < raw.length; i++) {
+    body.push([joinListToBool_(raw[i][0]), joinListToBool_(raw[i][1])]);
+  }
+  var rng = destSh.getRange(3, destCheckCol, body.length, 2);
+  rng.setValues(body);
+  rng.setDataValidation(SpreadsheetApp.newDataValidation().requireCheckbox().setAllowInvalid(true).build());
+  rng.setHorizontalAlignment('center');
+  var rules = destSh.getConditionalFormatRules() || [];
+  rules = rules.filter(function (r) {
+    return r.getRanges().every(function (x) {
+      var c = x.getColumn();
+      return !(x.getSheet().getName() === JOIN_LIST_SHEET_ && c >= destCheckCol && c <= destCheckCol + 1);
+    });
+  });
+  var colLetter = columnLetter_(destCheckCol);
+  var colLetter2 = columnLetter_(destCheckCol + 1);
+  rules.push(
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenFormulaSatisfied('=' + colLetter + '3=TRUE')
+      .setBackground(dnTheme_().cream)
+      .setRanges([destSh.getRange(3, destCheckCol, body.length, 1)])
+      .build()
+  );
+  rules.push(
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenFormulaSatisfied('=' + colLetter2 + '3=TRUE')
+      .setBackground(dnTheme_().cream)
+      .setRanges([destSh.getRange(3, destCheckCol + 1, body.length, 1)])
+      .build()
+  );
+  destSh.setConditionalFormatRules(rules);
+  return { ok: true, rows: body.length, true2: body.filter(function (x) { return x[1]; }).length };
+}
+
+function joinListPushChecks_(ss) {
+  ss = ss || openWorkspaceSpreadsheet_();
+  var sh = ss.getSheetByName(JOIN_LIST_SHEET_);
+  if (!sh) return { ok: false, message: 'missing join list' };
+  var kyodo = joinListPushBlock_(sh, 3, 4, MACHINE_SOURCE_ID_);
+  var fit = joinListPushBlock_(sh, 8, 9, FIT365_JOIN_SOURCE_ID_);
+  return { ok: !!(kyodo.ok && fit.ok), kyodo: kyodo, fit365: fit };
+}
+
+function joinListPushBlock_(destSh, emailCol, destCheckCol, srcId) {
+  var src = SpreadsheetApp.openById(srcId);
+  var srcSh = src.getSheetByName(JOIN_LIST_SHEET_);
+  if (!srcSh) return { ok: false, message: 'no source sheet' };
+  var last = Math.max(destSh.getLastRow(), 3);
+  var n = last - 2;
+  if (n < 1) return { ok: true, pushed: 0 };
+  var emails = destSh.getRange(3, emailCol, n, 1).getDisplayValues();
+  var checks = destSh.getRange(3, destCheckCol, n, 2).getValues();
+  var srcLast = Math.max(srcSh.getLastRow(), 2);
+  var srcEmails = srcSh.getRange(2, 3, srcLast - 1, 1).getDisplayValues();
+  var map = {};
+  var i;
+  for (i = 0; i < srcEmails.length; i++) {
+    var k = String(srcEmails[i][0] || '').trim().toLowerCase();
+    if (k) map[k] = i + 2;
+  }
+  var pushed = 0;
+  var missed = 0;
+  for (i = 0; i < emails.length; i++) {
+    var em = String(emails[i][0] || '').trim().toLowerCase();
+    if (!em || em === 'メールアドレス') continue;
+    var srcRow = map[em];
+    if (!srcRow) {
+      missed += 1;
+      continue;
+    }
+    srcSh.getRange(srcRow, 4, 1, 2).setValues([[joinListToBool_(checks[i][0]), joinListToBool_(checks[i][1])]]);
+    pushed += 1;
+  }
+  return { ok: true, pushed: pushed, missed: missed };
+}
+
 /** マシンレクチャー／入会者一覧 → Workspace（同名シート・内容そのまま・IMPORTRANGE） */
 var MACHINE_SOURCE_ID_ = '1wntzhyPGcz9hW4saswppYmVG-zHINbjAibu9VkCyEQ8';
 
@@ -1774,8 +1904,9 @@ function setupMachineImport_() {
       sourceTitle: source.getName(),
       sourceUrl: source.getUrl(),
       imported: imported,
+      joinList: setupJoinListLinked_(),
       workspaceUrl: dest.getUrl(),
-      note: 'シート名そのまま / 内容は IMPORTRANGE。初回はアクセス許可が必要な場合あり。元ブック未変更。'
+      note: 'シート名そのまま / 入会者一覧のチェックは元スプシと同期。'
     };
   } catch (err) {
     return { ok: false, message: String(err && err.message ? err.message : err) };
@@ -2028,7 +2159,11 @@ function handleApiGet_(e) {
       return jsonOutput_(fillUnpaidNow_());
     }
     if (api === 'flushUnpaidQueue') {
-      return jsonOutput_(unpaidFlushQueue_());
+      var ssFlush = openWorkspaceSpreadsheet_();
+      return jsonOutput_({
+        unpaid: unpaidFlushQueue_(ssFlush),
+        joinList: joinListPushChecks_(ssFlush)
+      });
     }
     if (api === 'styleUnpaidNow') {
       return jsonOutput_(styleUnpaidNow_());
@@ -4413,6 +4548,7 @@ function hubEnsureSourceBanner_(sh) {
   if (!sh) return;
   var n = sh.getName();
   if (n === HUB_HOME_SHEET_ || n === UNPAID_SHEET_ || n === '経堂マスタ' || n === '学割' || n === '販促_学校関係者') return;
+  if (n === JOIN_LIST_SHEET_) return;
   if (hubIsAlwaysHidden_(n) && n !== UNPAID_TREND_SHEET_) return;
   var src = hubSourceForName_(n);
   if (!src) return;
@@ -6061,8 +6197,12 @@ function flushUnpaidFromMenu() {
   var ss = SpreadsheetApp.getActiveSpreadsheet() || openWorkspaceSpreadsheet_();
   try { ensureUnpaidEditTrigger_(); } catch (eT) {}
   var r = unpaidFlushQueue_(ss);
-  ss.toast(r.pushed ? ('元ファイルへ ' + r.pushed + ' 件送りました') : (r.errors ? '送れなかったマスがあります' : '送るチェックはありません'), '未納', 8);
-  return r;
+  var j = { ok: true, kyodo: { pushed: 0 }, fit365: { pushed: 0 } };
+  try { j = joinListPushChecks_(ss); } catch (eJ) { j = { ok: false, message: String(eJ) }; }
+  var jp = ((j.kyodo && j.kyodo.pushed) || 0) + ((j.fit365 && j.fit365.pushed) || 0);
+  var total = (r.pushed || 0) + jp;
+  ss.toast(total ? ('元ファイルへ ' + total + ' 件送りました') : (r.errors || !j.ok ? '送れなかったマスがあります' : '送るチェックはありません'), '反映', 8);
+  return { unpaid: r, joinList: j };
 }
 
 /**
