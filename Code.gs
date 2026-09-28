@@ -2448,6 +2448,9 @@ function handleApiGet_(e) {
     if (api === 'setupHubHome') {
       return jsonOutput_(setupHubHome_());
     }
+    if (api === 'setupMasterKpiCharts') {
+      return jsonOutput_(setupMasterKpiCharts_());
+    }
     if (api === 'setupMasterIntroKpi') {
       return jsonOutput_(setupMasterIntroKpi_());
     }
@@ -5927,6 +5930,148 @@ function restyleKyodoMasterLook_(sh) {
   }
   hubStampType_(sh, last + 40, kpiCols);
   sh.setTabColor(t.ink);
+  try { masterEnsureKpiCharts_(sh); } catch (eCh) {}
+}
+
+function masterFindALabel_(sh, needle) {
+  var last = Math.min(Math.max(sh.getLastRow(), 24), 80);
+  var vals = sh.getRange(1, 1, last, 1).getDisplayValues();
+  var i;
+  for (i = 0; i < vals.length; i++) {
+    if (String(vals[i][0] || '') === needle) return i + 1;
+  }
+  return 0;
+}
+
+function masterClearKpiCharts_(sh) {
+  var charts = sh.getCharts();
+  var i;
+  for (i = charts.length - 1; i >= 0; i--) {
+    try {
+      var info = charts[i].getContainerInfo();
+      if (info.getAnchorColumn() >= 11 && info.getAnchorRow() >= 15) sh.removeChart(charts[i]);
+    } catch (e0) {}
+  }
+}
+
+function masterWriteKpiChartSource_(sh) {
+  var head = masterFindALabel_(sh, '項目') || 16;
+  var blocks = [
+    { key: 'join', plan: masterFindALabel_(sh, '入会計画'), act: masterFindALabel_(sh, '入会実績') },
+    { key: 'leave', plan: masterFindALabel_(sh, '解除計画'), act: masterFindALabel_(sh, '解除実績') },
+    { key: 'start', plan: masterFindALabel_(sh, '月初計画'), act: masterFindALabel_(sh, '月初実績') },
+    { key: 'end', plan: masterFindALabel_(sh, '月末計画'), act: masterFindALabel_(sh, '月末実績') }
+  ];
+  var startCol = 35;
+  var need = startCol + 15;
+  if (sh.getMaxColumns() < need) sh.insertColumnsAfter(sh.getMaxColumns(), need - sh.getMaxColumns());
+  try { sh.showColumns(startCol, 15); } catch (eShow) {}
+  sh.getRange(1, startCol, 8, 15).clearContent();
+  var t = dnTheme_();
+  var out = [];
+  var b;
+  for (b = 0; b < blocks.length; b++) {
+    var col = startCol + b * 4;
+    var plan = blocks[b].plan;
+    var act = blocks[b].act;
+    if (!plan || !act) {
+      out.push({ key: blocks[b].key, ok: false });
+      continue;
+    }
+    sh.getRange(1, col, 1, 3).setValues([['月', '計画', '実績']]);
+    var r;
+    var forms = [];
+    for (r = 0; r < 5; r++) {
+      var srcCol = columnLetter_(2 + r);
+      forms.push([
+        '=' + srcCol + head,
+        '=' + srcCol + plan,
+        '=' + srcCol + act
+      ]);
+    }
+    sh.getRange(2, col, 5, 3).setFormulas(forms);
+    sh.getRange(2, col + 1, 5, 2).setNumberFormat('0');
+    out.push({ key: blocks[b].key, ok: true, col: col, plan: plan, act: act });
+  }
+  sh.getRange(1, startCol, 6, 15).setFontColor(t.paper).setBackground(t.paper).setFontSize(8);
+  try { sh.setColumnWidths(startCol, 15, 10); } catch (eW) {}
+  return { ok: true, head: head, startCol: startCol, blocks: out };
+}
+
+function masterReplaceMomSpark_(sh, head) {
+  var t = dnTheme_();
+  var last = Math.min(Math.max(sh.getLastRow(), head + 8), 80);
+  var labels = sh.getRange(head, 1, last - head + 1, 1).getDisplayValues();
+  sh.getRange(head, 10).setValue('5ヶ月').setFontWeight('bold').setHorizontalAlignment('center');
+  var i;
+  for (i = 1; i < labels.length; i++) {
+    var name = String(labels[i][0] || '');
+    if (!name) continue;
+    var row = head + i;
+    var color = /解除実績|退会実績/.test(name) ? t.blood : t.ink;
+    sh.getRange(row, 10).setFormula(
+      '=IFERROR(SPARKLINE(B' + row + ':F' + row + ',{"charttype","line";"color","' + color + '";"linewidth",2}),)'
+    );
+  }
+}
+
+function masterEnsureKpiCharts_(sh) {
+  if (!sh) return { ok: false };
+  masterClearKpiCharts_(sh);
+  var src = masterWriteKpiChartSource_(sh);
+  var head = src.head || 16;
+  try { masterReplaceMomSpark_(sh, head); } catch (eSp) {}
+  var t = dnTheme_();
+  var start = src.startCol || 35;
+  var chartTop = head;
+  var gap = 12;
+  var titles = [
+    { title: '入会 計画と実績', colors: [t.ash, t.ink] },
+    { title: '退会 計画と実績', colors: [t.ash, t.blood] },
+    { title: '月初 計画と実績', colors: [t.ash, t.ink] },
+    { title: '月末 計画と実績', colors: [t.ash, t.ink] }
+  ];
+  SpreadsheetApp.flush();
+  var placed = 0;
+  var errors = [];
+  var i;
+  for (i = 0; i < titles.length; i++) {
+    var col = start + i * 4;
+    var r = unpaidInsertTrendChart_(sh, {
+      kind: 'column',
+      range: sh.getRange(1, col, 6, 3),
+      title: titles[i].title,
+      row: chartTop + i * gap,
+      col: 11,
+      width: 460,
+      height: 230,
+      colors: titles[i].colors
+    });
+    if (r && r.ok) placed += 1;
+    else errors.push(titles[i].title + ': ' + ((r && r.message) || 'fail'));
+  }
+  return { ok: placed > 0, charts: placed, errors: errors, head: head, src: src };
+}
+
+function setupMasterKpiCharts_() {
+  try {
+    var ss = openWorkspaceSpreadsheet_();
+    var sh = ss.getSheetByName('経堂マスタ');
+    if (!sh) return { ok: false, message: '経堂マスタなし' };
+    var out = masterEnsureKpiCharts_(sh);
+    return {
+      ok: !!(out && out.ok),
+      charts: out && out.charts,
+      errors: out && out.errors,
+      head: out && out.head,
+      j16: String(sh.getRange('J16').getDisplayValue() || ''),
+      a17: String(sh.getRange('A17').getDisplayValue() || ''),
+      ai1: String(sh.getRange(1, 35).getDisplayValue() || ''),
+      ai2: String(sh.getRange(2, 35).getDisplayValue() || '')
+    };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
 }
 
 function restyleUnpaidTrendLook_(tr) {
@@ -7137,6 +7282,12 @@ function unpaidPaintTrend_(tr, body, totals, latest) {
   }
   unpaidWriteTrendChartSource_(tr, body);
   unpaidStyleTrendSheet_(tr);
+  if (body.length) {
+    var spark2 = [];
+    var si;
+    for (si = 0; si < body.length; si++) spark2.push([unpaidSparkFormula_(head + 1 + si)]);
+    tr.getRange(head + 1, 6, body.length, 1).setFormulas(spark2);
+  }
   if (latestRate !== '' && latestRate < 0.5) {
     tr.getRange(3, 9, 1, 2).setBackground(t.blood).setFontColor(t.paper);
   }

@@ -119,6 +119,7 @@ https://script.google.com/macros/s/AKfycbzMELimQThNdPUShwo2_KBzJd8kGy9BNdRyOYNgu
 | `fillUnpaidTrendNow` | 推移シートを実データ月で描き直し（表の下にグラフ） |
 | `restyleHubLook` | 見た目再適用。経堂マスタでは当月紹介・当月学割と P列以降の当月パネルも冪等に載せる |
 | `setupMasterIntroKpi` | 経堂マスタの当月移籍の右に「当月紹介」（`販促_紹介・ペア入会` の当月申請件数）を追加 |
+| `setupMasterKpiCharts` | 経堂マスタ：5ヶ月の入会／退会／月初／月末の計画対実績グラフ。対前月列は5ヶ月スパークライン |
 | `hubOpen&name=` | 指定シートだけ表示して開く |
 | `hubClose` | トップ以外を隠す |
 | `setupKengakuJoinLive&mode=` | 見学体験申請の入会判定（`joinDate`=K列入会日／`joinLabel`=J列／`emailJoin`=経堂_入会・退会の列拡張／`leaveList`=経堂マスタ D9 今日の退会者） |
