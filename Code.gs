@@ -59,10 +59,16 @@ function onOpen() {
     .addItem('受付状況表の数値を更新（入会・退会・OP）', 'refreshReceptionNumbersFromMenu')
     .addItem('前回の更新時刻を確認', 'showReceptionRefreshStatus')
     .addItem('入会者一覧を元シートと連動し直す', 'relinkJoinListFromMenu')
+    .addSeparator()
+    .addItem('請求報告の自動連携を有効にする（初回のみ）', 'setupBillingLinkFromMenu')
+    .addItem('請求報告を今すぐ取り込む', 'refreshBillingFromMenu')
     .addToUi();
   try {
     linkJoinListLive_(SpreadsheetApp.getActiveSpreadsheet(), false);
   } catch (eLink) {}
+  try {
+    linkUnpaidFollowup_(SpreadsheetApp.getActiveSpreadsheet());
+  } catch (eFollow) {}
 }
 
 var JOIN_LIST_FIT365_ID_ = '1BbExBUCfyq1cfNqw4TvlwUriL-AfvghU9XT6McdzGTQ';
@@ -4373,6 +4379,7 @@ function hubCatalog_(ss) {
     { group: '数字', name: '【経堂】会員動向', title: '動向' },
     { group: '未納', name: '未納管理', title: '今月' },
     { group: '未納', name: '未納管理_推移', title: '推移' },
+    { group: '未納', name: '未納_請求報告', title: '請求' },
     { group: '現場', name: '見学体験申請', title: '見学' },
     { group: '現場', name: '口コミ_経堂', title: '口コミ' },
     { group: '現場', name: 'マシンレクチャー申込', title: 'レクチャー' },
@@ -5093,6 +5100,7 @@ function setupUnpaidView_() {
       .setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(options, true).setAllowInvalid(false).build());
     sh.getRange('A2').setFormula('=HYPERLINK("https://docs.google.com/spreadsheets/d/' + UNPAID_SOURCE_ID_ + '/edit","元の未納管理ドライブを開く ↗")');
     sh.getRange('A3').setFormula('=HYPERLINK("#gid=' + trend.getSheetId() + '","月別の推移を見る ↗")');
+    sh.getRange('A4').setFormula('=HYPERLINK("https://docs.google.com/spreadsheets/d/' + UNPAID_FOLLOWUP_ID_ + '/edit","対応後☑用シートを開く ↗")');
     sh.getRange('D1').setFormula(unpaidDashboardFormula_());
     sh.getRange(UNPAID_DATA_ROW_, 1).setFormula(unpaidViewFormula_());
 
@@ -5599,4 +5607,293 @@ function polishKansouWithGemini(rawText) {
     console.error(e);
     return { ok: false, message: String(e.message || e) };
   }
+}
+
+/**
+ * 未納_請求報告：26年度未納一覧【EAST運営本部】の「経堂」行（C:AH）を月度ごとに表示・入力。
+ * 入力セルの変更は installable onEdit で元シートの経堂行へ書き戻す（数式セル・書式には触れない）。
+ * 元シートの値は 10 分ごとの時間トリガーで取り込み直す。
+ */
+var BILL_SHEET_ = '未納_請求報告';
+var BILL_SOURCE_ID_ = '1qFF8HGOlSOczshMI5Vg5iTAgN_iLQ2aemJLp35V3rbA';
+var BILL_STORE_ = '経堂';
+var BILL_REF_TAB_ = '26年6月度';
+var BILL_LAST_COL_ = 34;
+var BILL_FIRST_ROW_ = 5;
+var BILL_RED_ = '#f4cccc';
+var BILL_CALC_ = '#eeeeee';
+var BILL_NOTE_ = '白いセルに入力すると元シートの経堂行へすぐ反映　赤＝未入力　グレー＝元シートの自動計算（入力不可）';
+var UNPAID_FOLLOWUP_ID_ = '1NvIIRTXC9XCAuib5USFouigkvmM8H2WDBOTWLjfN8oM';
+
+function billMonths_() {
+  var out = [];
+  var m;
+  for (m = 4; m <= 12; m++) out.push('26年' + m + '月度');
+  for (m = 1; m <= 3; m++) out.push('27年' + m + '月度');
+  return out;
+}
+
+function billColumnKeys_(head) {
+  var keys = [];
+  var seen = {};
+  var g = '';
+  var s = '';
+  for (var c = 2; c < head[0].length; c++) {
+    var r1 = String(head[0][c] || '').trim();
+    var r2 = String(head[1][c] || '').trim();
+    var h = String(head[2][c] || '').replace(/\s+/g, ' ').trim();
+    if (r1) {
+      g = r1.replace(/[【】]/g, '');
+      s = '当月';
+    }
+    if (r2) s = /翌月/.test(r2) ? '翌月' : '当月';
+    if (!h) continue;
+    var sub = /規約退会|未納率|入金/.test(h) ? '他' : s;
+    var base = g + '|' + sub + '|' + h;
+    seen[base] = (seen[base] || 0) + 1;
+    keys.push({ key: base + '|' + seen[base], group: g, sub: sub, header: h, col: c + 1 });
+  }
+  return keys;
+}
+
+function billCanon_(src) {
+  var ref = src.getSheetByName(BILL_REF_TAB_);
+  if (!ref) throw new Error('基準タブがありません: ' + BILL_REF_TAB_);
+  return billColumnKeys_(ref.getRange(1, 1, 3, BILL_LAST_COL_).getDisplayValues());
+}
+
+function billTabInfo_(tab) {
+  var lastCol = Math.max(tab.getLastColumn(), BILL_LAST_COL_);
+  var keys = billColumnKeys_(tab.getRange(1, 1, 3, lastCol).getDisplayValues());
+  var map = {};
+  for (var i = 0; i < keys.length; i++) map[keys[i].key] = keys[i].col;
+  var names = tab.getRange(1, 2, Math.max(tab.getLastRow(), 1), 1).getDisplayValues();
+  var row = 0;
+  for (var r = 3; r < names.length; r++) {
+    if (String(names[r][0]).trim() === BILL_STORE_) {
+      row = r + 1;
+      break;
+    }
+  }
+  return { map: map, row: row, lastCol: lastCol };
+}
+
+function billMergeRuns_(sh, row, arr) {
+  var start = 1;
+  for (var c = 2; c <= arr.length; c++) {
+    if (c === arr.length || arr[c] !== arr[start]) {
+      if (c - start > 1) sh.getRange(row, start + 1, 1, c - start).merge();
+      start = c;
+    }
+  }
+}
+
+function billBuildHeader_(sh, canon) {
+  var n = canon.length;
+  sh.clear();
+  try { sh.getRange(1, 1, sh.getMaxRows(), sh.getMaxColumns()).breakApart(); } catch (eB) {}
+  try {
+    sh.getProtections(SpreadsheetApp.ProtectionType.RANGE).forEach(function (p) { p.remove(); });
+  } catch (eR) {}
+  sh.setHiddenGridlines(true);
+  var r2 = [''];
+  var r3 = [''];
+  var r4 = ['月度'];
+  for (var i = 0; i < n; i++) {
+    r2.push(canon[i].group);
+    r3.push(canon[i].sub === '翌月' ? '翌月振替結果後' : (canon[i].sub === '当月' ? '当月振替結果' : ''));
+    r4.push(canon[i].header);
+  }
+  sh.getRange(2, 1, 3, n + 1).setValues([r2, r3, r4]);
+  billMergeRuns_(sh, 2, r2);
+  billMergeRuns_(sh, 3, r3);
+  sh.getRange(1, 1, 4, n + 1).setFontFamily('Meiryo').setFontSize(10).setVerticalAlignment('middle');
+  sh.getRange(2, 1, 1, n + 1).setBackground('#000000').setFontColor('#ffffff').setFontWeight('bold').setHorizontalAlignment('center');
+  sh.getRange(3, 1, 1, n + 1).setBackground('#424242').setFontColor('#ffffff').setHorizontalAlignment('center');
+  sh.getRange(4, 1, 1, n + 1).setBackground('#212121').setFontColor('#ffffff').setFontWeight('bold')
+    .setHorizontalAlignment('center').setWrap(true);
+  sh.getRange(1, 1, 1, 4).merge()
+    .setFormula('=HYPERLINK("https://docs.google.com/spreadsheets/d/' + BILL_SOURCE_ID_ + '/edit","26年度未納一覧【EAST運営本部】を開く ↗")')
+    .setFontWeight('bold').setFontColor('#000000');
+  sh.getRange(1, 5, 1, 14).merge().setFontColor('#616161').setFontSize(9);
+  var months = billMonths_();
+  sh.getRange(BILL_FIRST_ROW_, 1, months.length, 1)
+    .setValues(months.map(function (m) { return [m]; }))
+    .setFontWeight('bold').setBackground('#fafafa').setFontColor('#212121');
+  sh.getRange(BILL_FIRST_ROW_, 1, months.length, n + 1)
+    .setFontFamily('Meiryo').setFontSize(10).setVerticalAlignment('middle')
+    .setBorder(true, true, true, true, true, true, '#e0e0e0', SpreadsheetApp.BorderStyle.SOLID);
+  sh.getRange(BILL_FIRST_ROW_, 2, months.length, n).setHorizontalAlignment('right');
+  sh.setRowHeight(4, 42);
+  sh.setColumnWidth(1, 96);
+  sh.setColumnWidths(2, n, 84);
+  sh.setFrozenRows(4);
+  sh.setFrozenColumns(1);
+  try {
+    sh.getRange(1, 1, 4, n + 1).protect().setDescription('請求報告の見出し').setWarningOnly(true);
+  } catch (eP) {}
+  sh.getRange(1, n + 2).setValue(canon.map(function (k) { return k.key; }).join('\t'));
+  sh.hideColumns(n + 2);
+}
+
+function billPull_(ss) {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(20000)) return { ok: false, message: 'busy' };
+  try {
+    var src = SpreadsheetApp.openById(BILL_SOURCE_ID_);
+    var canon = billCanon_(src);
+    var n = canon.length;
+    var sh = ss.getSheetByName(BILL_SHEET_);
+    if (!sh) {
+      var after = ss.getSheetByName(UNPAID_TREND_SHEET_) || ss.getSheetByName(UNPAID_SHEET_);
+      sh = ss.insertSheet(BILL_SHEET_, after ? after.getIndex() : ss.getSheets().length);
+    }
+    var sig = canon.map(function (k) { return k.key; }).join('\t');
+    if (String(sh.getRange(1, n + 2).getValue()) !== sig) billBuildHeader_(sh, canon);
+    try { sh.setTabColor(hubTabColorFor_(BILL_SHEET_)); } catch (eT) {}
+
+    var months = billMonths_();
+    var vals = [], bgs = [], fcs = [], nfs = [];
+    for (var m = 0; m < months.length; m++) {
+      var tab = src.getSheetByName(months[m]);
+      var info = tab ? billTabInfo_(tab) : null;
+      var rv = null, rf = null, rn = null;
+      if (info && info.row) {
+        var rg = tab.getRange(info.row, 1, 1, info.lastCol);
+        rv = rg.getValues()[0];
+        rf = rg.getFormulas()[0];
+        rn = rg.getNumberFormats()[0];
+      }
+      var v = [], b = [], f = [], nf = [];
+      for (var i = 0; i < n; i++) {
+        var col = info ? info.map[canon[i].key] : 0;
+        if (!rv || !col) {
+          v.push('');
+          b.push('#f5f5f5');
+          f.push('#bdbdbd');
+          nf.push('General');
+          continue;
+        }
+        var val = rv[col - 1];
+        if (typeof val === 'string' && /^#/.test(val)) val = '';
+        var isCalc = !!rf[col - 1];
+        v.push(val);
+        b.push(isCalc ? BILL_CALC_ : (val === '' ? BILL_RED_ : '#ffffff'));
+        f.push(isCalc ? '#757575' : '#000000');
+        nf.push(rn[col - 1] || 'General');
+      }
+      vals.push(v);
+      bgs.push(b);
+      fcs.push(f);
+      nfs.push(nf);
+    }
+    var body = sh.getRange(BILL_FIRST_ROW_, 2, months.length, n);
+    body.setNumberFormats(nfs);
+    body.setValues(vals);
+    body.setBackgrounds(bgs);
+    body.setFontColors(fcs);
+    sh.getRange(1, 5).setValue('取得 ' + Utilities.formatDate(new Date(), 'Asia/Tokyo', 'M/d HH:mm') + '（10分ごと）　' + BILL_NOTE_);
+    return { ok: true, months: months.length, cols: n };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function billParseInput_(raw) {
+  if (raw === '' || raw == null) return '';
+  if (typeof raw !== 'string') return raw;
+  var s = raw.replace(/[,，¥￥円\s]/g, '');
+  if (s === '') return '';
+  if (/^-?\d+(\.\d+)?%$/.test(s)) return Number(s.slice(0, -1)) / 100;
+  if (/^-?\d+(\.\d+)?$/.test(s)) return Number(s);
+  return raw;
+}
+
+function billingOnEdit(e) {
+  if (!e || !e.range) return;
+  var sh = e.range.getSheet();
+  if (sh.getName() !== BILL_SHEET_) return;
+  var months = billMonths_();
+  var r0 = e.range.getRow();
+  var c0 = e.range.getColumn();
+  var nr = e.range.getNumRows();
+  var nc = e.range.getNumColumns();
+  var lastRow = BILL_FIRST_ROW_ + months.length - 1;
+  if (r0 + nr - 1 < BILL_FIRST_ROW_ || r0 > lastRow || c0 + nc - 1 < 2) return;
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var src = SpreadsheetApp.openById(BILL_SOURCE_ID_);
+    var canon = billCanon_(src);
+    var vals = e.range.getValues();
+    var cache = {};
+    for (var i = 0; i < nr; i++) {
+      var r = r0 + i;
+      if (r < BILL_FIRST_ROW_ || r > lastRow) continue;
+      var month = months[r - BILL_FIRST_ROW_];
+      if (!cache[month]) {
+        var tab = src.getSheetByName(month);
+        cache[month] = tab ? { tab: tab, info: billTabInfo_(tab) } : { tab: null };
+      }
+      var t = cache[month];
+      for (var j = 0; j < nc; j++) {
+        var c = c0 + j;
+        if (c < 2 || c > canon.length + 1) continue;
+        var cell = sh.getRange(r, c);
+        var col = t.tab && t.info.row ? t.info.map[canon[c - 2].key] : 0;
+        if (!col) {
+          cell.setValue('');
+          continue;
+        }
+        var target = t.tab.getRange(t.info.row, col);
+        if (target.getFormula()) {
+          cell.setValue(target.getValue());
+          cell.setBackground(BILL_CALC_).setFontColor('#757575');
+          continue;
+        }
+        var nv = billParseInput_(vals[i][j]);
+        if (String(target.getValue()) !== String(nv)) target.setValue(nv);
+        cell.setBackground(nv === '' ? BILL_RED_ : '#ffffff').setFontColor('#000000');
+      }
+    }
+    sh.getRange(1, 5).setValue('反映 ' + Utilities.formatDate(new Date(), 'Asia/Tokyo', 'M/d HH:mm') + '　' + BILL_NOTE_);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function billingPullTriggered() {
+  try { billPull_(openWorkspaceSpreadsheet_()); } catch (e) { console.error(e); }
+}
+
+function linkUnpaidFollowup_(ss) {
+  var sh = ss.getSheetByName(UNPAID_SHEET_);
+  if (!sh) return;
+  var a4 = sh.getRange('A4');
+  if (/HYPERLINK/i.test(String(a4.getFormula() || ''))) return;
+  sh.getRange('A3').copyTo(a4, SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+  a4.setFormula('=HYPERLINK("https://docs.google.com/spreadsheets/d/' + UNPAID_FOLLOWUP_ID_ + '/edit","対応後☑用シートを開く ↗")');
+}
+
+function setupBillingLinkFromMenu() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  linkUnpaidFollowup_(ss);
+  var r = billPull_(ss);
+  var handlers = { billingOnEdit: 1, billingPullTriggered: 1 };
+  var triggers = ScriptApp.getProjectTriggers();
+  for (var i = 0; i < triggers.length; i++) {
+    if (handlers[triggers[i].getHandlerFunction()]) ScriptApp.deleteTrigger(triggers[i]);
+  }
+  ScriptApp.newTrigger('billingOnEdit').forSpreadsheet(ss).onEdit().create();
+  ScriptApp.newTrigger('billingPullTriggered').timeBased().everyMinutes(10).create();
+  var sh = ss.getSheetByName(BILL_SHEET_);
+  if (sh) ss.setActiveSheet(sh);
+  ss.toast(r.ok ? '請求報告の自動連携を有効にしました' : String(r.message), '未納_請求報告', 8);
+}
+
+function refreshBillingFromMenu() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var r = billPull_(ss);
+  ss.toast(r.ok ? '元シートから取り込みました' : String(r.message), '未納_請求報告', 5);
 }
