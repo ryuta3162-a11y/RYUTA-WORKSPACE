@@ -78,7 +78,7 @@ function refreshReceptionNumbersFromMenu() {
     ss.toast((r && r.message) || '更新を開始できませんでした', '数値更新', 10);
     return r;
   }
-  ss.toast('更新中です…（1〜2分）完了したらお知らせします', '数値更新', 150);
+  ss.toast('更新中です…（2〜4分）完了したらお知らせします', '数値更新', 150);
 
   // メニュー実行は最大6分。5分まで完了を待つ
   var deadline = Date.now() + 5 * 60 * 1000;
@@ -90,7 +90,7 @@ function refreshReceptionNumbersFromMenu() {
       return s;
     }
     if (s && s.ok && !s.pending && s.lastRefreshed && s.lastRefreshed !== beforeAt) {
-      SpreadsheetApp.flush();
+      reloadReceptionImports_(ss);
       ss.toast('更新が完了しました（' + s.lastRefreshed + '）', '数値更新', 15);
       return s;
     }
@@ -99,13 +99,31 @@ function refreshReceptionNumbersFromMenu() {
   return r;
 }
 
+/**
+ * IMPORTRANGE は元が更新されても数分〜数十分キャッシュを返すことがある。
+ * 経堂マスタの IMPORTRANGE が参照する元ID（AF1）を書き直して、読み直させる。
+ */
+function reloadReceptionImports_(ss) {
+  var sh = ss.getSheetByName('経堂マスタ');
+  if (!sh) return;
+  var cell = sh.getRange('AF1');
+  var id = cell.getValue();
+  if (!id) return;
+  cell.setValue('');
+  SpreadsheetApp.flush();
+  cell.setValue(id);
+  SpreadsheetApp.flush();
+}
+
 function showReceptionRefreshStatus() {
   var r = callReceptionRefreshApi_('refreshStatus');
   var msg = !r || !r.ok
     ? '状態を取得できませんでした'
     : r.pending
       ? '更新中です。少しお待ちください。'
-      : '前回の更新: ' + (r.lastRefreshed || '記録なし');
+      : r.error
+        ? '前回の更新でエラー: ' + r.error + '（最後に成功: ' + (r.lastRefreshed || '記録なし') + '）'
+        : '前回の更新: ' + (r.lastRefreshed || '記録なし');
   SpreadsheetApp.getActiveSpreadsheet().toast(msg, '数値更新', 8);
   return r;
 }
