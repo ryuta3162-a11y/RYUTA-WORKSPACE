@@ -139,6 +139,13 @@ https://script.google.com/macros/s/AKfycbzMELimQThNdPUShwo2_KBzJd8kGy9BNdRyOYNgu
 - **集計ロジック**（`unpaidStatsLet_`）: 新旧レイアウトが混在（26年3月以前は会員番号がB列・区分列なし）するため、列は見出し文字（会員番号／支払額／総額／回収金額|入金金額|レジ打ち金額）で探す。対象行＝会員番号あり・支払額>0。回収＝回収金額、空なら右隣3列に「〇〇入金」があれば支払額を回収扱い。元ファイル右上の独自集計欄とは定義が違うので数字は一致しない
 - **すべて数式**なのでトリガー不要（Workspace GAS には script.scriptapp スコープが無くトリガーを作れない）
 
+## 入会者一覧＋自動メール管理（2026-09-30）
+
+- 経堂 A:E ＝ `1wntzhy…` / FIT365 F:J ＝ `1BbExBU…` の同名シートを **IMPORTRANGE で常時連動**（`linkJoinListLive_`）。チェック列は ☑/☐ 表示
+- 値コピー同期（`syncJoinListWithCheckboxes_`）は使わない。このプロジェクトは `script.scriptapp` 権限がなく時間トリガーが作れないため、コピーは一度きりで古くなる
+- A2 が IMPORTRANGE でなくなると `onOpen` が自動で張り直す。手動はメニュー「数値更新 → 入会者一覧を元シートと連動し直す」
+- **clasp push の前に必ず `clasp pull`（別PCのHEADを消さない）**。2026-09-29 に別PCの v192〜200 を上書きしたため v200 に統合し直した
+
 ## ハマりどころ（GAS から数式を入れるとき）
 
 - LET の変数名に **セル参照っぽい名前（`d1` `k1` など）は使えない** → `#NAME?`。`kone` `djoin` のように付ける
