@@ -5612,7 +5612,7 @@ function polishKansouWithGemini(rawText) {
 /**
  * 未納_請求報告：26年度未納一覧【EAST運営本部】の「経堂」行（C:AH）を月度ごとに表示・入力。
  * 入力セルの変更は installable onEdit で元シートの経堂行へ書き戻す（数式セル・書式には触れない）。
- * 元シートの値は 10 分ごとの時間トリガーで取り込み直す。
+ * 元シートの値は開いた時と 5 分ごとの時間トリガーで取り込み直す。
  */
 var BILL_SHEET_ = '未納_請求報告';
 var BILL_SOURCE_ID_ = '1qFF8HGOlSOczshMI5Vg5iTAgN_iLQ2aemJLp35V3rbA';
@@ -5712,7 +5712,7 @@ function billBuildHeader_(sh, canon) {
   sh.getRange(3, 1, 1, n + 1).setBackground('#424242').setFontColor('#ffffff').setHorizontalAlignment('center');
   sh.getRange(4, 1, 1, n + 1).setBackground('#212121').setFontColor('#ffffff').setFontWeight('bold')
     .setHorizontalAlignment('center').setWrap(true);
-  sh.getRange(1, 1, 1, 4).merge()
+  sh.getRange(1, 1)
     .setFormula('=HYPERLINK("https://docs.google.com/spreadsheets/d/' + BILL_SOURCE_ID_ + '/edit","26年度未納一覧【EAST運営本部】を開く ↗")')
     .setFontWeight('bold').setFontColor('#000000');
   sh.getRange(1, 5, 1, 14).merge().setFontColor('#616161').setFontSize(9);
@@ -5792,7 +5792,7 @@ function billPull_(ss) {
     body.setValues(vals);
     body.setBackgrounds(bgs);
     body.setFontColors(fcs);
-    sh.getRange(1, 5).setValue('取得 ' + Utilities.formatDate(new Date(), 'Asia/Tokyo', 'M/d HH:mm') + '（10分ごと）　' + BILL_NOTE_);
+    sh.getRange(1, 5).setValue('取得 ' + Utilities.formatDate(new Date(), 'Asia/Tokyo', 'M/d HH:mm') + '（開いた時＋5分ごと）　' + BILL_NOTE_);
     return { ok: true, months: months.length, cols: n };
   } finally {
     lock.releaseLock();
@@ -5886,7 +5886,8 @@ function setupBillingLinkFromMenu() {
     if (handlers[triggers[i].getHandlerFunction()]) ScriptApp.deleteTrigger(triggers[i]);
   }
   ScriptApp.newTrigger('billingOnEdit').forSpreadsheet(ss).onEdit().create();
-  ScriptApp.newTrigger('billingPullTriggered').timeBased().everyMinutes(10).create();
+  ScriptApp.newTrigger('billingPullTriggered').timeBased().everyMinutes(5).create();
+  ScriptApp.newTrigger('billingPullTriggered').forSpreadsheet(ss).onOpen().create();
   var sh = ss.getSheetByName(BILL_SHEET_);
   if (sh) ss.setActiveSheet(sh);
   ss.toast(r.ok ? '請求報告の自動連携を有効にしました' : String(r.message), '未納_請求報告', 8);
