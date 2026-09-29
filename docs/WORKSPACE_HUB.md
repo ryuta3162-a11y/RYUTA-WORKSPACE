@@ -123,9 +123,9 @@ https://script.google.com/macros/s/AKfycbzMELimQThNdPUShwo2_KBzJd8kGy9BNdRyOYNgu
 
 ## 他PCでの再開手順（最短）
 
-1. このリポジトリを clone
+1. このリポジトリを clone（既にあれば `git pull`）
 2. Node + `@google/clasp`、`clasp login`（できれば `r-kusaka@okamoto-group.co.jp`）
-3. リポジトリ直下で `clasp push --force`（`.clasp.json` の scriptId を使用）
+3. **先に `clasp pull` して `git diff` で差分確認**（もう片方のPCが push した HEAD を消さないため）。問題なければ編集→`clasp push --force`→ git commit/push
 4. 必要なら `clasp deploy -i AKfycbzMELimQThNdPUShwo2_KBzJd8kGy9BNdRyOYNgu_sg41t2SleVRiWXFztZJ48e2l9L -d "..."`
 5. 上記「制限付き共有 + IMPORTRANGE 再許可」を実施
 
