@@ -4294,7 +4294,7 @@ function hubTabColorFor_(name) {
   var t = dnTheme_();
   if (name === HUB_HOME_SHEET_) return '#111111';
   if (name === '経堂マスタ') return t.ink;
-  if (name.indexOf('未納') === 0) return t.blood;
+  if (name.indexOf('未納') === 0 || name === '請求・回収実績') return t.blood;
   if (name.indexOf('見学体験') === 0 && name.indexOf('backup') === -1) return '#6B3A1F';
   if (name.indexOf('販促_') === 0) return '#3F4A28';
   if (name.indexOf('口コミ') === 0) return '#5A1F2A';
@@ -4379,7 +4379,7 @@ function hubCatalog_(ss) {
     { group: '数字', name: '【経堂】会員動向', title: '動向' },
     { group: '未納', name: '未納管理', title: '今月' },
     { group: '未納', name: '未納管理_推移', title: '推移' },
-    { group: '未納', name: '未納_請求報告', title: '請求' },
+    { group: '未納', name: '請求・回収実績', title: '請求' },
     { group: '現場', name: '見学体験申請', title: '見学' },
     { group: '現場', name: '口コミ_経堂', title: '口コミ' },
     { group: '現場', name: 'マシンレクチャー申込', title: 'レクチャー' },
@@ -5610,11 +5610,13 @@ function polishKansouWithGemini(rawText) {
 }
 
 /**
- * 未納_請求報告：26年度未納一覧【EAST運営本部】の「経堂」行（C:AH）を月度ごとに表示・入力。
+ * 請求・回収実績：26年度未納一覧【EAST運営本部】の「経堂」行（C:AH）を月度ごとに表示・入力。
  * 入力セルの変更は installable onEdit で元シートの経堂行へ書き戻す（数式セル・書式には触れない）。
  * 元シートの値は開いた時と 5 分ごとの時間トリガーで取り込み直す。
  */
-var BILL_SHEET_ = '未納_請求報告';
+var BILL_SHEET_ = '請求・回収実績';
+var BILL_OLD_SHEET_ = '未納_請求報告';
+var BILL_ANALYSIS_ROW_ = 19;
 var BILL_SOURCE_ID_ = '1qFF8HGOlSOczshMI5Vg5iTAgN_iLQ2aemJLp35V3rbA';
 var BILL_STORE_ = '経堂';
 var BILL_REF_TAB_ = '26年6月度';
@@ -5691,6 +5693,7 @@ function billMergeRuns_(sh, row, arr) {
 function billBuildHeader_(sh, canon) {
   var n = canon.length;
   sh.clear();
+  sh.getCharts().forEach(function (ch) { sh.removeChart(ch); });
   try { sh.getRange(1, 1, sh.getMaxRows(), sh.getMaxColumns()).breakApart(); } catch (eB) {}
   try {
     sh.getProtections(SpreadsheetApp.ProtectionType.RANGE).forEach(function (p) { p.remove(); });
@@ -5745,12 +5748,17 @@ function billPull_(ss) {
     var n = canon.length;
     var sh = ss.getSheetByName(BILL_SHEET_);
     if (!sh) {
+      sh = ss.getSheetByName(BILL_OLD_SHEET_);
+      if (sh) sh.setName(BILL_SHEET_);
+    }
+    if (!sh) {
       var after = ss.getSheetByName(UNPAID_TREND_SHEET_) || ss.getSheetByName(UNPAID_SHEET_);
       sh = ss.insertSheet(BILL_SHEET_, after ? after.getIndex() : ss.getSheets().length);
     }
     var sig = canon.map(function (k) { return k.key; }).join('\t');
     if (String(sh.getRange(1, n + 2).getValue()) !== sig) billBuildHeader_(sh, canon);
     try { sh.setTabColor(hubTabColorFor_(BILL_SHEET_)); } catch (eT) {}
+    billEnsureAnalysis_(sh, canon);
 
     var months = billMonths_();
     var vals = [], bgs = [], fcs = [], nfs = [];
@@ -5797,6 +5805,119 @@ function billPull_(ss) {
   } finally {
     lock.releaseLock();
   }
+}
+
+function billEnsureAnalysis_(sh, canon) {
+  var top = BILL_ANALYSIS_ROW_;
+  var months = billMonths_();
+  if (String(sh.getRange(top, 1).getValue()) === '売上・回収の分析' && sh.getCharts().length >= 2) return;
+  var need = top + months.length + 22;
+  if (sh.getMaxRows() < need) sh.insertRowsAfter(sh.getMaxRows(), need - sh.getMaxRows());
+
+  var colOf = function (key) {
+    for (var i = 0; i < canon.length; i++) {
+      if (canon[i].key === key) return columnLetter_(i + 2);
+    }
+    throw new Error('列が見つかりません: ' + key);
+  };
+  var cCnt = colOf('合計|当月|請求件数|1');
+  var cAmt = colOf('合計|当月|請求金額|1');
+  var cRec = colOf('合計|当月|回収金額|1');
+  var cUn = colOf('合計|当月|不納金額|1');
+  var cUn2 = colOf('合計|翌月|不納金額|1');
+  var cJx = colOf('ジャックス|当月|請求金額|1');
+
+  var heads = ['月度', '売上（請求金額）', '請求件数', '客単価', '回収金額', '当月回収率',
+    '未納額（当月）', '未納額（翌月振替後）', '最終回収率', '売上 前月比', '請求件数 前月比', 'ジャックス比率'];
+  var nc = heads.length;
+  sh.getRange(top, 1, months.length + 2, nc).clear();
+  sh.getRange(top, 1).setValue('売上・回収の分析');
+  sh.getRange(top, 3, 1, 8).merge()
+    .setValue('上の表（合計列）から自動計算。売上＝請求金額、客単価＝請求金額÷請求件数、最終回収率＝1−最終未納額÷売上');
+  sh.getRange(top + 1, 1, 1, nc).setValues([heads]);
+  var rows = [];
+  for (var i = 0; i < months.length; i++) {
+    var s = BILL_FIRST_ROW_ + i;
+    var r = top + 2 + i;
+    var prev = r - 1;
+    rows.push([
+      '=$A' + s,
+      '=IF(N(' + cAmt + s + ')=0,"",' + cAmt + s + ')',
+      '=IF(N(' + cCnt + s + ')=0,"",' + cCnt + s + ')',
+      '=IFERROR(B' + r + '/C' + r + ',"")',
+      '=IF(B' + r + '="","",' + cRec + s + ')',
+      '=IFERROR(E' + r + '/B' + r + ',"")',
+      '=IF(B' + r + '="","",' + cUn + s + ')',
+      '=IF(OR(B' + r + '="",N(' + cUn2 + s + ')=0),"",' + cUn2 + s + ')',
+      '=IF(B' + r + '="","",1-IF(H' + r + '<>"",H' + r + ',G' + r + ')/B' + r + ')',
+      i === 0 ? '' : '=IFERROR(B' + r + '/B' + prev + '-1,"")',
+      i === 0 ? '' : '=IFERROR(C' + r + '/C' + prev + '-1,"")',
+      '=IFERROR(' + cJx + s + '/B' + r + ',"")'
+    ]);
+  }
+  var body = sh.getRange(top + 2, 1, months.length, nc);
+  body.setFormulas(rows);
+
+  sh.getRange(top, 1, 1, nc).setFontFamily('Meiryo');
+  sh.getRange(top, 1).setFontWeight('bold').setFontSize(12).setFontColor('#000000');
+  sh.getRange(top, 3).setFontSize(9).setFontColor('#757575');
+  sh.getRange(top + 1, 1, 1, nc).setBackground('#212121').setFontColor('#ffffff').setFontWeight('bold')
+    .setHorizontalAlignment('center').setWrap(true).setFontFamily('Meiryo').setFontSize(10);
+  body.setFontFamily('Meiryo').setFontSize(10).setBackground('#ffffff').setFontColor('#000000')
+    .setBorder(true, true, true, true, true, true, '#e0e0e0', SpreadsheetApp.BorderStyle.SOLID);
+  sh.getRange(top + 2, 1, months.length, 1).setFontWeight('bold').setBackground('#fafafa');
+  sh.getRange(top + 2, 2, months.length, 1).setNumberFormat('¥#,##0').setFontWeight('bold');
+  sh.getRange(top + 2, 3, months.length, 1).setNumberFormat('#,##0');
+  sh.getRange(top + 2, 4, months.length, 1).setNumberFormat('¥#,##0');
+  sh.getRange(top + 2, 5, months.length, 1).setNumberFormat('¥#,##0');
+  sh.getRange(top + 2, 6, months.length, 1).setNumberFormat('0.0%');
+  sh.getRange(top + 2, 7, months.length, 2).setNumberFormat('¥#,##0');
+  sh.getRange(top + 2, 9, months.length, 1).setNumberFormat('0.0%').setFontWeight('bold');
+  sh.getRange(top + 2, 10, months.length, 2).setNumberFormat('+0.0%;[Red]-0.0%;0.0%');
+  sh.getRange(top + 2, 12, months.length, 1).setNumberFormat('0.0%');
+  sh.getRange(top + 2, 2, months.length, nc - 1).setHorizontalAlignment('right');
+  sh.setRowHeight(top + 1, 36);
+
+  sh.getCharts().forEach(function (ch) { sh.removeChart(ch); });
+  var hdr = top + 1;
+  var last = top + 1 + months.length;
+  var chartRow = last + 2;
+  var sales = sh.newChart()
+    .setChartType(Charts.ChartType.COMBO)
+    .addRange(sh.getRange('A' + hdr + ':B' + last))
+    .addRange(sh.getRange('D' + hdr + ':D' + last))
+    .setNumHeaders(1)
+    .setOption('title', '売上（請求金額）と客単価')
+    .setOption('seriesType', 'bars')
+    .setOption('series', {
+      0: { type: 'bars', color: '#424242', targetAxisIndex: 0 },
+      1: { type: 'line', color: '#c5221f', lineWidth: 2, pointSize: 5, targetAxisIndex: 1 }
+    })
+    .setOption('vAxes', { 0: { format: '¥#,##0' }, 1: { format: '¥#,##0' } })
+    .setOption('legend', { position: 'bottom' })
+    .setOption('width', 620)
+    .setOption('height', 300)
+    .setPosition(chartRow, 1, 0, 0)
+    .build();
+  sh.insertChart(sales);
+  var rate = sh.newChart()
+    .setChartType(Charts.ChartType.LINE)
+    .addRange(sh.getRange('A' + hdr + ':A' + last))
+    .addRange(sh.getRange('F' + hdr + ':F' + last))
+    .addRange(sh.getRange('I' + hdr + ':I' + last))
+    .setNumHeaders(1)
+    .setOption('title', '回収率の推移')
+    .setOption('series', {
+      0: { color: '#9e9e9e', lineWidth: 2, pointSize: 4 },
+      1: { color: '#000000', lineWidth: 3, pointSize: 5 }
+    })
+    .setOption('vAxis', { format: '0%' })
+    .setOption('legend', { position: 'bottom' })
+    .setOption('width', 620)
+    .setOption('height', 300)
+    .setPosition(chartRow, 8, 0, 0)
+    .build();
+  sh.insertChart(rate);
 }
 
 function billParseInput_(raw) {
@@ -5890,11 +6011,11 @@ function setupBillingLinkFromMenu() {
   ScriptApp.newTrigger('billingPullTriggered').forSpreadsheet(ss).onOpen().create();
   var sh = ss.getSheetByName(BILL_SHEET_);
   if (sh) ss.setActiveSheet(sh);
-  ss.toast(r.ok ? '請求報告の自動連携を有効にしました' : String(r.message), '未納_請求報告', 8);
+  ss.toast(r.ok ? '請求報告の自動連携を有効にしました' : String(r.message), '請求・回収実績', 8);
 }
 
 function refreshBillingFromMenu() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var r = billPull_(ss);
-  ss.toast(r.ok ? '元シートから取り込みました' : String(r.message), '未納_請求報告', 5);
+  ss.toast(r.ok ? '元シートから取り込みました' : String(r.message), '請求・回収実績', 5);
 }
