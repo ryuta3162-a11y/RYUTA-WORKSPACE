@@ -702,6 +702,32 @@ function tidyImportMirrorKeepLook_(sheet) {
   }
 }
 
+/**
+ * マシンレクチャー申込：新しい行が入っても同じ背景色になるよう、A列に値がある行を条件付き書式で塗る。
+ * 色は手直し済みの A3 の背景色に合わせる。他の見た目（文字・列幅など）は触らない。
+ */
+function tintLectureRows_() {
+  try {
+    var sh = openWorkspaceSpreadsheet_().getSheetByName('マシンレクチャー申込');
+    if (!sh) return { ok: false, message: 'sheet not found' };
+    var bg = String(sh.getRange('A3').getBackground() || '#ffffff');
+    if (/^#?f{6}$/i.test(bg.replace('#', '')) || bg === '#ffffff') bg = '#efefef';
+    var cols = Math.max(sh.getLastColumn(), 7);
+    var rng = sh.getRange(3, 1, sh.getMaxRows() - 2, cols);
+    var formula = '=$A3<>""';
+    var rules = sh.getConditionalFormatRules().filter(function (r) {
+      var c = r.getBooleanCondition();
+      return !(c && c.getCriteriaValues && String(c.getCriteriaValues()[0]) === formula);
+    });
+    rules.push(SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied(formula)
+      .setBackground(bg).setRanges([rng]).build());
+    sh.setConditionalFormatRules(rules);
+    return { ok: true, color: bg, range: rng.getA1Notation(), rules: rules.length };
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
 function removeSheetFilterSafe_(sheet) {
   try {
     var f = sheet.getFilter();
@@ -1980,6 +2006,9 @@ function handleApiGet_(e) {
     }
     if (api === 'setupUnpaidView') {
       return jsonOutput_(setupUnpaidView_());
+    }
+    if (api === 'tintLectureRows') {
+      return jsonOutput_(tintLectureRows_());
     }
     if (api === 'peekExternal') {
       try {
