@@ -5617,6 +5617,7 @@ function polishKansouWithGemini(rawText) {
 var BILL_SHEET_ = '請求・回収実績';
 var BILL_OLD_SHEET_ = '未納_請求報告';
 var BILL_ANALYSIS_ROW_ = 19;
+var BILL_ANALYSIS_VER_ = '2';
 var BILL_SOURCE_ID_ = '1qFF8HGOlSOczshMI5Vg5iTAgN_iLQ2aemJLp35V3rbA';
 var BILL_STORE_ = '経堂';
 var BILL_REF_TAB_ = '26年6月度';
@@ -5810,7 +5811,9 @@ function billPull_(ss) {
 function billEnsureAnalysis_(sh, canon) {
   var top = BILL_ANALYSIS_ROW_;
   var months = billMonths_();
-  if (String(sh.getRange(top, 1).getValue()) === '売上・回収の分析' && sh.getCharts().length >= 2) return;
+  var verCell = sh.getRange(2, canon.length + 2);
+  if (String(verCell.getValue()) === BILL_ANALYSIS_VER_ && sh.getCharts().length >= 2) return;
+  verCell.setValue(BILL_ANALYSIS_VER_);
   var need = top + months.length + 22;
   if (sh.getMaxRows() < need) sh.insertRowsAfter(sh.getMaxRows(), need - sh.getMaxRows());
 
@@ -5850,8 +5853,8 @@ function billEnsureAnalysis_(sh, canon) {
       '=IF(B' + r + '="","",' + cUn + s + ')',
       '=IF(OR(B' + r + '="",N(' + cUn2 + s + ')=0),"",' + cUn2 + s + ')',
       '=IF(B' + r + '="","",1-IF(H' + r + '<>"",H' + r + ',G' + r + ')/B' + r + ')',
-      i === 0 ? '' : '=IFERROR(B' + r + '/B' + prev + '-1,"")',
-      i === 0 ? '' : '=IFERROR(C' + r + '/C' + prev + '-1,"")',
+      i === 0 ? '' : '=IF(OR(B' + r + '="",B' + prev + '=""),"",B' + r + '/B' + prev + '-1)',
+      i === 0 ? '' : '=IF(OR(C' + r + '="",C' + prev + '=""),"",C' + r + '/C' + prev + '-1)',
       '=IFERROR(' + cJx + s + '/B' + r + ',"")'
     ]);
   }
