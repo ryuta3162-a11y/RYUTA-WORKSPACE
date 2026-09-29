@@ -21,6 +21,9 @@
 | EAST口コミ回答 | EAST口コミ回答者 | `13_E8m3vQa_61hcoMAPb7XZTyVDVtQ9O7rkVDNtHQvRM` | https://docs.google.com/spreadsheets/d/13_E8m3vQa_61hcoMAPb7XZTyVDVtQ9O7rkVDNtHQvRM/edit |
 | マシンレクチャー／自動メール | 20分マシンレクチャー・自動送信メール | `1wntzhyPGcz9hW4saswppYmVG-zHINbjAibu9VkCyEQ8` | https://docs.google.com/spreadsheets/d/1wntzhyPGcz9hW4saswppYmVG-zHINbjAibu9VkCyEQ8/edit |
 | 未納管理（オーナー別・自分は編集者） | 26年度未納管理ドライブ【経堂】 | `10vpQRDfTdwx_Wb7JaSm3lZCkTk8msLyf8ggAHhI1shI` | https://docs.google.com/spreadsheets/d/10vpQRDfTdwx_Wb7JaSm3lZCkTk8msLyf8ggAHhI1shI/edit |
+| 未納の対応後☑（リンクのみ） | 【JOYFIT】26年度未納回収フロー管理表 | `1NvIIRTXC9XCAuib5USFouigkvmM8H2WDBOTWLjfN8oM` | https://docs.google.com/spreadsheets/d/1NvIIRTXC9XCAuib5USFouigkvmM8H2WDBOTWLjfN8oM/edit |
+| 請求報告（EAST全店・経堂行を相互連携） | 26年度未納一覧【EAST運営本部】 | `1qFF8HGOlSOczshMI5Vg5iTAgN_iLQ2aemJLp35V3rbA` | https://docs.google.com/spreadsheets/d/1qFF8HGOlSOczshMI5Vg5iTAgN_iLQ2aemJLp35V3rbA/edit |
+| FIT365 入会者一覧 | FIT365 入会者一覧＋自動メール管理 | `1BbExBUCfyq1cfNqw4TvlwUriL-AfvghU9XT6McdzGTQ` | https://docs.google.com/spreadsheets/d/1BbExBUCfyq1cfNqw4TvlwUriL-AfvghU9XT6McdzGTQ/edit |
 
 ## 制限付き共有 + IMPORTRANGE 再許可（推奨運用）
 
@@ -137,7 +140,8 @@ https://script.google.com/macros/s/AKfycbzMELimQThNdPUShwo2_KBzJd8kGy9BNdRyOYNgu
   - A〜D 列と 1〜6 行を固定。配色は白黒グレー＋赤1色のみ（ユーザー希望：カラフルにしない）
 - **`未納管理_推移`**: 1行＝1ヶ月（25年8月〜27年12月）。数値のまま（計算に使える）。元にタブが増えれば自動で埋まる。累計の回収額は各月の単純合計（繰越で二重計上の可能性あり）
 - **集計ロジック**（`unpaidStatsLet_`）: 新旧レイアウトが混在（26年3月以前は会員番号がB列・区分列なし）するため、列は見出し文字（会員番号／支払額／総額／回収金額|入金金額|レジ打ち金額）で探す。対象行＝会員番号あり・支払額>0。回収＝回収金額、空なら右隣3列に「〇〇入金」があれば支払額を回収扱い。元ファイル右上の独自集計欄とは定義が違うので数字は一致しない
-- **すべて数式**なのでトリガー不要（Workspace GAS には script.scriptapp スコープが無くトリガーを作れない）
+- **すべて数式**なのでトリガー不要
+- A4 に「対応後☑用シートを開く ↗」（【JOYFIT】26年度未納回収フロー管理表へのリンクのみ・IMPORTRANGE なし）。`onOpen` で消えていれば自動で付け直す
 
 ## 入会者一覧＋自動メール管理（2026-09-30）
 
@@ -145,6 +149,39 @@ https://script.google.com/macros/s/AKfycbzMELimQThNdPUShwo2_KBzJd8kGy9BNdRyOYNgu
 - 値コピー同期（`syncJoinListWithCheckboxes_`）は使わない。このプロジェクトは `script.scriptapp` 権限がなく時間トリガーが作れないため、コピーは一度きりで古くなる
 - A2 が IMPORTRANGE でなくなると `onOpen` が自動で張り直す。手動はメニュー「数値更新 → 入会者一覧を元シートと連動し直す」
 - **clasp push の前に必ず `clasp pull`（別PCのHEADを消さない）**。2026-09-29 に別PCの v192〜200 を上書きしたため v200 に統合し直した
+
+## 請求・回収実績（2026-09-29 作成・旧名 未納_請求報告）
+
+- **元**: 26年度未納一覧【EAST運営本部】（全店入力・自分はEAST店舗分の編集者）。月度タブ `26年4月度`〜。**経堂は B列「経堂」の行（現在72行目）**。C:AH を使用（クレカ／ジャックス／合計 × 当月振替結果・翌月振替結果後）
+- **Workspace 側**: 縦＝月度（26年4月度〜27年3月度）、横＝項目（30列）。見出し1〜3行目は元と同じ
+  - 白セル＝手入力項目。入力すると **installable onEdit（`billingOnEdit`）で元シートの経堂行へ即書き戻し**
+  - 赤＝未入力（該当ゼロは「0」を入れる）。グレー＝元シートの数式（自動計算）→ Workspace で入力しても元には書かず元の値に戻す
+  - 元→Workspace は `billingPullTriggered`（開いた時＋5分ごと）で取り込み
+  - 列は位置ではなく「グループ｜当月/翌月/他｜見出し名」で照合（4・5月度は列構成が違うため）。基準タブ `26年6月度`。4・5月度だけにある SMSレジ入金・代弁入金・総入金は未表示
+  - 経堂の行は毎回店舗名で検索。**元シートの数式・書式・他店舗・構成には一切触れない**（書くのは経堂行の非数式セルだけ）。元の変更履歴には自分の名前で残る
+- **19行目〜「売上・回収の分析」**: 売上（請求金額）・請求件数・客単価・回収金額・当月回収率・未納額（当月／翌月振替後）・最終回収率・前月比・ジャックス比率。グラフ2つ（売上と客単価／回収率の推移）。分析を作り直したい時は `BILL_ANALYSIS_VER_` を上げて push
+- 初回セットアップ（済）: メニュー「数値更新 → 請求報告の自動連携を有効にする（初回のみ）」。トリガー3つ（onEdit／5分／onOpen）を作成。manifest に `script.scriptapp` を追加済み
+- 実績（9/29時点）: 売上 月1,120〜1,220万円、客単価 ¥8,100〜8,700（低下傾向）、当月回収率 93.3%→95.0%（改善）
+
+## 会員分析（2026-09-29 作成）
+
+- **元**: Workspace 内の `累計退会データ`（F:S＝会員番号〜理由、P＝在籍期間、R＝退会年月）と `累計入会データ`（F:O＝会員番号〜手続、N＝利用開始年月）。**手動貼り付け**
+- 貼り替えで行数が変わると 5分以内に自動で作り直し（`memberAnalysisIfChanged_`）。手動はメニュー「数値更新 → 会員分析を作り直す」
+- 中身: KPI（在籍推定・累計入会/退会・月間退会率・退会者平均在籍・平均客単価〔請求・回収実績から連動〕・生涯売上2種）、入会年別／入会月別（直近36ヶ月）の 3・6・12・24ヶ月継続率、年代・性別・契約プラン別（2023年以降入会）、継続率グラフ
+- 9/29 時点の要点: 在籍約1,480人／月間退会率3.61%／生涯売上 ¥126,247（退会者平均在籍15ヶ月）〜¥232,463（1÷退会率）。**3ヶ月継続率が 2017〜22年入会 96〜99% → 2024・25年入会 83.2% に悪化**（2026年は97%に回復）。20代ほど早期退会が多い
+- 注意: 年齢は現在年齢。契約名称はほぼ空欄（＝通常）。退会理由は半数以上空欄＋記号（A・M 等）で意味不明
+
+## 課題・未対応（2026-09-29 時点）
+
+- **GAS バージョン上限 200 に到達** → Web アプリ（`AKfycbzMELim…` @200）を更新できない。新しい API を使うには Apps Script エディタ「プロジェクト履歴」で古いバージョンを一括削除（@200 は残す）してから `clasp deploy -i …`。メニュー・トリガーは HEAD で動くので push だけで反映される
+- 退会理由の記号表が手に入れば理由別集計を追加
+- 請求・回収実績：4・5月度の追加列（SMSレジ入金 等）を出すか要確認
+- 以前からの保留: SHIFT-DETA-NEW の stash（local-before-pull-2026-09-29）破棄/保持、SHIFT の .env.local キー、未納で「該当なし」の人を会員番号で照合できる名簿、F71 書き込み、2609 曜日列、backup シート整理
+
+## 今後やりたいこと（案）
+
+- 会員分析：退会理由別、入会月（7月キャンペーン等）ごとの継続率比較、早期退会者の特徴（年代×プラン）
+- 請求・回収実績と会員分析をトップのタイルに出す（`hubCatalog_` には追加済み。`setupHubHome` の再構築で表示）
 
 ## ハマりどころ（GAS から数式を入れるとき）
 
