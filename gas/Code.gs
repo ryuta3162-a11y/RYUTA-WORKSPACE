@@ -6427,21 +6427,40 @@ function noteMemberAnalysisBreakdown_(ss) {
 }
 
 /**
- * 日報の契約・解約は OP集計の「対象月」ではなく、日報 B1（2610 など）の月を数える。
- * OP集計のプルダウンは「ログに1件でもある月」しか出ないので、月初の10月は選べない。
- * 同じブックの OP集計ログ（I=日時 K=区分 M=集計名）を COUNTIFS する。月初列は触らない。
+ * 日報の契約・解約は日報 B1 の月。
+ * 新規入会のセットOPは OP取込診断（入会月）を数える。
+ * 受信日時で切ると、月末夜に届いた翌月入会（渡辺・朴など）が落ちて 3人なのに契約1 になる。
+ * 解約はログの利用停止から、当月入会者の誤停止メールを除く。月初列は触らない。
  */
-var NIPPO_OP_NOTE_ = '日報B1の月を自動集計（OP集計の対象月は見ない。B1を2611にすれば11月）';
+var NIPPO_OP_NOTE_ = '日報B1の入会月で自動集計（診断の検出OP＋OP追加。月末夜の翌月入会も拾う）';
 
-function nippoOpCountFormula_(row, kind) {
-  return '=IFERROR(LET('
-    + 'bcode,REGEXREPLACE($B$1&"","[^0-9]",""),'
+function nippoOpYmFromB1_(b1) {
+  var bcode = String(b1 || '').replace(/\D/g, '');
+  var y = bcode.length === 6 ? Number(bcode.slice(0, 4)) : 2000 + Number(bcode.slice(0, 2));
+  var m = Number(bcode.slice(-2));
+  return { y: y, m: m, label: y + '年' + m + '月' };
+}
+
+function nippoOpLetPrefix_() {
+  return 'bcode,REGEXREPLACE($B$1&"","[^0-9]",""),'
     + 'yy,IF(LEN(bcode)=6,VALUE(LEFT(bcode,4)),2000+VALUE(LEFT(bcode,2))),'
     + 'mm,VALUE(RIGHT(bcode,2)),'
-    + 'COUNTIFS(\'OP集計\'!$M:$M,$B' + row
-    + ',\'OP集計\'!$K:$K,"' + kind + '"'
-    + ',\'OP集計\'!$I:$I,">="&DATE(yy,mm,1)'
-    + ',\'OP集計\'!$I:$I,"<"&DATE(yy,mm+1,1))),0)';
+    + 'label,yy&"年"&mm&"月",'
+    + 'startD,DATE(yy,mm,1),'
+    + 'endD,DATE(yy,mm+1,1),';
+}
+
+function nippoOpContractFormula_(row) {
+  return '=IFERROR(LET(' + nippoOpLetPrefix_()
+    + 'newjoin,SUMPRODUCT((\'OP取込診断\'!C$3:C$200=label)*ISNUMBER(SEARCH(" / "&$B' + row + '&" / "," / "&\'OP取込診断\'!E$3:E$200&" / "))),'
+    + 'addon,COUNTIFS(\'OP集計\'!$M:$M,$B' + row + ',\'OP集計\'!$K:$K,"利用開始(OP追加)",\'OP集計\'!$I:$I,">="&startD,\'OP集計\'!$I:$I,"<"&endD),'
+    + 'newjoin+addon),0)';
+}
+
+function nippoOpCancelFormula_(row) {
+  return '=IFERROR(LET(' + nippoOpLetPrefix_()
+    + 'joiners,IFERROR(FILTER(\'OP取込診断\'!A$3:A$200,(\'OP取込診断\'!C$3:C$200=label)*(\'OP取込診断\'!A$3:A$200<>"")),{"__none__"}),'
+    + 'SUMPRODUCT((\'OP集計\'!$M$2:$M$20000=$B' + row + ')*(\'OP集計\'!$K$2:$K$20000="利用停止")*(\'OP集計\'!$I$2:$I$20000>=startD)*(\'OP集計\'!$I$2:$I$20000<endD)*ISNA(MATCH(\'OP集計\'!$J$2:$J$20000,joiners,0)))),0)';
 }
 
 function nippoOpLastRow_(sh) {
@@ -6453,36 +6472,88 @@ function nippoOpLastRow_(sh) {
   return last;
 }
 
-function nippoOpFormulaOk_(formula) {
-  var f = String(formula || '');
-  return /COUNTIFS/i.test(f) && /OP集計/.test(f) && /\$B\$1/.test(f);
+function nippoOpFormulaOk_(dFormula, eFormula) {
+  return /OP取込診断/.test(String(dFormula || '')) && /利用停止/.test(String(eFormula || '')) && /\$B\$1/.test(String(dFormula || ''));
 }
 
-function ensureNippoOpByB1_(force) {
+function nippoOpStampForMonth_(stamp, y, m) {
+  var ymd = memberYmd_(stamp);
+  if (ymd && ymd.y === y && ymd.m === m) {
+    var d = new Date(stamp);
+    if (!isNaN(d.getTime())) return d;
+  }
+  return new Date(y, m - 1, 1, 0, 1, 0);
+}
+
+/** 診断で取れた新規OPがログに無いとき（月末夜の翌月入会）を足す */
+function backfillOpLogFromDiag_(book, y, m) {
+  var diag = book.getSheetByName('OP取込診断');
+  var op = book.getSheetByName('OP集計');
+  var join = book.getSheetByName('入会・退会_データ');
+  if (!diag || !op || !join) return { added: 0 };
+  var label = y + '年' + m + '月';
+  var last = Math.max(op.getLastRow(), 2);
+  var logN = Math.max(last - 1, 1);
+  var log = op.getRange(2, 9, logN, 6).getDisplayValues();
+  var seen = {};
+  for (var i = 0; i < log.length; i++) {
+    if (!/利用開始/.test(String(log[i][2] || ''))) continue;
+    seen[String(log[i][5] || '') + '|' + String(log[i][4] || '')] = 1;
+  }
+  var jLast = Math.max(join.getLastRow() - 1, 0);
+  var byName = {};
+  if (jLast) {
+    var jv = join.getRange(2, 1, jLast, 5).getDisplayValues();
+    for (var j = 0; j < jv.length; j++) {
+      if (String(jv[j][2] || '') !== label) continue;
+      byName[String(jv[j][1] || '').trim()] = jv[j];
+    }
+  }
+  var dLast = Math.max(diag.getLastRow() - 2, 0);
+  if (!dLast) return { added: 0 };
+  var dv = diag.getRange(3, 1, dLast, 5).getDisplayValues();
+  var rows = [];
+  for (var r = 0; r < dv.length; r++) {
+    if (String(dv[r][2] || '') !== label) continue;
+    var name = String(dv[r][0] || '').trim();
+    var parts = String(dv[r][4] || '').split(/\s*\/\s*/);
+    var jrow = byName[name];
+    var mailId = jrow ? String(jrow[4] || '') : '';
+    var when = nippoOpStampForMonth_(jrow ? jrow[0] : '', y, m);
+    for (var o = 0; o < parts.length; o++) {
+      var opt = String(parts[o] || '').trim();
+      if (!opt || opt === '(エラー)') continue;
+      var key = mailId + '|' + opt;
+      if (seen[key]) continue;
+      seen[key] = 1;
+      rows.push([when, name, '利用開始(新規入会)', opt, opt, mailId]);
+    }
+  }
+  if (rows.length) {
+    op.getRange(op.getLastRow() + 1, 9, rows.length, 6).setValues(rows);
+  }
+  return { added: rows.length };
+}
+
+function applyNippoOpByB1_() {
   var book = SpreadsheetApp.openById(RECEPTION_SOURCE_ID_);
   var sh = book.getSheetByName('日報');
   var op = book.getSheetByName('OP集計');
+  var diag = book.getSheetByName('OP取込診断');
   if (!sh) return { ok: false, message: '日報なし' };
   if (!op) return { ok: false, message: 'OP集計なし' };
-  if (!force && nippoOpFormulaOk_(sh.getRange('D21').getFormula()) && nippoOpFormulaOk_(sh.getRange('E21').getFormula())) {
-    var keep = sh.getRange('D22:F22').getDisplayValues()[0];
-    return {
-      ok: true,
-      skipped: true,
-      b1: sh.getRange('B1').getDisplayValue(),
-      vipContract: keep[0],
-      vipCancel: keep[1],
-      vipDelta: keep[2]
-    };
-  }
+  if (!diag) return { ok: false, message: 'OP取込診断なし' };
+  var ym = nippoOpYmFromB1_(sh.getRange('B1').getDisplayValue());
+  var fill = { added: 0 };
+  try { fill = backfillOpLogFromDiag_(book, ym.y, ym.m); } catch (eF) { fill = { added: 0, error: String(eF && eF.message ? eF.message : eF) }; }
   var last = nippoOpLastRow_(sh);
   var n = last - 20;
   var dForms = [];
   var eForms = [];
   var fForms = [];
   for (var row = 21; row <= last; row++) {
-    dForms.push([nippoOpCountFormula_(row, '利用開始*')]);
-    eForms.push([nippoOpCountFormula_(row, '利用停止')]);
+    dForms.push([nippoOpContractFormula_(row)]);
+    eForms.push([nippoOpCancelFormula_(row)]);
     fForms.push(['=IFERROR(D' + row + '-E' + row + ',0)']);
   }
   sh.getRange(21, 4, n, 1).setFormulas(dForms).setNote(NIPPO_OP_NOTE_);
@@ -6490,23 +6561,65 @@ function ensureNippoOpByB1_(force) {
   sh.getRange(21, 6, n, 1).setFormulas(fForms);
   sh.getRange(21, 4, n, 3).setNumberFormat('0');
   SpreadsheetApp.flush();
-  var vip = sh.getRange('D22:F22').getDisplayValues()[0];
+  var names = sh.getRange(21, 2, n, 1).getDisplayValues();
+  var vals = sh.getRange(21, 4, n, 3).getDisplayValues();
+  var vip = ['', '', ''];
+  var pilates = '';
+  for (var i = 0; i < names.length; i++) {
+    if (names[i][0] === '安心サポートVIP') vip = vals[i];
+    if (/ピラティス/.test(String(names[i][0] || ''))) pilates = vals[i][0];
+  }
   return {
     ok: true,
     skipped: false,
     b1: sh.getRange('B1').getDisplayValue(),
+    month: ym.label,
+    added: fill.added,
     lastRow: last,
     vipContract: vip[0],
     vipCancel: vip[1],
-    vipDelta: vip[2]
+    vipDelta: vip[2],
+    pilates: pilates
   };
+}
+
+function ensureNippoOpByB1_(force) {
+  var book = SpreadsheetApp.openById(RECEPTION_SOURCE_ID_);
+  var sh = book.getSheetByName('日報');
+  if (!sh) return { ok: false, message: '日報なし' };
+  if (!force && nippoOpFormulaOk_(sh.getRange('D21').getFormula(), sh.getRange('E21').getFormula())) {
+    try {
+      var ymKeep = nippoOpYmFromB1_(sh.getRange('B1').getDisplayValue());
+      backfillOpLogFromDiag_(book, ymKeep.y, ymKeep.m);
+    } catch (eB) {}
+    var keep = sh.getRange('D22:F22').getDisplayValues()[0];
+    var pilates = '';
+    try {
+      var last = nippoOpLastRow_(sh);
+      var names = sh.getRange(21, 2, last - 20, 1).getDisplayValues();
+      var ds = sh.getRange(21, 4, last - 20, 1).getDisplayValues();
+      for (var i = 0; i < names.length; i++) {
+        if (/ピラティス/.test(String(names[i][0] || ''))) pilates = ds[i][0];
+      }
+    } catch (eP) {}
+    return {
+      ok: true,
+      skipped: true,
+      b1: sh.getRange('B1').getDisplayValue(),
+      vipContract: keep[0],
+      vipCancel: keep[1],
+      vipDelta: keep[2],
+      pilates: pilates
+    };
+  }
+  return applyNippoOpByB1_();
 }
 
 function refreshNippoOpFromMenu() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var r = ensureNippoOpByB1_(true);
   ss.toast(r.ok
-    ? ('B1=' + r.b1 + '　VIP 契約' + r.vipContract + ' 解約' + r.vipCancel)
+    ? ('B1=' + r.b1 + '　VIP 契約' + r.vipContract + ' ピラティス' + r.pilates)
     : String(r.message), '日報オプション', 10);
   return r;
 }
@@ -6514,43 +6627,104 @@ function refreshNippoOpFromMenu() {
 function 日報オプションをB1連動() {
   var book = SpreadsheetApp.openById('14hxiLBzvGTuIpfZcoVjiHpz8b419OzUrtQAr5788h3w');
   var sh = book.getSheetByName('日報');
-  var opSh = book.getSheetByName('OP集計');
+  var op = book.getSheetByName('OP集計');
+  var diag = book.getSheetByName('OP取込診断');
+  var join = book.getSheetByName('入会・退会_データ');
   if (!sh) throw new Error('日報なし');
-  if (!opSh) throw new Error('OP集計なし');
-  var last = 21;
-  var names = sh.getRange('B21:B40').getDisplayValues();
-  for (var i = 0; i < names.length; i++) {
-    if (String(names[i][0] || '').trim()) last = 21 + i;
+  if (!op || !diag || !join) throw new Error('OP集計 / OP取込診断 / 入会・退会_データ がありません');
+  var b1 = String(sh.getRange('B1').getDisplayValue() || '').replace(/\D/g, '');
+  var y = b1.length === 6 ? Number(b1.slice(0, 4)) : 2000 + Number(b1.slice(0, 2));
+  var m = Number(b1.slice(-2));
+  var label = y + '年' + m + '月';
+  var lastLog = Math.max(op.getLastRow(), 2);
+  var log = op.getRange(2, 9, lastLog - 1, 6).getDisplayValues();
+  var seen = {};
+  for (var i = 0; i < log.length; i++) {
+    if (!/利用開始/.test(String(log[i][2] || ''))) continue;
+    seen[String(log[i][5] || '') + '|' + String(log[i][4] || '')] = 1;
   }
+  var jLast = Math.max(join.getLastRow() - 1, 0);
+  var byName = {};
+  if (jLast) {
+    var jv = join.getRange(2, 1, jLast, 5).getDisplayValues();
+    for (var j = 0; j < jv.length; j++) {
+      if (String(jv[j][2] || '') === label) byName[String(jv[j][1] || '').trim()] = jv[j];
+    }
+  }
+  var dLast = Math.max(diag.getLastRow() - 2, 0);
+  var added = 0;
+  if (dLast) {
+    var dv = diag.getRange(3, 1, dLast, 5).getDisplayValues();
+    var rows = [];
+    for (var r = 0; r < dv.length; r++) {
+      if (String(dv[r][2] || '') !== label) continue;
+      var name = String(dv[r][0] || '').trim();
+      var parts = String(dv[r][4] || '').split(/\s*\/\s*/);
+      var jrow = byName[name];
+      var mailId = jrow ? String(jrow[4] || '') : '';
+      var stamp = jrow ? String(jrow[0] || '') : '';
+      var ym = stamp.match(/(20\d{2})\D+(\d{1,2})/);
+      var when = (ym && Number(ym[1]) === y && Number(ym[2]) === m)
+        ? stamp
+        : new Date(y, m - 1, 1, 0, 1, 0);
+      for (var o = 0; o < parts.length; o++) {
+        var opt = String(parts[o] || '').trim();
+        if (!opt || opt === '(エラー)') continue;
+        var key = mailId + '|' + opt;
+        if (seen[key]) continue;
+        seen[key] = 1;
+        rows.push([when, name, '利用開始(新規入会)', opt, opt, mailId]);
+      }
+    }
+    if (rows.length) {
+      op.getRange(op.getLastRow() + 1, 9, rows.length, 6).setValues(rows);
+      added = rows.length;
+    }
+  }
+  var last = 21;
+  var optNames = sh.getRange('B21:B40').getDisplayValues();
+  for (var n = 0; n < optNames.length; n++) {
+    if (String(optNames[n][0] || '').trim()) last = 21 + n;
+  }
+  var prefix = 'bcode,REGEXREPLACE($B$1&"","[^0-9]",""),yy,IF(LEN(bcode)=6,VALUE(LEFT(bcode,4)),2000+VALUE(LEFT(bcode,2))),mm,VALUE(RIGHT(bcode,2)),label,yy&"年"&mm&"月",startD,DATE(yy,mm,1),endD,DATE(yy,mm+1,1),';
   var dForms = [];
   var eForms = [];
   var fForms = [];
   for (var row = 21; row <= last; row++) {
-    var body = 'LET(bcode,REGEXREPLACE($B$1&"","[^0-9]",""),yy,IF(LEN(bcode)=6,VALUE(LEFT(bcode,4)),2000+VALUE(LEFT(bcode,2))),mm,VALUE(RIGHT(bcode,2)),COUNTIFS(\'OP集計\'!$M:$M,$B'
-      + row + ',\'OP集計\'!$K:$K,"KIND",\'OP集計\'!$I:$I,">="&DATE(yy,mm,1),\'OP集計\'!$I:$I,"<"&DATE(yy,mm+1,1)))';
-    dForms.push(['=IFERROR(' + body.replace('KIND', '利用開始*') + ',0)']);
-    eForms.push(['=IFERROR(' + body.replace('KIND', '利用停止') + ',0)']);
+    dForms.push(['=IFERROR(LET(' + prefix
+      + 'newjoin,SUMPRODUCT((\'OP取込診断\'!C$3:C$200=label)*ISNUMBER(SEARCH(" / "&$B' + row + '&" / "," / "&\'OP取込診断\'!E$3:E$200&" / "))),'
+      + 'addon,COUNTIFS(\'OP集計\'!$M:$M,$B' + row + ',\'OP集計\'!$K:$K,"利用開始(OP追加)",\'OP集計\'!$I:$I,">="&startD,\'OP集計\'!$I:$I,"<"&endD),'
+      + 'newjoin+addon),0)']);
+    eForms.push(['=IFERROR(LET(' + prefix
+      + 'joiners,IFERROR(FILTER(\'OP取込診断\'!A$3:A$200,(\'OP取込診断\'!C$3:C$200=label)*(\'OP取込診断\'!A$3:A$200<>"")),{"__none__"}),'
+      + 'SUMPRODUCT((\'OP集計\'!$M$2:$M$20000=$B' + row + ')*(\'OP集計\'!$K$2:$K$20000="利用停止")*(\'OP集計\'!$I$2:$I$20000>=startD)*(\'OP集計\'!$I$2:$I$20000<endD)*ISNA(MATCH(\'OP集計\'!$J$2:$J$20000,joiners,0)))),0)']);
     fForms.push(['=IFERROR(D' + row + '-E' + row + ',0)']);
   }
-  var n = last - 20;
-  var note = '日報B1の月を自動集計（OP集計の対象月は見ない。B1を2611にすれば11月）';
-  sh.getRange(21, 4, n, 1).setFormulas(dForms).setNote(note);
-  sh.getRange(21, 5, n, 1).setFormulas(eForms).setNote(note);
-  sh.getRange(21, 6, n, 1).setFormulas(fForms);
-  sh.getRange(21, 4, n, 3).setNumberFormat('0');
+  var num = last - 20;
+  var note = '日報B1の入会月で自動集計（診断の検出OP＋OP追加。月末夜の翌月入会も拾う）';
+  sh.getRange(21, 4, num, 1).setFormulas(dForms).setNote(note);
+  sh.getRange(21, 5, num, 1).setFormulas(eForms).setNote(note);
+  sh.getRange(21, 6, num, 1).setFormulas(fForms);
+  sh.getRange(21, 4, num, 3).setNumberFormat('0');
   SpreadsheetApp.flush();
-  var b1 = sh.getRange('B1').getDisplayValue();
-  var vip = sh.getRange('D22:F22').getDisplayValues()[0];
-  var r = { ok: true, b1: b1, vipContract: vip[0], vipCancel: vip[1], vipDelta: vip[2] };
+  var names = sh.getRange(21, 2, num, 1).getDisplayValues();
+  var vals = sh.getRange(21, 4, num, 3).getDisplayValues();
+  var vip = ['', '', ''];
+  var pilates = '';
+  for (var p = 0; p < names.length; p++) {
+    if (names[p][0] === '安心サポートVIP') vip = vals[p];
+    if (/ピラティス/.test(String(names[p][0] || ''))) pilates = vals[p][0];
+  }
   try { installJoinBreakdownTrigger_(); } catch (eT) {}
   try {
     SpreadsheetApp.getUi().alert(
-      '日報B1=' + b1 + ' の月を契約・解約が数えます。\n'
-      + '安心サポートVIP　契約' + vip[0] + '　解約' + vip[1] + '　増減' + vip[2] + '\n'
-      + 'OP集計の対象月は触らなくて大丈夫です。'
+      '日報B1=' + sh.getRange('B1').getDisplayValue() + '（' + label + '）の入会月で契約を数えます。\n'
+      + '安心サポートVIP　契約' + vip[0] + '　解約' + vip[1] + '\n'
+      + 'ピラティスリフォーマー　契約' + pilates + '\n'
+      + 'ログに足した新規OP ' + added + '件'
     );
   } catch (eUi) {}
-  return r;
+  return { ok: true, added: added, vipContract: vip[0], pilates: pilates };
 }
 
 function 移籍復会紹介を反映() {
