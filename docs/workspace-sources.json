@@ -6,7 +6,11 @@
     "sharing": "restricted_ok",
     "importAccount": "r-kusaka@okamoto-group.co.jp",
     "onRefError": "share_viewer_plus_then_Allow_access_in_Workspace",
-    "doNot": "bulk setFormulas / repairRestrictedImports that rewrite master labels"
+    "doNot": "bulk setFormulas / repairRestrictedImports that rewrite master labels",
+    "agreedWriteBack": [
+      "reception 日報 D10/F10/H10 当日 移籍/復会/紹介",
+      "reception 日報 D14/F14/H14 当月 移籍/復会/紹介"
+    ]
   },
   "hub": {
     "name": "RYUTA Workspace",
