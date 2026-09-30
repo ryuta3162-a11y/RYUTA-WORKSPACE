@@ -56,7 +56,7 @@ function onOpen() {
     .addItem('トップを表示', 'hubShowHome_')
     .addToUi();
   ui.createMenu('数値更新')
-    .addItem('受付状況表の数値を更新（入会・退会・OP）', 'refreshReceptionNumbersFromMenu')
+    .addItem('受付状況表の数値を更新（入会・退会・OP・移籍・契約）', 'refreshReceptionNumbersFromMenu')
     .addItem('前回の更新時刻を確認', 'showReceptionRefreshStatus')
     .addItem('入会者一覧を元シートと連動し直す', 'relinkJoinListFromMenu')
     .addSeparator()
@@ -165,12 +165,41 @@ function refreshReceptionNumbersFromMenu() {
     }
     if (s && s.ok && !s.pending && s.lastRefreshed && s.lastRefreshed !== beforeAt) {
       reloadReceptionImports_(ss);
-      ss.toast('更新が完了しました（' + s.lastRefreshed + '）', '数値更新', 15);
-      return s;
+      var done = writeNippoExtras_(ss);
+      ss.toast(nippoRefreshToast_(s.lastRefreshed, done), '数値更新', 15);
+      return { refresh: s, extras: done };
     }
   }
-  ss.toast('まだ終わっていません。少ししてから「前回の更新時刻を確認」で見てください。', '数値更新', 15);
+  var late = writeNippoExtras_(ss);
+  ss.toast('メール取り込みはまだです。移籍と契約は先に書きました。' + nippoExtraShort_(late), '数値更新', 15);
   return r;
+}
+
+/** 移籍・復会・紹介と、オプション契約・解約。受付状況表の日報へ書く。 */
+function writeNippoExtras_(ss) {
+  var breakdown = { ok: false };
+  var op = { ok: false };
+  try { breakdown = syncJoinBreakdown_(ss); } catch (eB) {
+    breakdown = { ok: false, message: String(eB && eB.message ? eB.message : eB) };
+  }
+  try { op = applyNippoOpByB1_(); } catch (eO) {
+    op = { ok: false, message: String(eO && eO.message ? eO.message : eO) };
+  }
+  return { breakdown: breakdown, op: op };
+}
+
+function nippoExtraShort_(done) {
+  var c = (done && done.breakdown && done.breakdown.counts) || {};
+  var op = (done && done.op) || {};
+  return ' 移籍' + (c.move == null ? '?' : c.move) +
+    ' 復会' + (c.rejoin == null ? '?' : c.rejoin) +
+    ' 紹介' + (c.intro == null ? '?' : c.intro) +
+    '／VIP契約' + (op.vipContract == null ? '?' : op.vipContract) +
+    ' ピラティス' + (op.pilates == null ? '?' : op.pilates);
+}
+
+function nippoRefreshToast_(when, done) {
+  return '更新が完了しました（' + when + '）' + nippoExtraShort_(done);
 }
 
 /**
@@ -6265,9 +6294,12 @@ function syncJoinBreakdown_(ss) {
   ss = ss || openWorkspaceSpreadsheet_();
   var counts = countMoveIntroRejoin_(ss);
   var nippo = writeNippoMoveIntroRejoin_(counts);
-  // 契約/解約は受付状況表 GAS（1JvaBDxH…）が書く。ここから ensureNippoOpByB1_ しない。
+  var op = { ok: false };
+  try { op = applyNippoOpByB1_(); } catch (eOp) {
+    op = { ok: false, message: String(eOp && eOp.message ? eOp.message : eOp) };
+  }
   try { noteMemberAnalysisBreakdown_(ss); } catch (eN) {}
-  return { ok: true, counts: counts, nippo: nippo };
+  return { ok: true, counts: counts, nippo: nippo, op: op };
 }
 
 function refreshJoinBreakdownFromMenu() {
