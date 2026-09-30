@@ -4496,10 +4496,15 @@ function ensureMasterMemberNo_(ss) {
     sh.getRange(4, memberCol, last - 3, 1).setNumberFormat('0').setHorizontalAlignment('center').setFontWeight('bold');
     sh.setColumnWidth(memberCol, 100);
   }
+  var tab = sh.getRange(2, memberCol);
+  if (tab.getDataValidation()) {
+    tab.clearDataValidations().clearContent().clearFormat()
+      .setBackground(sh.getRange(1, col).getBackground());
+  }
   var cell = sh.getRange(4, memberCol);
   var f = cell.getFormula();
   var mark = columnLetter_(col) + '3:' + columnLetter_(col + 15) + '3';
-  if (f.indexOf(mark) < 0 || f.indexOf('被紹介者') < 0) cell.setFormula(masterMemberNoFormula_(col));
+  if (f.indexOf(mark) < 0 || f.indexOf('ROWS(FILTER(') < 0) cell.setFormula(masterMemberNoFormula_(col));
 }
 
 /** トップの引用元リンク（H列）の末尾にエンジョイポイント付与画面を足す。既にあれば何もしない */

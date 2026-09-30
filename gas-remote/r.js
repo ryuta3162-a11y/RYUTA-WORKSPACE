@@ -4496,6 +4496,11 @@ function ensureMasterMemberNo_(ss) {
     sh.getRange(4, memberCol, last - 3, 1).setNumberFormat('0').setHorizontalAlignment('center').setFontWeight('bold');
     sh.setColumnWidth(memberCol, 100);
   }
+  var tab = sh.getRange(2, memberCol);
+  if (tab.getDataValidation()) {
+    tab.clearDataValidations().clearContent().clearFormat()
+      .setBackground(sh.getRange(1, col).getBackground());
+  }
   var cell = sh.getRange(4, memberCol);
   var f = cell.getFormula();
   var mark = columnLetter_(col) + '3:' + columnLetter_(col + 15) + '3';
