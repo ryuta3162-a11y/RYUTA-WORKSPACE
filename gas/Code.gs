@@ -4471,12 +4471,13 @@ function masterMemberNoFormula_(col) {
     'n,COUNTA(' + a + '4:' + a + '300),' +
     'no,' + src + 'F2:F,' +
     'nm,ARRAYFORMULA(REGEXREPLACE(' + src + 'G2:G&"","[\\s　]","")),' +
-    'tl,ARRAYFORMULA(RIGHT(REGEXREPLACE(' + src + 'L2:L&"","\\D",""),10)),' +
+    'tl,ARRAYFORMULA(RIGHT(REGEXREPLACE(' + src + 'L2:L&"","\\D",""),9)),' +
     'IF(n=0,"",MAP(SEQUENCE(n),LAMBDA(i,IF(ki>0,INDEX(d,i,ki),' +
     'LET(k,IF(ni=0,"",REGEXREPLACE(INDEX(d,i,ni)&"","[\\s　]","")),' +
-    't,IF(ti=0,"",RIGHT(REGEXREPLACE(INDEX(d,i,ti)&"","\\D",""),10)),' +
+    't,IF(ti=0,"",RIGHT(REGEXREPLACE(INDEX(d,i,ti)&"","\\D",""),9)),' +
     'c,IF(k="",0,IFERROR(ROWS(FILTER(no,nm=k)),0)),' +
-    'IF(c=1,XLOOKUP(k,nm,no),IF(c>1,IFERROR(INDEX(FILTER(no,nm=k,tl=t),1),"要確認"),""))))))))';
+    'fp,IF(OR(c<2,LEN(t)<9),"",IFERROR(FILTER(no,nm=k,tl=t),"")),' +
+    'IF(c=0,"",IF(c=1,XLOOKUP(k,nm,no),IF(INDEX(fp,1)<>"",INDEX(fp,ROWS(fp)),XLOOKUP(k,nm,no,"",0,-1))))))))))';
 }
 
 function ensureMasterMemberNo_(ss) {
@@ -4504,7 +4505,7 @@ function ensureMasterMemberNo_(ss) {
   var cell = sh.getRange(4, memberCol);
   var f = cell.getFormula();
   var mark = columnLetter_(col) + '3:' + columnLetter_(col + 15) + '3';
-  if (f.indexOf(mark) < 0 || f.indexOf('ROWS(FILTER(') < 0) cell.setFormula(masterMemberNoFormula_(col));
+  if (f.indexOf(mark) < 0 || f.indexOf('INDEX(fp,ROWS(fp))') < 0) cell.setFormula(masterMemberNoFormula_(col));
 }
 
 /** トップの引用元リンク（H列）の末尾にエンジョイポイント付与画面を足す。既にあれば何もしない */
