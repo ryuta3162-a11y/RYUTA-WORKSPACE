@@ -177,19 +177,15 @@ function refreshReceptionNumbersFromMenu() {
 
 /** 移籍・復会・紹介と、オプション契約・解約。受付状況表の日報へ書く。 */
 function writeNippoExtras_(ss) {
-  var breakdown = { ok: false };
-  var op = { ok: false };
-  try { breakdown = syncJoinBreakdown_(ss); } catch (eB) {
-    breakdown = { ok: false, message: String(eB && eB.message ? eB.message : eB) };
+  try {
+    return syncJoinBreakdown_(ss);
+  } catch (eB) {
+    return { ok: false, message: String(eB && eB.message ? eB.message : eB), counts: {}, op: {} };
   }
-  try { op = applyNippoOpByB1_(); } catch (eO) {
-    op = { ok: false, message: String(eO && eO.message ? eO.message : eO) };
-  }
-  return { breakdown: breakdown, op: op };
 }
 
 function nippoExtraShort_(done) {
-  var c = (done && done.breakdown && done.breakdown.counts) || {};
+  var c = (done && done.counts) || {};
   var op = (done && done.op) || {};
   return ' 移籍' + (c.move == null ? '?' : c.move) +
     ' 復会' + (c.rejoin == null ? '?' : c.rejoin) +
