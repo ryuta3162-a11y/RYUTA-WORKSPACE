@@ -5659,7 +5659,7 @@ function polishKansouWithGemini(rawText) {
 var BILL_SHEET_ = '請求・回収実績';
 var BILL_OLD_SHEET_ = '未納_請求報告';
 var BILL_ANALYSIS_ROW_ = 19;
-var BILL_ANALYSIS_VER_ = '2';
+var BILL_ANALYSIS_VER_ = '4';
 var BILL_SOURCE_ID_ = '1qFF8HGOlSOczshMI5Vg5iTAgN_iLQ2aemJLp35V3rbA';
 var BILL_STORE_ = '経堂';
 var BILL_REF_TAB_ = '26年6月度';
@@ -5853,12 +5853,6 @@ function billPull_(ss) {
 function billEnsureAnalysis_(sh, canon) {
   var top = BILL_ANALYSIS_ROW_;
   var months = billMonths_();
-  var verCell = sh.getRange(2, canon.length + 2);
-  if (String(verCell.getValue()) === BILL_ANALYSIS_VER_ && sh.getCharts().length >= 2) return;
-  verCell.setValue(BILL_ANALYSIS_VER_);
-  var need = top + months.length + 22;
-  if (sh.getMaxRows() < need) sh.insertRowsAfter(sh.getMaxRows(), need - sh.getMaxRows());
-
   var colOf = function (key) {
     for (var i = 0; i < canon.length; i++) {
       if (canon[i].key === key) return columnLetter_(i + 2);
@@ -5867,18 +5861,28 @@ function billEnsureAnalysis_(sh, canon) {
   };
   var cCnt = colOf('合計|当月|請求件数|1');
   var cAmt = colOf('合計|当月|請求金額|1');
+  var amts = sh.getRange(cAmt + BILL_FIRST_ROW_ + ':' + cAmt + (BILL_FIRST_ROW_ + months.length - 1)).getValues();
+  var filled = 0;
+  amts.forEach(function (v, k) { if (Number(v[0])) filled = k + 1; });
+  filled = Math.max(filled, 1);
+  var verCell = sh.getRange(2, canon.length + 2);
+  var sig = BILL_ANALYSIS_VER_ + ':' + filled;
+  if (String(verCell.getValue()) === sig && sh.getCharts().length >= 2) return;
+  verCell.setValue(sig);
+  var need = top + months.length + 30;
+  if (sh.getMaxRows() < need) sh.insertRowsAfter(sh.getMaxRows(), need - sh.getMaxRows());
+
   var cRec = colOf('合計|当月|回収金額|1');
   var cUn = colOf('合計|当月|不納金額|1');
   var cUn2 = colOf('合計|翌月|不納金額|1');
-  var cJx = colOf('ジャックス|当月|請求金額|1');
 
-  var heads = ['月度', '売上（請求金額）', '請求件数', '客単価', '回収金額', '当月回収率',
-    '未納額（当月）', '未納額（翌月振替後）', '最終回収率', '売上 前月比', '請求件数 前月比', 'ジャックス比率'];
+  var heads = ['月度', '売上', '請求件数', '客単価', '回収金額', '回収率',
+    '未納額', '未納率', '売上 前月比', '翌月振替の不納額（参考）'];
   var nc = heads.length;
-  sh.getRange(top, 1, months.length + 2, nc).clear();
+  sh.getRange(top, 1, months.length + 2, 12).clear();
   sh.getRange(top, 1).setValue('売上・回収の分析');
   sh.getRange(top, 3, 1, 8).merge()
-    .setValue('上の表（合計列）から自動計算。売上＝請求金額、客単価＝請求金額÷請求件数、最終回収率＝1−最終未納額÷売上');
+    .setValue('上の表（合計列）から自動計算。言葉の意味と計算方法は表の下の「用語」');
   sh.getRange(top + 1, 1, 1, nc).setValues([heads]);
   var rows = [];
   for (var i = 0; i < months.length; i++) {
@@ -5893,11 +5897,9 @@ function billEnsureAnalysis_(sh, canon) {
       '=IF(B' + r + '="","",' + cRec + s + ')',
       '=IFERROR(E' + r + '/B' + r + ',"")',
       '=IF(B' + r + '="","",' + cUn + s + ')',
-      '=IF(OR(B' + r + '="",N(' + cUn2 + s + ')=0),"",' + cUn2 + s + ')',
-      '=IF(B' + r + '="","",1-IF(H' + r + '<>"",H' + r + ',G' + r + ')/B' + r + ')',
+      '=IFERROR(G' + r + '/B' + r + ',"")',
       i === 0 ? '' : '=IF(OR(B' + r + '="",B' + prev + '=""),"",B' + r + '/B' + prev + '-1)',
-      i === 0 ? '' : '=IF(OR(C' + r + '="",C' + prev + '=""),"",C' + r + '/C' + prev + '-1)',
-      '=IFERROR(' + cJx + s + '/B' + r + ',"")'
+      '=IF(OR(B' + r + '="",N(' + cUn2 + s + ')=0),"",' + cUn2 + s + ')'
     ]);
   }
   var body = sh.getRange(top + 2, 1, months.length, nc);
@@ -5915,30 +5917,54 @@ function billEnsureAnalysis_(sh, canon) {
   sh.getRange(top + 2, 3, months.length, 1).setNumberFormat('#,##0');
   sh.getRange(top + 2, 4, months.length, 1).setNumberFormat('¥#,##0');
   sh.getRange(top + 2, 5, months.length, 1).setNumberFormat('¥#,##0');
-  sh.getRange(top + 2, 6, months.length, 1).setNumberFormat('0.0%');
-  sh.getRange(top + 2, 7, months.length, 2).setNumberFormat('¥#,##0');
-  sh.getRange(top + 2, 9, months.length, 1).setNumberFormat('0.0%').setFontWeight('bold');
-  sh.getRange(top + 2, 10, months.length, 2).setNumberFormat('+0.0%;[Red]-0.0%;0.0%');
-  sh.getRange(top + 2, 12, months.length, 1).setNumberFormat('0.0%');
+  sh.getRange(top + 2, 6, months.length, 1).setNumberFormat('0.0%').setFontWeight('bold');
+  sh.getRange(top + 2, 7, months.length, 1).setNumberFormat('¥#,##0');
+  sh.getRange(top + 2, 8, months.length, 1).setNumberFormat('0.00%');
+  sh.getRange(top + 2, 9, months.length, 1).setNumberFormat('+0.0%;[Red]-0.0%;0.0%');
+  sh.getRange(top + 2, 10, months.length, 1).setNumberFormat('¥#,##0').setFontColor('#9e9e9e');
   sh.getRange(top + 2, 2, months.length, nc - 1).setHorizontalAlignment('right');
   sh.setRowHeight(top + 1, 36);
 
+  var tableEnd = top + 1 + months.length;
+  var gRow = tableEnd + 2;
+  var terms = [
+    ['用語', '意味と計算方法'],
+    ['売上', 'その月度に請求した金額の合計（上の表「合計・当月・請求金額」）'],
+    ['客単価', '売上 ÷ 請求件数。会員1人に1ヶ月で請求している平均額（月会費＋オプション込み）'],
+    ['回収率', '回収金額 ÷ 売上。その月の引き落としで回収できた割合'],
+    ['未納率', '未納額 ÷ 売上（元シートの「未納率」と同じ考え方）'],
+    ['翌月振替の不納額', '元シート「翌月振替結果後」の不納金額をそのまま表示。当月より件数が多い月があり意味が未確認のため、計算には使っていない']
+  ];
+  try { sh.getRange(gRow, 1, 8, 12).breakApart(); } catch (eBr) {}
+  sh.getRange(gRow, 1, 8, 12).clear();
+  for (var t = 0; t < terms.length; t++) {
+    sh.getRange(gRow + t, 1).setValue(terms[t][0]);
+    sh.getRange(gRow + t, 2, 1, 9).merge().setValue(terms[t][1]);
+  }
+  sh.getRange(gRow, 1, 1, 10).setBackground('#616161').setFontColor('#ffffff').setFontWeight('bold');
+  sh.getRange(gRow + 1, 1, terms.length - 1, 1).setFontWeight('bold').setBackground('#fafafa');
+  sh.getRange(gRow, 1, terms.length, 10).setFontFamily('Meiryo').setFontSize(10).setVerticalAlignment('middle')
+    .setBorder(true, true, true, true, true, true, '#e0e0e0', SpreadsheetApp.BorderStyle.SOLID);
+
   sh.getCharts().forEach(function (ch) { sh.removeChart(ch); });
   var hdr = top + 1;
-  var last = top + 1 + months.length;
-  var chartRow = last + 2;
+  var last = top + 1 + filled;
+  var chartRow = gRow + terms.length + 1;
   var sales = sh.newChart()
     .setChartType(Charts.ChartType.COMBO)
     .addRange(sh.getRange('A' + hdr + ':B' + last))
     .addRange(sh.getRange('D' + hdr + ':D' + last))
     .setNumHeaders(1)
-    .setOption('title', '売上（請求金額）と客単価')
+    .setOption('title', '売上（棒・左の目盛り）と客単価（赤線・右の目盛り）')
     .setOption('seriesType', 'bars')
     .setOption('series', {
       0: { type: 'bars', color: '#424242', targetAxisIndex: 0 },
-      1: { type: 'line', color: '#c5221f', lineWidth: 2, pointSize: 5, targetAxisIndex: 1 }
+      1: { type: 'line', color: '#c5221f', lineWidth: 2, pointSize: 6, targetAxisIndex: 1, dataLabel: 'value' }
     })
-    .setOption('vAxes', { 0: { format: '¥#,##0' }, 1: { format: '¥#,##0' } })
+    .setOption('vAxes', {
+      0: { format: 'short', viewWindow: { min: 0 }, gridlines: { count: 4 } },
+      1: { format: '¥#,##0', viewWindow: { min: 0, max: 12000 }, gridlines: { count: 4 } }
+    })
     .setOption('legend', { position: 'bottom' })
     .setOption('width', 620)
     .setOption('height', 300)
@@ -5949,15 +5975,13 @@ function billEnsureAnalysis_(sh, canon) {
     .setChartType(Charts.ChartType.LINE)
     .addRange(sh.getRange('A' + hdr + ':A' + last))
     .addRange(sh.getRange('F' + hdr + ':F' + last))
-    .addRange(sh.getRange('I' + hdr + ':I' + last))
     .setNumHeaders(1)
-    .setOption('title', '回収率の推移')
+    .setOption('title', '回収率（回収金額 ÷ 売上）')
     .setOption('series', {
-      0: { color: '#9e9e9e', lineWidth: 2, pointSize: 4 },
-      1: { color: '#000000', lineWidth: 3, pointSize: 5 }
+      0: { color: '#000000', lineWidth: 3, pointSize: 6, dataLabel: 'value' }
     })
-    .setOption('vAxis', { format: '0%' })
-    .setOption('legend', { position: 'bottom' })
+    .setOption('vAxis', { format: '0%', viewWindow: { min: 0.8, max: 1 }, gridlines: { count: 5 } })
+    .setOption('legend', { position: 'none' })
     .setOption('width', 620)
     .setOption('height', 300)
     .setPosition(chartRow, 8, 0, 0)
