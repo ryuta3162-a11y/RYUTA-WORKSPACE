@@ -6002,7 +6002,7 @@ function billingPullTriggered() {
 var MEMBER_SHEET_ = '会員分析';
 var MEMBER_JOIN_SRC_ = '累計入会データ';
 var MEMBER_LEAVE_SRC_ = '累計退会データ';
-var MEMBER_ANALYSIS_VER_ = '2';
+var MEMBER_ANALYSIS_VER_ = '3';
 
 function memberAnalysisIfChanged_(ss) {
   var j = ss.getSheetByName(MEMBER_JOIN_SRC_);
@@ -6128,7 +6128,8 @@ function buildMemberAnalysis_(ss) {
     var plan = String(jv[k][2]).trim();
     var ym = memberYm_(jv[k][13]);
     if (ym == null) continue;
-    if (ym > nowYm) nowYm = ym;
+    var reqYm = memberYm_(jv[k][12]);
+    if (reqYm != null && reqYm > nowYm) nowYm = reqYm;
     var lf = leaves[id(jv[k][5])] || null;
     members.push({
       ym: ym, gender: String(jv[k][8]).trim() || '不明', age: memberAgeBand_(jv[k][9]),
@@ -6179,7 +6180,7 @@ function buildMemberAnalysis_(ss) {
   sh.setHiddenGridlines(true);
   sh.setTabColor('#212121');
 
-  var cols = ['区分', '入会数', '3ヶ月継続率', '6ヶ月継続率', '12ヶ月継続率', '24ヶ月継続率', '現在も在籍', '退会者の平均在籍', '生涯売上の目安'];
+  var cols = ['区分', '入会数', '3ヶ月継続率', '6ヶ月継続率', '12ヶ月継続率', '24ヶ月継続率', '現在も在籍', '退会者の平均在籍', '退会者の平均在籍×客単価'];
   var nc = cols.length;
   var monthlyChurn = active ? recentLeaves / 12 / active : 0;
 
@@ -6227,7 +6228,7 @@ function buildMemberAnalysis_(ss) {
     sh.getRange(start, 8, out.length, 1).setNumberFormat('0.0"ヶ月"');
     if (withLtv) {
       var f = [];
-      for (var q = 0; q < out.length; q++) f.push(['=IFERROR(H' + (start + q) + '*$F$4,"")']);
+      for (var q = 0; q < out.length; q++) f.push(['=IF(H' + (start + q) + '="","",H' + (start + q) + '*$F$4)']);
       sh.getRange(start, 9, out.length, 1).setFormulas(f).setNumberFormat('¥#,##0');
     }
     rateRanges.push(sh.getRange(start, 3, out.length, 4));
@@ -6247,7 +6248,7 @@ function buildMemberAnalysis_(ss) {
   sh.getRange(row, 1, 1, nc).setBackground('#212121').setFontColor('#ffffff').setFontWeight('bold').setFontSize(9).setHorizontalAlignment('center');
   row++;
   var money = [
-    ['月の売上（直近月）', '=IFERROR(LOOKUP(2,1/(' + billB + '<>""),' + billB + '),"")', '請求・回収実績の直近月の請求金額'],
+    ['月の売上（直近月）', '=IFERROR(ARRAYFORMULA(LOOKUP(2,1/(' + billB + '<>""),' + billB + ')),"")', '請求・回収実績の直近月の請求金額'],
     ['退会で毎月なくなる売上', '=IFERROR(' + (recentLeaves / 12) + '*$F$4,"")',
       '月平均の退会 ' + (Math.round(recentLeaves / 12 * 10) / 10) + '人 × 客単価。毎月この分を新規入会で埋めている'],
     ['入会1人で入る売上（生涯）', '=H4', '客単価 ÷ 月間退会率。販促で1人獲得にかけられる費用の上限の目安'],
