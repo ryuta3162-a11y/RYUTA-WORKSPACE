@@ -87,6 +87,8 @@ https://script.google.com/macros/s/AKfycbzMELimQThNdPUShwo2_KBzJd8kGy9BNdRyOYNgu
 
 ## 外部アプリ URL
 
+- エンジョイポイント付与画面（口コミの付与確認後に使う・経堂 clubCode=1304）: https://main.d5z4bnw4wyrxn.amplifyapp.com/store-settings/basic/points?clubCode=1304 — トップの引用元リンク（H列）末尾に自動で追加（`ensureEnjoyPointLink_`）
+
 | 用途 | URL |
 |------|-----|
 | Workspace GAS Web App（本番） | https://script.google.com/macros/s/AKfycbzMELimQThNdPUShwo2_KBzJd8kGy9BNdRyOYNgu_sg41t2SleVRiWXFztZJ48e2l9L/exec |

@@ -70,6 +70,9 @@ function onOpen() {
   try {
     linkUnpaidFollowup_(SpreadsheetApp.getActiveSpreadsheet());
   } catch (eFollow) {}
+  try {
+    ensureEnjoyPointLink_(SpreadsheetApp.getActiveSpreadsheet());
+  } catch (eEnjoy) {}
 }
 
 var JOIN_LIST_FIT365_ID_ = '1BbExBUCfyq1cfNqw4TvlwUriL-AfvghU9XT6McdzGTQ';
@@ -4417,8 +4420,32 @@ function hubSourceLinks_() {
     { title: 'JOYFIT24経堂追加販促', url: 'https://docs.google.com/spreadsheets/d/1w7ExndmZn7t2_z55CvxRDMZy4QAcuEyNhIuj-6sUy3E/edit' },
     { title: 'EAST口コミ回答者', url: 'https://docs.google.com/spreadsheets/d/13_E8m3vQa_61hcoMAPb7XZTyVDVtQ9O7rkVDNtHQvRM/edit' },
     { title: '20分マシンレクチャー・自動送信メール', url: 'https://docs.google.com/spreadsheets/d/1wntzhyPGcz9hW4saswppYmVG-zHINbjAibu9VkCyEQ8/edit' },
-    { title: '口コミ付与アプリ', url: REVIEW_GRANT_APP_URL_ }
+    { title: '口コミ付与アプリ', url: REVIEW_GRANT_APP_URL_ },
+    { title: ENJOY_POINT_TITLE_, url: ENJOY_POINT_URL_ }
   ];
+}
+
+var ENJOY_POINT_URL_ = 'https://main.d5z4bnw4wyrxn.amplifyapp.com/store-settings/basic/points?clubCode=1304';
+var ENJOY_POINT_TITLE_ = 'エンジョイポイント付与（口コミ確認後）';
+
+/** トップの引用元リンク（H列）の末尾にエンジョイポイント付与画面を足す。既にあれば何もしない */
+function ensureEnjoyPointLink_(ss) {
+  var sh = ss.getSheetByName(HUB_HOME_SHEET_);
+  if (!sh) return;
+  var last = Math.min(sh.getLastRow(), 40);
+  if (last < 2) return;
+  var f = sh.getRange(1, 8, last, 1).getFormulas();
+  var lastLink = 0;
+  for (var r = 0; r < f.length; r++) {
+    if (f[r][0].indexOf(ENJOY_POINT_URL_) >= 0) return;
+    if (/HYPERLINK/i.test(f[r][0])) lastLink = r + 1;
+  }
+  if (!lastLink) return;
+  var target = sh.getRange(lastLink + 1, 8);
+  if (String(target.getDisplayValue()) !== '') return;
+  var arrow = / ↗"\)$/.test(f[lastLink - 1][0]) ? ' ↗' : '';
+  sh.getRange(lastLink, 8).copyTo(target, SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+  target.setFormula('=HYPERLINK("' + ENJOY_POINT_URL_ + '","' + ENJOY_POINT_TITLE_ + arrow + '")');
 }
 
 function hubPaintTile_(home, row, col, on) {
@@ -5993,6 +6020,7 @@ function billingPullTriggered() {
   var ss = openWorkspaceSpreadsheet_();
   try { billPull_(ss); } catch (e) { console.error(e); }
   try { memberAnalysisIfChanged_(ss); } catch (e2) { console.error(e2); }
+  try { ensureEnjoyPointLink_(ss); } catch (e3) { console.error(e3); }
 }
 
 /**
