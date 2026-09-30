@@ -74,6 +74,9 @@ function onOpen() {
     ensureEnjoyPointLink_(SpreadsheetApp.getActiveSpreadsheet());
   } catch (eEnjoy) {}
   try {
+    ensureMasterMemberNo_(SpreadsheetApp.getActiveSpreadsheet());
+  } catch (eMemberNo) {}
+  try {
     ensureMasterApplyCheckmarks_(SpreadsheetApp.getActiveSpreadsheet());
   } catch (eCheck) {}
 }
@@ -172,7 +175,8 @@ function refreshReceptionNumbersFromMenu() {
 function reloadReceptionImports_(ss) {
   var sh = ss.getSheetByName('経堂マスタ');
   if (!sh) return;
-  var cell = sh.getRange('AF1');
+  var applyCol = masterApplyCol_(sh);
+  var cell = sh.getRange(1, applyCol ? applyCol + 16 : 32);
   var id = cell.getValue();
   if (!id) return;
   cell.setValue('');
@@ -4431,14 +4435,71 @@ function hubSourceLinks_() {
 var ENJOY_POINT_URL_ = 'https://main.d5z4bnw4wyrxn.amplifyapp.com/store-settings/basic/points?clubCode=1304';
 var ENJOY_POINT_TITLE_ = 'エンジョイポイント付与（口コミ確認後）';
 
-/** 経堂マスタ「当月の申請」（P4 の QUERY）の TRUE/FALSE を ☑/☐ で表示する。包み済みなら何もしない */
+/** 経堂マスタ「当月の申請」の表の先頭列（1行目に「当月の申請」の式がある列）。見つからなければ 0 */
+function masterApplyCol_(sh) {
+  var f = sh.getRange(1, 1, 1, Math.min(sh.getLastColumn(), 60)).getFormulas()[0];
+  for (var c = 0; c < f.length; c++) {
+    if (f[c].indexOf('当月の申請') >= 0) return c + 1;
+  }
+  return 0;
+}
+
+/** 経堂マスタ「当月の申請」の QUERY の TRUE/FALSE を ☑/☐ で表示する。包み済みなら何もしない */
 function ensureMasterApplyCheckmarks_(ss) {
   var sh = ss.getSheetByName('経堂マスタ');
   if (!sh) return;
-  var cell = sh.getRange('P4');
+  var col = masterApplyCol_(sh);
+  if (!col) return;
+  var cell = sh.getRange(4, col);
   var f = cell.getFormula();
   if (!f || /^=LET\(src_,/.test(f)) return;
   cell.setFormula('=LET(src_,' + f.slice(1) + ',MAP(src_,LAMBDA(v_,IF(ISLOGICAL(v_),IF(v_,"☑","☐"),IF(v_&""="","",v_)))))');
+}
+
+/**
+ * 経堂マスタ「当月の申請」の左に会員番号の列を置き、累計入会データの氏名（空白を無視）から会員番号を関数で引く。
+ * 同名が複数なら電話番号（下10桁）で絞り、絞れなければ「要確認」。口コミのように会員番号の列がある表はそれを出す。
+ */
+function masterMemberNoFormula_(col) {
+  var a = columnLetter_(col);
+  var z = columnLetter_(col + 15);
+  var src = "'" + MEMBER_JOIN_SRC_ + "'!";
+  return '=LET(h,' + a + '3:' + z + '3,d,' + a + '4:' + z + '300,' +
+    'ni,IFERROR(MATCH("被紹介者",h,0),IFERROR(MATCH("氏名",h,0),IFERROR(MATCH("名前",h,0),0))),' +
+    'ti,IFERROR(MATCH("被紹介者電話",h,0),IFERROR(MATCH("電話",h,0),IFERROR(MATCH("連絡先",h,0),0))),' +
+    'ki,IFERROR(MATCH("会員番号",h,0),0),' +
+    'n,COUNTA(' + a + '4:' + a + '300),' +
+    'no,' + src + 'F2:F,' +
+    'nm,ARRAYFORMULA(REGEXREPLACE(' + src + 'G2:G&"","[\\s　]","")),' +
+    'tl,ARRAYFORMULA(RIGHT(REGEXREPLACE(' + src + 'L2:L&"","\\D",""),10)),' +
+    'IF(n=0,"",MAP(SEQUENCE(n),LAMBDA(i,IF(ki>0,INDEX(d,i,ki),' +
+    'LET(k,IF(ni=0,"",REGEXREPLACE(INDEX(d,i,ni)&"","[\\s　]","")),' +
+    't,IF(ti=0,"",RIGHT(REGEXREPLACE(INDEX(d,i,ti)&"","\\D",""),10)),' +
+    'c,IF(k="",0,IFERROR(ROWS(FILTER(no,nm=k)),0)),' +
+    'IF(c=1,XLOOKUP(k,nm,no),IF(c>1,IFERROR(INDEX(FILTER(no,nm=k,tl=t),1),"要確認"),""))))))))';
+}
+
+function ensureMasterMemberNo_(ss) {
+  var sh = ss.getSheetByName('経堂マスタ');
+  if (!sh) return;
+  var col = masterApplyCol_(sh);
+  if (!col || col < 2) return;
+  var memberCol = col - 1;
+  if (String(sh.getRange(3, memberCol).getValue()) !== '会員番号') {
+    sh.insertColumnBefore(col);
+    memberCol = col;
+    col = col + 1;
+    var last = Math.min(sh.getMaxRows(), 300);
+    sh.getRange(3, col, last - 2, 1).copyTo(sh.getRange(3, memberCol, last - 2, 1), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+    sh.getRange(1, memberCol, 2, 1).setBackground(sh.getRange(1, col).getBackground());
+    sh.getRange(3, memberCol).setValue('会員番号');
+    sh.getRange(4, memberCol, last - 3, 1).setNumberFormat('0').setHorizontalAlignment('center').setFontWeight('bold');
+    sh.setColumnWidth(memberCol, 100);
+  }
+  var cell = sh.getRange(4, memberCol);
+  var f = cell.getFormula();
+  var mark = columnLetter_(col) + '3:' + columnLetter_(col + 15) + '3';
+  if (f.indexOf(mark) < 0 || f.indexOf('被紹介者') < 0) cell.setFormula(masterMemberNoFormula_(col));
 }
 
 /** トップの引用元リンク（H列）の末尾にエンジョイポイント付与画面を足す。既にあれば何もしない */
@@ -6058,6 +6119,7 @@ function billingPullTriggered() {
   try { billPull_(ss); } catch (e) { console.error(e); }
   try { memberAnalysisIfChanged_(ss); } catch (e2) { console.error(e2); }
   try { ensureEnjoyPointLink_(ss); } catch (e3) { console.error(e3); }
+  try { ensureMasterMemberNo_(ss); } catch (e5) { console.error(e5); }
   try { ensureMasterApplyCheckmarks_(ss); } catch (e4) { console.error(e4); }
 }
 
