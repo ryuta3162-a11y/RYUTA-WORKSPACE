@@ -9,7 +9,8 @@
     "doNot": "bulk setFormulas / repairRestrictedImports that rewrite master labels",
     "agreedWriteBack": [
       "reception 日報 D10/F10/H10 当日 移籍/復会/紹介",
-      "reception 日報 D14/F14/H14 当月 移籍/復会/紹介"
+      "reception 日報 D14/F14/H14 当月 移籍/復会/紹介",
+      "reception 日報 D21:F36 オプション契約/解約/増減（B1の月。OP集計の対象月は見ない）"
     ]
   },
   "hub": {
