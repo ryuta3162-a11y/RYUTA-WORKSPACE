@@ -6265,10 +6265,9 @@ function syncJoinBreakdown_(ss) {
   ss = ss || openWorkspaceSpreadsheet_();
   var counts = countMoveIntroRejoin_(ss);
   var nippo = writeNippoMoveIntroRejoin_(counts);
-  var op = { ok: false };
-  try { op = ensureNippoOpByB1_(false); } catch (eOp) { op = { ok: false, message: String(eOp && eOp.message ? eOp.message : eOp) }; }
+  // 契約/解約は受付状況表 GAS（1JvaBDxH…）が書く。ここから ensureNippoOpByB1_ しない。
   try { noteMemberAnalysisBreakdown_(ss); } catch (eN) {}
-  return { ok: true, counts: counts, nippo: nippo, op: op };
+  return { ok: true, counts: counts, nippo: nippo };
 }
 
 function refreshJoinBreakdownFromMenu() {

@@ -1,5 +1,5 @@
 {
-  "updated": "2026-09-27",
+  "updated": "2026-10-01",
   "purpose": "RYUTA Workspace aggregation hub — shared spreadsheet IDs and sync map for handoff",
   "policy": {
     "sync": "IMPORTRANGE",
@@ -9,8 +9,7 @@
     "doNot": "bulk setFormulas / repairRestrictedImports that rewrite master labels",
     "agreedWriteBack": [
       "reception 日報 D10/F10/H10 当日 移籍/復会/紹介",
-      "reception 日報 D14/F14/H14 当月 移籍/復会/紹介",
-      "reception 日報 D21:F36 オプション契約/解約/増減（B1の入会月。診断の検出OP＋OP追加）"
+      "reception 日報 D14/F14/H14 当月 移籍/復会/紹介"
     ]
   },
   "hub": {
@@ -62,7 +61,15 @@
       "workspaceSheets": ["経堂マスタ", "経堂_入会", "経堂_退会", "経堂_OP"],
       "sync": "IMPORTRANGE",
       "shareWith": ["r-kusaka@okamoto-group.co.jp"],
-      "reAllowCellsHint": ["経堂マスタ!AB4", "経堂_入会!A1", "経堂_退会!A1", "経堂_OP!A1"]
+      "reAllowCellsHint": ["経堂マスタ!AB4", "経堂_入会!A1", "経堂_退会!A1", "経堂_OP!A1"],
+      "gas": {
+        "name": "受付状況表（NIPPO）",
+        "scriptId": "1JvaBDxH580M-WCRa1bk5QZOAZd8veLJDbQccODMDni5Iv9_DHtZVRw7d",
+        "webAppExec": "https://script.google.com/macros/s/AKfycbyQzrG0awDLjYqoBELKF78nphmcycUJRdEQRNq2i3SCjYulMIIgB5dspSnYRF-jfslK/exec",
+        "role": "Gmail入会・退会取込、OP取込、日報メール、refreshNumbers",
+        "pasteFix": "docs/受付状況表_OP月末入会を直す.gs",
+        "sourceOfTruthOp": "kyodo-master-deta/option/Code.gs（シート名は正本がOPデータ/集計、本番はOP集計）"
+      }
     },
     {
       "key": "kengaku",

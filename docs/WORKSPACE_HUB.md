@@ -8,7 +8,7 @@
 - **集約用**: RYUTA Workspace（このリポジトリの GAS が紐づくスプシ）
 - **入力元**: 各業務スプシは独立のまま（EAST全店・フォーム等）。Workspace 側は基本 **読み取りのみ**
 - **同期手段**: `IMPORTRANGE` / `QUERY(IMPORTRANGE(...))`（ライブ）。口コミ・入会者フラグは TRUE/FALSE をチェック風表示
-- **元ブックを勝手に編集しない**（特に EAST 口コミは全店利用）。例外: 受付状況表 `日報` の移籍/復会/紹介セル（D10/F10/H10・D14/F14/H14）と、オプションの契約/解約/増減（D21:F36）。月初列は触らない
+- **元ブックを勝手に編集しない**（特に EAST 口コミは全店利用）。例外: 受付状況表 `日報` の移籍/復会/紹介セル（D10/F10/H10・D14/F14/H14）。**オプションの契約/解約は受付状況表 GAS が書く**（Workspace は上書きしない。月初列は触らない）
 - **日報の月シート参照は使わない**: `INDIRECT($B$1&"!H36")` のように B1（2609）の月タブを見る式は、月シートへの手入力が回っておらず機能していない。削除してよい（2026-10-01 確認）
 
 ## スプレッドシート一覧
@@ -95,13 +95,17 @@ https://script.google.com/macros/s/AKfycbzMELimQThNdPUShwo2_KBzJd8kGy9BNdRyOYNgu
 | Workspace GAS Web App（本番） | https://script.google.com/macros/s/AKfycbzMELimQThNdPUShwo2_KBzJd8kGy9BNdRyOYNgu_sg41t2SleVRiWXFztZJ48e2l9L/exec |
 | EAST 口コミ付与アプリ | https://script.google.com/a/macros/okamoto-group.co.jp/s/AKfycbwu1eUxJzePa494p-343axfwgUcnHATf-db7FKw806rXZQsHn_ea0uHc6415yw-RZ80/exec |
 
-## GAS プロジェクト
+## GAS プロジェクトは2つ（混ぜない）
 
-| 項目 | 値 |
-|------|-----|
-| scriptId | `1YjNLFjfLFNYM2Pyt248fGd90QW9wOKvAYJu-CKxHHTRobtZQNAxlobjp` |
-| ローカル | `gas-remote/`（`clasp push` の root） |
-| サーバ本体 | `gas-remote/r.js`（同期コピー: `Code.gs`, `gas/Code.gs`） |
+| 項目 | ワークスペース | 受付状況表（NIPPO） |
+|------|----------------|---------------------|
+| スプシ | 経堂　ワークスペース `1deuG2zYd…` | 経堂　受付状況表 `14hxiLBzv…` |
+| scriptId | `1YjNLFjfLFNYM2Pyt248fGd90QW9wOKvAYJu-CKxHHTRobtZQNAxlobjp` | `1JvaBDxH580M-WCRa1bk5QZOAZd8veLJDbQccODMDni5Iv9_DHtZVRw7d` |
+| ローカル | `gas-remote/r.js`（同期コピー: `Code.gs`, `gas/Code.gs`） | 会社PC `Documents/GitHub/nippo/gas/`。OPの正本は `kyodo-master-deta/option/Code.gs` |
+| Web App | `AKfycbzMELimQTh…` | `AKfycbyQzrG0awDL…`（`refreshNumbers`） |
+| 役割 | 販促ミラー、会員分析、移籍/復会/紹介の日報書き戻し | Gmail 入会・退会、OP取込、日報メール、数値更新 |
+
+スクリプトIDは「どのプロジェクトか」を特定できる。貼ってあるソース全文をこの環境からダウンロードするには Google ログインが要る。シートの数字は `peekExternal` で読める。
 
 ### セットアップ用 API（再構築）
 
@@ -121,8 +125,8 @@ https://script.google.com/macros/s/AKfycbzMELimQThNdPUShwo2_KBzJd8kGy9BNdRyOYNgu
 | `peekExternal&id=&name=&range=` | 外部ブックを読み取りのみで確認（name 省略でシート一覧） |
 | `inspectBook&id=` | 任意ブックのシート／ヘッダー確認 |
 | `rebuildUrlIndex` | URL一覧再生成（deta がある場合） |
-| `syncJoinBreakdown` | 移籍・復会・紹介を数えて日報 D14/F14/H14（と当日 D10/F10/H10）へ書き戻す。あわせて契約/解約を B1 連動の COUNTIFS にする |
-| `ensureNippoOpByB1` | 日報の契約/解約/増減を、B1 の月で OP集計ログを数える関数にする（OP集計の対象月は使わない） |
+| `syncJoinBreakdown` | 移籍・復会・紹介を数えて日報 D14/F14/H14（と当日 D10/F10/H10）へ書き戻す。**契約/解約は触らない** |
+| `ensureNippoOpByB1` | 残っているが、5分トリガーからは呼ばない。契約/解約は受付状況表側 |
 
 **シート内容の一括書き換え API（`repairRestrictedImports` 等）は使わない。** ラベル消失の原因になりうる。権限切れは上の共有＋再許可で直す。
 
@@ -178,7 +182,7 @@ https://script.google.com/macros/s/AKfycbzMELimQThNdPUShwo2_KBzJd8kGy9BNdRyOYNgu
   - **復会**＝今月の `経堂_入会` が過去の `経堂_入会` とメール／氏名一致。F14 当月、F10 当日
   - **当日（10行）**＝日報 B1 の月のうち「その日」（今日が翌月ならその月末日）。**当月（14行）**＝B1 の月全体
   - 月シート 2609 の INDIRECT は運用されていないので使わない
-- **10/1 オプション契約・解約**: OP集計の「対象月」はログに1件でもある月しか選べない（10月ゼロ件だと 2026年10月が出ない）。日報の契約は **日報 B1 の入会月** で `OP取込診断` の検出OPを数える（月末夜に届いた翌月入会が受信日時フィルタで落ちるため。10/1 は入会3なのに契約1・ピラティス0 だった）。解約はログの利用停止から当月入会者を除く。OP追加はログ。月初列は手置き。関数が消えたら 5分以内に張り直す（`日報オプションをB1連動`）
+- **10/1 オプション契約・解約**: 取込は **受付状況表 GAS**（scriptId `1JvaBDxH…`）。Gmail `after:10/01` だと 9/30夜の10月入会（渡辺・朴）が OP集計ログに載らず、契約1・ピラティス0 になる。診断は入会月で見ているので 3人とも取れている。直しは Workspace ではなく `docs/受付状況表_OP月末入会を直す.gs` を受付状況表エディタに貼って `OP月末入会を直す` を実行。Workspace の5分トリガーは契約/解約を上書きしない。日報 C21（月初）は触らない
 - 旧中身: KPI（在籍推定・累計入会/退会・月間退会率・退会者平均在籍・平均客単価〔請求・回収実績から連動〕・生涯売上2種）、入会年別／入会月別（直近36ヶ月）の 3・6・12・24ヶ月継続率、年代・性別・契約プラン別（2023年以降入会）、継続率グラフ
 - 9/29 時点の要点: 在籍約1,480人／月間退会率3.61%／生涯売上 ¥126,247（退会者平均在籍15ヶ月）〜¥232,463（1÷退会率）。**3ヶ月継続率が 2017〜22年入会 96〜99% → 2024・25年入会 83.2% に悪化**（2026年は97%に回復）。20代ほど早期退会が多い
 - 注意: 年齢は現在年齢。契約名称はほぼ空欄（＝通常）。退会理由は半数以上空欄＋記号（A・M 等）で意味不明
