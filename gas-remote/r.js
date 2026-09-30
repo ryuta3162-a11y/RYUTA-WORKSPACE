@@ -6002,7 +6002,7 @@ function billingPullTriggered() {
 var MEMBER_SHEET_ = '会員分析';
 var MEMBER_JOIN_SRC_ = '累計入会データ';
 var MEMBER_LEAVE_SRC_ = '累計退会データ';
-var MEMBER_ANALYSIS_VER_ = '3';
+var MEMBER_ANALYSIS_VER_ = '4';
 
 function memberAnalysisIfChanged_(ss) {
   var j = ss.getSheetByName(MEMBER_JOIN_SRC_);
@@ -6148,7 +6148,7 @@ function buildMemberAnalysis_(ss) {
     var o = { n: list.length, r3: '', r6: '', r12: '', r24: '', now: '', active: 0, avgTen: '' };
     [3, 6, 12, 24].forEach(function (mo) {
       var el = list.filter(function (m) { return nowYm - m.ym >= mo; });
-      if (!el.length) return;
+      if (el.length < 10) return;
       var kept = el.filter(function (m) { return !m.left || m.left.tenure > mo; }).length;
       o['r' + mo] = kept / el.length;
     });
@@ -6187,7 +6187,7 @@ function buildMemberAnalysis_(ss) {
   sh.getRange('A1').setValue('会員分析').setFontSize(14).setFontWeight('bold');
   sh.getRange('C1').setValue('累計入会データ・累計退会データから集計（' +
     Utilities.formatDate(new Date(), 'Asia/Tokyo', 'M/d HH:mm') + '・入会データは ' + memberYmLabel_(nowYm) +
-    ' まで）。継続率＝入会からその月数が経った人のうち、まだ辞めていない割合。')
+    ' まで）。継続率＝入会からその月数が経った人のうち、まだ辞めていない割合（対象が10人未満の欄は空欄）。')
     .setFontSize(9).setFontColor('#757575');
 
   var kpiLabels = ['在籍（推定）', '累計入会', '累計退会', '月間退会率（直近12ヶ月）', '退会者の平均在籍', '平均客単価', '生涯売上（平均在籍×客単価）', '生涯売上（1÷退会率×客単価）'];

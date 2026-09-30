@@ -6148,7 +6148,7 @@ function buildMemberAnalysis_(ss) {
     var o = { n: list.length, r3: '', r6: '', r12: '', r24: '', now: '', active: 0, avgTen: '' };
     [3, 6, 12, 24].forEach(function (mo) {
       var el = list.filter(function (m) { return nowYm - m.ym >= mo; });
-      if (!el.length) return;
+      if (el.length < 10) return;
       var kept = el.filter(function (m) { return !m.left || m.left.tenure > mo; }).length;
       o['r' + mo] = kept / el.length;
     });
