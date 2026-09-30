@@ -63,6 +63,7 @@ function onOpen() {
     .addItem('請求報告の自動連携を有効にする（初回のみ）', 'setupBillingLinkFromMenu')
     .addItem('請求報告を今すぐ取り込む', 'refreshBillingFromMenu')
     .addItem('会員分析を作り直す', 'refreshMemberAnalysisFromMenu')
+    .addItem('移籍・復会・紹介を日報へ反映', 'refreshJoinBreakdownFromMenu')
     .addToUi();
   try {
     linkJoinListLive_(SpreadsheetApp.getActiveSpreadsheet(), false);
@@ -79,6 +80,9 @@ function onOpen() {
   try {
     ensureMasterApplyCheckmarks_(SpreadsheetApp.getActiveSpreadsheet());
   } catch (eCheck) {}
+  try {
+    syncJoinBreakdownIfChanged_(SpreadsheetApp.getActiveSpreadsheet());
+  } catch (eBd) {}
 }
 
 var JOIN_LIST_FIT365_ID_ = '1BbExBUCfyq1cfNqw4TvlwUriL-AfvghU9XT6McdzGTQ';
@@ -2165,6 +2169,9 @@ function handleApiGet_(e) {
       } catch (eRR) {
         return jsonOutput_({ ok: false, message: String(eRR.message || eRR) });
       }
+    }
+    if (api === 'syncJoinBreakdown') {
+      return jsonOutput_(syncJoinBreakdown_(openWorkspaceSpreadsheet_()));
     }
     if (api === 'listTriggers') {
       return jsonOutput_({
@@ -6128,6 +6135,7 @@ function billingPullTriggered() {
   try { ensureEnjoyPointLink_(ss); } catch (e3) { console.error(e3); }
   try { ensureMasterMemberNo_(ss); } catch (e5) { console.error(e5); }
   try { ensureMasterApplyCheckmarks_(ss); } catch (e4) { console.error(e4); }
+  try { syncJoinBreakdownIfChanged_(ss); } catch (e6) { console.error(e6); }
 }
 
 /**
@@ -6169,6 +6177,279 @@ function memberPhone_(s) {
   if (d.length === 10 && d.charAt(0) !== '0') d = '0' + d;
   if (d.length < 10 || d.length > 11 || d.charAt(0) !== '0') return '';
   return d.slice(-10);
+}
+
+function memberYmd_(s) {
+  var m = String(s || '').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
+  return m ? { y: Number(m[1]), m: Number(m[2]), d: Number(m[3]) } : null;
+}
+
+function memberMail_(s) {
+  var v = String(s || '').trim().toLowerCase();
+  return /@/.test(v) ? v : '';
+}
+
+/**
+ * 移籍＝今月の販促_乗り換え（名前の重複は1人）、紹介＝今月の販促_紹介・ペア入会の被紹介者。
+ * 復会＝今月の経堂_入会が、それより前の入会・退会（メール→電話→氏名）と一致。
+ * 日報 D14/F14/H14（当月）と D10/F10/H10（当日・日報の月と同じときだけ）へ書き戻す。
+ * 会員分析 B5 と経堂マスタ 当月移籍は日報を IMPORTRANGE しているので同じ数字になる。
+ */
+var JOIN_BREAKDOWN_VER_ = '1';
+var JOIN_BREAKDOWN_NOTE_ = 'Workspace自動（移籍＝乗り換え申請、紹介＝紹介・ペア申請の被紹介者、復会＝その月の入会者が過去の入会・退会と一致）';
+
+function parseNippoYm_(ss) {
+  var tz = 'Asia/Tokyo';
+  var now = new Date();
+  var todayY = Number(Utilities.formatDate(now, tz, 'yyyy'));
+  var todayM = Number(Utilities.formatDate(now, tz, 'M'));
+  var todayD = Number(Utilities.formatDate(now, tz, 'd'));
+  var y = todayY;
+  var m = todayM;
+  try {
+    var nip = SpreadsheetApp.openById(RECEPTION_SOURCE_ID_).getSheetByName('日報');
+    var b1 = String(nip ? nip.getRange('B1').getDisplayValue() : '').replace(/\D/g, '');
+    if (b1.length === 4) {
+      y = 2000 + Number(b1.slice(0, 2));
+      m = Number(b1.slice(2, 4));
+    } else if (b1.length === 6) {
+      y = Number(b1.slice(0, 4));
+      m = Number(b1.slice(4, 6));
+    }
+  } catch (eYm) {}
+  if (!y || !m) { y = todayY; m = todayM; }
+  return { y: y, m: m, d: todayD, ym: y * 12 + m - 1, todayY: todayY, todayM: todayM, sameMonth: y === todayY && m === todayM };
+}
+
+function joinBreakdownSig_(ss) {
+  var ym = parseNippoYm_(ss);
+  var rows = function (n) {
+    var sh = ss.getSheetByName(n);
+    return sh ? sh.getLastRow() : 0;
+  };
+  var nip = '';
+  try {
+    var nsh = SpreadsheetApp.openById(RECEPTION_SOURCE_ID_).getSheetByName('日報');
+    nip = [
+      nsh.getRange('B1').getDisplayValue(),
+      nsh.getRange('D10').getDisplayValue(), nsh.getRange('F10').getDisplayValue(), nsh.getRange('H10').getDisplayValue(),
+      nsh.getRange('D14').getDisplayValue(), nsh.getRange('F14').getDisplayValue(), nsh.getRange('H14').getDisplayValue()
+    ].join(':');
+  } catch (eSig) {}
+  return JOIN_BREAKDOWN_VER_ + ':' + ym.y + '-' + ym.m + '-' + ym.d + ':' +
+    rows('販促_乗り換え') + ':' + rows('販促_紹介・ペア入会') + ':' + rows('経堂_入会') + ':' +
+    rows(MEMBER_JOIN_SRC_) + ':' + rows(MEMBER_LEAVE_SRC_) + ':' + nip;
+}
+
+function syncJoinBreakdownIfChanged_(ss) {
+  ss = ss || openWorkspaceSpreadsheet_();
+  var sig = joinBreakdownSig_(ss);
+  var props = PropertiesService.getDocumentProperties();
+  if (props.getProperty('JOIN_BREAKDOWN_SIG') === sig) return { ok: true, skipped: true };
+  var r = syncJoinBreakdown_(ss);
+  try { props.setProperty('JOIN_BREAKDOWN_SIG', joinBreakdownSig_(ss)); } catch (eP) {}
+  return r;
+}
+
+function syncJoinBreakdown_(ss) {
+  ss = ss || openWorkspaceSpreadsheet_();
+  var counts = countMonthMoveIntroRejoin_(ss);
+  var nippo = writeJoinBreakdownToNippo_(counts);
+  try { noteMemberAnalysisBreakdown_(ss); } catch (eN) {}
+  try { ensureMasterIntroFromNippo_(ss); } catch (eM) {}
+  return { ok: true, counts: counts, nippo: nippo };
+}
+
+function refreshJoinBreakdownFromMenu() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var r = syncJoinBreakdown_(ss);
+  var c = (r && r.counts) || {};
+  ss.toast('移籍' + c.move + ' 復会' + c.rejoin + ' 紹介' + c.intro + ' を日報に書きました', '移籍・復会・紹介', 8);
+}
+
+function countPromoUniqueInMonth_(sheet, y, m, d, introOnly) {
+  var out = { month: 0, today: 0 };
+  if (!sheet || sheet.getLastRow() < 2) return out;
+  var values = sheet.getDataRange().getDisplayValues();
+  var h = -1;
+  for (var r = 0; r < Math.min(values.length, 5); r++) {
+    if (values[r].some(function (v) { return /申請日時|タイムスタンプ/.test(v); })) { h = r; break; }
+  }
+  if (h < 0) return out;
+  var head = values[h];
+  var dateCol = -1;
+  head.forEach(function (v, c) { if (dateCol < 0 && /申請日時|タイムスタンプ/.test(v)) dateCol = c; });
+  var hasHi = head.some(function (v) { return /被紹介/.test(v); });
+  var nameCols = [];
+  var skipCols = {};
+  head.forEach(function (v, c) {
+    if (hasHi && /紹介者/.test(v) && !/被紹介/.test(v)) { skipCols[c] = 1; return; }
+    if (introOnly) {
+      if (hasHi ? /被紹介.*名前/.test(v) : /名前|登録名|氏名/.test(v)) nameCols.push(c);
+    } else if (/名前|登録名|氏名/.test(v) && !/紹介者/.test(v)) {
+      nameCols.push(c);
+    }
+  });
+  var seenM = {};
+  var seenT = {};
+  for (var i = h + 1; i < values.length; i++) {
+    var row = values[i];
+    var ymd = memberYmd_(row[dateCol]);
+    if (!ymd || ymd.y !== y || ymd.m !== m) continue;
+    var key = '';
+    for (var n = 0; n < nameCols.length && !key; n++) {
+      var raw = String(row[nameCols[n]] || '').trim();
+      if (!raw || memberPhone_(raw)) continue;
+      var nm = memberNorm_(raw);
+      if (nm.length >= 2) key = nm;
+    }
+    if (!key && introOnly) {
+      for (var c2 = 0; c2 < row.length && !key; c2++) {
+        if (skipCols[c2] || c2 === dateCol) continue;
+        var raw2 = String(row[c2] || '').trim();
+        if (!raw2 || memberPhone_(raw2) || /JOYFIT|経堂|該当/.test(raw2)) continue;
+        var nm2 = memberNorm_(raw2);
+        if (nm2.length >= 2 && !/\d{4,}/.test(nm2)) key = nm2;
+      }
+    }
+    if (!key) key = 'row' + i;
+    if (!seenM[key]) { seenM[key] = 1; out.month++; }
+    if (ymd.d === d && !seenT[key]) { seenT[key] = 1; out.today++; }
+  }
+  return out;
+}
+
+function countRejoinInMonth_(ss, ym) {
+  var histMail = {};
+  var histName = {};
+  var histKana = {};
+  var histTel = {};
+  var addHist = function (mail, name, kana, tel) {
+    if (mail) histMail[mail] = 1;
+    if (name && name.length >= 2) histName[name] = 1;
+    if (kana && kana.length >= 3) histKana[kana] = 1;
+    if (tel) histTel[tel] = 1;
+  };
+  var thisMonth = [];
+  var joinSh = ss.getSheetByName('経堂_入会');
+  if (joinSh && joinSh.getLastRow() > 1) {
+    var jv = joinSh.getRange(2, 1, joinSh.getLastRow() - 1, 6).getDisplayValues();
+    for (var i = 0; i < jv.length; i++) {
+      var name = memberNorm_(jv[i][1]);
+      var mail = memberMail_(jv[i][5]);
+      var stamp = String(jv[i][0] || '');
+      var rowYm = memberYm_(jv[i][2]);
+      if (rowYm == null) rowYm = memberYm_(stamp);
+      if (rowYm == null) continue;
+      if (rowYm < ym.ym) {
+        addHist(mail, name, '', '');
+      } else if (rowYm === ym.ym) {
+        var ymd = memberYmd_(stamp);
+        thisMonth.push({
+          name: name,
+          mail: mail,
+          today: !!(ymd && ymd.y === ym.todayY && ymd.m === ym.todayM && ymd.d === ym.d)
+        });
+      }
+    }
+  }
+  var js = ss.getSheetByName(MEMBER_JOIN_SRC_);
+  if (js && js.getLastRow() > 1) {
+    var av = js.getRange(2, 1, js.getLastRow() - 1, 15).getDisplayValues();
+    for (var k = 0; k < av.length; k++) {
+      var reqYm = memberYm_(av[k][12]);
+      var useYm = memberYm_(av[k][13]);
+      if (!((reqYm != null && reqYm < ym.ym) || (useYm != null && useYm < ym.ym))) continue;
+      addHist('', memberNorm_(av[k][6]), memberNorm_(av[k][7]), memberPhone_(av[k][11]));
+    }
+  }
+  var ls = ss.getSheetByName(MEMBER_LEAVE_SRC_);
+  if (ls && ls.getLastRow() > 1) {
+    var lv = ls.getRange(2, 6, Math.max(ls.getLastRow() - 1, 1), 13).getDisplayValues();
+    for (var li = 0; li < lv.length; li++) {
+      var lym = memberYm_(lv[li][12]);
+      if (lym == null || lym >= ym.ym) continue;
+      addHist('', memberNorm_(lv[li][1]), memberNorm_(lv[li][2]), memberPhone_(lv[li][6]));
+    }
+  }
+  var seen = {};
+  var month = 0;
+  var today = 0;
+  for (var t = 0; t < thisMonth.length; t++) {
+    var p = thisMonth[t];
+    var key = p.mail || p.name;
+    if (!key || seen[key]) continue;
+    var hit = (p.mail && histMail[p.mail]) ||
+      (p.name && p.name.length >= 2 && histName[p.name]) ||
+      (p.name && p.name.length >= 3 && histKana[p.name]);
+    if (!hit) continue;
+    seen[key] = 1;
+    month++;
+    if (p.today) today++;
+  }
+  return { month: month, today: today };
+}
+
+function countMonthMoveIntroRejoin_(ss) {
+  var ym = parseNippoYm_(ss);
+  var move = countPromoUniqueInMonth_(ss.getSheetByName('販促_乗り換え'), ym.y, ym.m, ym.d, false);
+  var intro = countPromoUniqueInMonth_(ss.getSheetByName('販促_紹介・ペア入会'), ym.y, ym.m, ym.d, true);
+  var rejoin = countRejoinInMonth_(ss, ym);
+  return {
+    y: ym.y, m: ym.m, d: ym.d, sameMonth: ym.sameMonth,
+    move: move.month, intro: intro.month, rejoin: rejoin.month,
+    moveToday: ym.sameMonth ? move.today : null,
+    introToday: ym.sameMonth ? intro.today : null,
+    rejoinToday: ym.sameMonth ? rejoin.today : null
+  };
+}
+
+function writeJoinBreakdownToNippo_(counts) {
+  var book = SpreadsheetApp.openById(RECEPTION_SOURCE_ID_);
+  var sh = book.getSheetByName('日報');
+  if (!sh) return { ok: false, message: '日報なし' };
+  var setNum = function (a1, val) {
+    if (val == null) return { cell: a1, skipped: 'other-month' };
+    var cell = sh.getRange(a1);
+    if (String(cell.getFormula() || '')) return { cell: a1, skipped: 'formula' };
+    var cur = cell.getValue();
+    var same = Number(cur) === Number(val);
+    var noteSame = String(cell.getNote() || '') === JOIN_BREAKDOWN_NOTE_;
+    if (same && noteSame) return { cell: a1, skipped: 'same', value: val };
+    cell.setValue(Number(val));
+    cell.setNote(JOIN_BREAKDOWN_NOTE_);
+    return { cell: a1, from: cur, to: val };
+  };
+  return {
+    ok: true,
+    D14: setNum('D14', counts.move),
+    F14: setNum('F14', counts.rejoin),
+    H14: setNum('H14', counts.intro),
+    D10: setNum('D10', counts.moveToday),
+    F10: setNum('F10', counts.rejoinToday),
+    H10: setNum('H10', counts.introToday)
+  };
+}
+
+function noteMemberAnalysisBreakdown_(ss) {
+  var sh = ss.getSheetByName(MEMBER_SHEET_);
+  if (!sh) return;
+  var b5 = sh.getRange('B5');
+  if (String(b5.getNote() || '') !== JOIN_BREAKDOWN_NOTE_) b5.setNote(JOIN_BREAKDOWN_NOTE_);
+}
+
+function ensureMasterIntroFromNippo_(ss) {
+  var sh = ss.getSheetByName('経堂マスタ');
+  if (!sh) return { skipped: true };
+  var l5 = String(sh.getRange('L5').getFormula() || '');
+  if (/日報!H14/.test(l5)) return { skipped: true };
+  var idCell = '$AG$1';
+  var jf = String(sh.getRange('J5').getFormula() || '');
+  var m = jf.match(/IMPORTRANGE\(([^,]+),/);
+  if (m) idCell = m[1];
+  else if (!/IMPORTRANGE/i.test(jf)) return { skipped: 'no-master-link' };
+  sh.getRange('L5').setFormula('=IFERROR(N(IMPORTRANGE(' + idCell + ',"日報!H14")),)');
+  return { updated: true };
 }
 
 /**
@@ -6658,6 +6939,7 @@ function buildMemberAnalysis_(ss) {
 function refreshMemberAnalysisFromMenu() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var r = buildMemberAnalysis_(ss);
+  try { syncJoinBreakdown_(ss); } catch (eBd) {}
   ss.toast(r.ok ? '会員分析を更新しました' : String(r.message), '会員分析', 5);
 }
 
