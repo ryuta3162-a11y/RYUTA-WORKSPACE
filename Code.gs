@@ -73,6 +73,9 @@ function onOpen() {
   try {
     ensureEnjoyPointLink_(SpreadsheetApp.getActiveSpreadsheet());
   } catch (eEnjoy) {}
+  try {
+    ensureMasterApplyCheckmarks_(SpreadsheetApp.getActiveSpreadsheet());
+  } catch (eCheck) {}
 }
 
 var JOIN_LIST_FIT365_ID_ = '1BbExBUCfyq1cfNqw4TvlwUriL-AfvghU9XT6McdzGTQ';
@@ -4428,6 +4431,16 @@ function hubSourceLinks_() {
 var ENJOY_POINT_URL_ = 'https://main.d5z4bnw4wyrxn.amplifyapp.com/store-settings/basic/points?clubCode=1304';
 var ENJOY_POINT_TITLE_ = 'エンジョイポイント付与（口コミ確認後）';
 
+/** 経堂マスタ「当月の申請」（P4 の QUERY）の TRUE/FALSE を ☑/☐ で表示する。包み済みなら何もしない */
+function ensureMasterApplyCheckmarks_(ss) {
+  var sh = ss.getSheetByName('経堂マスタ');
+  if (!sh) return;
+  var cell = sh.getRange('P4');
+  var f = cell.getFormula();
+  if (!f || /^=LET\(src_,/.test(f)) return;
+  cell.setFormula('=LET(src_,' + f.slice(1) + ',MAP(src_,LAMBDA(v_,IF(ISLOGICAL(v_),IF(v_,"☑","☐"),IF(v_&""="","",v_)))))');
+}
+
 /** トップの引用元リンク（H列）の末尾にエンジョイポイント付与画面を足す。既にあれば何もしない */
 function ensureEnjoyPointLink_(ss) {
   var sh = ss.getSheetByName(HUB_HOME_SHEET_);
@@ -6021,6 +6034,7 @@ function billingPullTriggered() {
   try { billPull_(ss); } catch (e) { console.error(e); }
   try { memberAnalysisIfChanged_(ss); } catch (e2) { console.error(e2); }
   try { ensureEnjoyPointLink_(ss); } catch (e3) { console.error(e3); }
+  try { ensureMasterApplyCheckmarks_(ss); } catch (e4) { console.error(e4); }
 }
 
 /**
