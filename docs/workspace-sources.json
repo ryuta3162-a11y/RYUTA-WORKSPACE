@@ -1,5 +1,5 @@
 {
-  "updated": "2026-09-27",
+  "updated": "2026-10-01",
   "purpose": "RYUTA Workspace aggregation hub — shared spreadsheet IDs and sync map for handoff",
   "policy": {
     "sync": "IMPORTRANGE",
@@ -61,7 +61,15 @@
       "workspaceSheets": ["経堂マスタ", "経堂_入会", "経堂_退会", "経堂_OP"],
       "sync": "IMPORTRANGE",
       "shareWith": ["r-kusaka@okamoto-group.co.jp"],
-      "reAllowCellsHint": ["経堂マスタ!AB4", "経堂_入会!A1", "経堂_退会!A1", "経堂_OP!A1"]
+      "reAllowCellsHint": ["経堂マスタ!AB4", "経堂_入会!A1", "経堂_退会!A1", "経堂_OP!A1"],
+      "gas": {
+        "name": "受付状況表（NIPPO）",
+        "scriptId": "1JvaBDxH580M-WCRa1bk5QZOAZd8veLJDbQccODMDni5Iv9_DHtZVRw7d",
+        "webAppExec": "https://script.google.com/macros/s/AKfycbyQzrG0awDLjYqoBELKF78nphmcycUJRdEQRNq2i3SCjYulMIIgB5dspSnYRF-jfslK/exec",
+        "role": "Gmail入会・退会取込、OP取込、日報メール、refreshNumbers",
+        "pasteFix": "docs/受付状況表_OP月末入会を直す.gs",
+        "sourceOfTruthOp": "kyodo-master-deta/option/Code.gs（シート名は正本がOPデータ/集計、本番はOP集計）"
+      }
     },
     {
       "key": "kengaku",
