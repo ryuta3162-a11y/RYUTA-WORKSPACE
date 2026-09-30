@@ -51,20 +51,9 @@ var RECEPTION_REFRESH_TOKEN_ = 'kyodo-ws-refresh-7f3c91';
 
 function onOpen() {
   var ui = SpreadsheetApp.getUi();
-  ui.createMenu('今日の作業')
-    .addItem('しまう', 'hubCloseWork_')
-    .addItem('トップを表示', 'hubShowHome_')
-    .addToUi();
   ui.createMenu('数値更新')
-    .addItem('受付状況表の数値を更新（入会・退会・OP・移籍・契約）', 'refreshReceptionNumbersFromMenu')
+    .addItem('受付状況表の数値を更新', 'refreshReceptionNumbersFromMenu')
     .addItem('前回の更新時刻を確認', 'showReceptionRefreshStatus')
-    .addItem('入会者一覧を元シートと連動し直す', 'relinkJoinListFromMenu')
-    .addSeparator()
-    .addItem('請求報告の自動連携を有効にする（初回のみ）', 'setupBillingLinkFromMenu')
-    .addItem('請求報告を今すぐ取り込む', 'refreshBillingFromMenu')
-    .addItem('会員分析を作り直す', 'refreshMemberAnalysisFromMenu')
-    .addItem('移籍・復会・紹介を日報へ反映', 'refreshJoinBreakdownFromMenu')
-    .addItem('日報の契約・解約をB1の月に連動', 'refreshNippoOpFromMenu')
     .addToUi();
   try {
     linkJoinListLive_(SpreadsheetApp.getActiveSpreadsheet(), false);

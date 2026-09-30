@@ -103,7 +103,7 @@ https://script.google.com/macros/s/AKfycbzMELimQThNdPUShwo2_KBzJd8kGy9BNdRyOYNgu
 | scriptId | `1YjNLFjfLFNYM2Pyt248fGd90QW9wOKvAYJu-CKxHHTRobtZQNAxlobjp` | `1JvaBDxH580M-WCRa1bk5QZOAZd8veLJDbQccODMDni5Iv9_DHtZVRw7d` |
 | ローカル | `gas-remote/r.js`（同期コピー: `Code.gs`, `gas/Code.gs`） | 会社PC `Documents/GitHub/nippo/gas/`。OPの正本は `kyodo-master-deta/option/Code.gs` |
 | Web App | `AKfycbzMELimQTh…` | `AKfycbyQzrG0awDL…`（`refreshNumbers`） |
-| 役割 | 販促ミラー、会員分析、移籍/復会/紹介の日報書き戻し | Gmail 入会・退会、OP取込、日報メール、数値更新 |
+| 役割 | 販促ミラー、会員分析、移籍/復会/紹介と契約の日報書き戻し。メニューは「数値更新」だけ | Gmail 入会・退会、OP取込、日報メール、数値更新 |
 
 スクリプトIDは「どのプロジェクトか」を特定できる。貼ってあるソース全文をこの環境からダウンロードするには Google ログインが要る。シートの数字は `peekExternal` で読める。日報の契約はワークスペース GAS が受付状況表を開いて書く（移籍と同じ）。この環境に `CLASPRC_JSON` が無いと本番へ push できない。
 
