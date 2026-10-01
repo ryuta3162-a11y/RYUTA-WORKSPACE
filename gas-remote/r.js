@@ -3954,10 +3954,6 @@ function billParseInput_(raw) {
 function billingOnEdit(e) {
   if (!e || !e.range) return;
   var sh = e.range.getSheet();
-  if (sh.getName() === MEMBER_SHEET_ && (e.range.getA1Notation() === 'B1' || e.range.getA1Notation() === 'D1' || e.range.getA1Notation() === 'E1')) {
-    memberAnalysisCharts_(sh);
-    return;
-  }
   if (sh.getName() !== BILL_SHEET_) return;
   var months = billMonths_();
   var r0 = e.range.getRow();
@@ -4013,6 +4009,10 @@ function billingPullTriggered() {
   var ss = openWorkspaceSpreadsheet_();
   try { memberAnalysisIfChanged_(ss); } catch (e2) { console.error(e2); }
   try { billPull_(ss); } catch (e) { console.error(e); }
+  try {
+    var hq = SpreadsheetApp.openById('1LOOUG97wuiKbhzl0BjJstXgLaaSCZAKNFdD8P3I5x_o').getSheetByName('経堂');
+    if (hq) gessho3PushHqUnpaidRates_(hq);
+  } catch (eUnpaid) { console.error(eUnpaid); }
   try { ensureEnjoyPointLink_(ss); } catch (e3) { console.error(e3); }
   try { ensureMasterMonthAuto_(ss); } catch (e8) { console.error(e8); }
   try { ensureMasterSameDayRow_(ss); } catch (e9) { console.error(e9); }
@@ -4032,13 +4032,13 @@ function billingPullTriggered() {
 }
 
 /**
- * 会員分析：日報は IMPORTRANGE。年代と男女は累計の入会月・退会月を COUNTIFS で数える。
- * B1 で月末・月初・入会・退会、E1 で当月・半年・昨年比。
+ * 会員分析：B2 で「みる月」を選び、累計入会・退会の全期間からその月を軸に集計する。
+ * 当月固定・指標切替・比較モード・グラフはやめて、テキストと表だけで読めるようにする。
  */
 var MEMBER_SHEET_ = '会員分析';
 var MEMBER_JOIN_SRC_ = '累計入会データ';
 var MEMBER_LEAVE_SRC_ = '累計退会データ';
-var MEMBER_ANALYSIS_VER_ = '19';
+var MEMBER_ANALYSIS_VER_ = '20';
 
 function memberAnalysisNote_(ss, msg) {
   try {
@@ -4061,22 +4061,11 @@ function memberAnalysisIfChanged_(ss) {
     if (!j || !l) return;
     var sig = MEMBER_ANALYSIS_VER_ + ':' + j.getLastRow() + ':' + l.getLastRow() + ':' + (ss.getSheetByName(MEMBER_SHEET_) ? 1 : 0);
     var props = PropertiesService.getDocumentProperties();
-    var sh = ss.getSheetByName(MEMBER_SHEET_);
-    if (props.getProperty('MEMBER_ANALYSIS_SIG') === sig) {
-      var chartErr = '';
-      if (sh && sh.getCharts().length === 0) {
-        try { memberAnalysisCharts_(sh); } catch (eChart) { chartErr = String(eChart.message || eChart); }
-      }
-      if (chartErr) memberAnalysisNote_(ss, 'charts ' + chartErr);
-      else if (sh && sh.getCharts().length > 0) memberAnalysisNote_(ss, '');
-      else memberAnalysisNote_(ss, 'charts 0');
-      return;
-    }
+    if (props.getProperty('MEMBER_ANALYSIS_SIG') === sig) return;
     memberAnalysisNote_(ss, 'start');
     buildMemberAnalysis_(ss);
     props.setProperty('MEMBER_ANALYSIS_SIG', sig);
     memberAnalysisNote_(ss, 'done');
-    try { memberAnalysisCharts_(ss.getSheetByName(MEMBER_SHEET_)); } catch (eChart2) {}
   } catch (err) {
     memberAnalysisNote_(ss, 'ERR ' + (err && err.message ? err.message : err));
   } finally {
@@ -4132,7 +4121,8 @@ function ensureVisitKind_(ss) {
   try { sh.hideColumns(11, 1); } catch (eK) {}
 }
 
-function memberSliceFormula_(monthCell, gender, ageMin, ageMax) {
+/** metric: 入会者 | 退会 | 月初会員 | 月末会員 */
+function memberSliceFormula_(monthCell, gender, ageMin, ageMax, metric) {
   var s = "'累計入会データ'!";
   var pairs = [
     [s + 'C2:C8000', '"<>法人会員(都度利用)"'],
@@ -4158,7 +4148,35 @@ function memberSliceFormula_(monthCell, gender, ageMin, ageMax) {
   var enrolled = '(' + count([[V, '">0"'], [V, '"<="&' + monthCell], [W, '""']]) + '+' + count([[V, '">0"'], [V, '"<="&' + monthCell], [W, '">"&' + monthCell]]) + ')';
   var joined = count([[V, monthCell]]);
   var left = count([[W, monthCell]]);
-  return '=IF(' + monthCell + '="","",IF($B$1="入会者",' + joined + ',IF($B$1="退会",' + left + ',IF($B$1="月初会員",' + opening + ',' + enrolled + '))))';
+  var body = metric === '入会者' ? joined
+    : metric === '退会' ? left
+    : metric === '月初会員' ? opening
+    : enrolled;
+  return '=IF(' + monthCell + '="","",' + body + ')';
+}
+
+function memberMonthChoices_() {
+  var out = [];
+  var now = new Date();
+  for (var i = 0; i < 36; i++) {
+    var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    out.push(d.getFullYear() + '年' + (d.getMonth() + 1) + '月');
+  }
+  return out;
+}
+
+function memberDefaultMonthLabel_() {
+  try {
+    var nippo = SpreadsheetApp.openById(RECEPTION_SOURCE_ID_).getSheetByName('日報');
+    var b1 = String(nippo.getRange('B1').getDisplayValue() || '').replace(/\D/g, '');
+    if (b1.length >= 4) {
+      var y = b1.length >= 6 ? Number(b1.slice(0, 4)) : 2000 + Number(b1.slice(0, 2));
+      var m = Number(b1.slice(-2));
+      if (y && m) return y + '年' + m + '月';
+    }
+  } catch (e) {}
+  var now = new Date();
+  return now.getFullYear() + '年' + (now.getMonth() + 1) + '月';
 }
 
 function buildMemberAnalysis_(ss) {
@@ -4169,227 +4187,186 @@ function buildMemberAnalysis_(ss) {
     var afterBill = ss.getSheetByName(BILL_SHEET_);
     sh = ss.insertSheet(MEMBER_SHEET_, afterBill ? afterBill.getIndex() : ss.getSheets().length);
   }
-  // 先に列を足りるようにしてから触る（「列は範囲外」防止）。他シートの表示／非表示は一切変えない。
-  ensureSheetColumns_(sh, 50);
+  ensureSheetColumns_(sh, 40);
   sh.clear();
   sh.getCharts().forEach(function (ch) { sh.removeChart(ch); });
   sh.clearConditionalFormatRules();
-  try { sh.getRange(1, 1, Math.min(sh.getMaxRows(), 120), 12).breakApart(); } catch (eB) {}
-  try { sh.getRange(1, 1, 2, 8).clearDataValidations(); } catch (eV) {}
+  try { sh.getRange(1, 1, Math.min(sh.getMaxRows(), 80), 14).breakApart(); } catch (eB) {}
+  try { sh.getRange(1, 1, 3, 8).clearDataValidations(); } catch (eV) {}
   sh.setHiddenGridlines(true);
   sh.setTabColor('#111111');
 
   var theme = hubTheme_();
-  var nip = function (a1) { return 'IMPORTRANGE("' + RECEPTION_SOURCE_ID_ + '","日報!' + a1 + '")'; };
   var grey = theme.mute;
   var bands = [
     ['10代', 0, 20], ['20代', 20, 30], ['30代', 30, 40], ['40代', 40, 50],
     ['50代', 50, 60], ['60代', 60, 70], ['70代以上', 70, 200]
   ];
-  // 比較月は最大3本（当月・比較1・比較2）。半年でも見やすさ優先で直近3ヶ月。
   var months = ['$AA$1', '$AB$1', '$AC$1'];
   var countCols = [2, 4, 6];
   var pctCols = [3, 5, 7];
-  var wide = 1 + months.length * 2;
+  var wide = 7;
 
-  // ---- 見出し ----
-  sh.getRange('A1').setValue('会員分析').setFontSize(14).setFontWeight('bold').setFontColor(theme.ink);
-  sh.getRange('B1').setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(['月末会員', '月初会員', '入会者', '退会'], true).setAllowInvalid(false).build());
-  sh.getRange('B1').setValue('月末会員').setFontSize(11).setFontWeight('bold').setHorizontalAlignment('center')
-    .setBackground(theme.ink).setFontColor('#ffffff');
-  sh.getRange('C1').setValue('比較').setFontSize(9).setFontColor(grey).setHorizontalAlignment('right');
-  sh.getRange('D1').setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(['当月', '半年', '昨年比'], true).setAllowInvalid(false).build());
-  sh.getRange('D1').setValue('半年').setFontSize(11).setFontWeight('bold').setHorizontalAlignment('center')
-    .setBackground(theme.ink).setFontColor('#ffffff');
-  sh.getRange('E1').setFormula('="更新 "&TEXT(NOW(),"M/d HH:mm")').setFontSize(9).setFontColor(grey);
-  sh.getRange('A2').setFormula('=IFERROR("日報 "&' + nip('B1') + ',"日報")').setFontSize(10).setFontWeight('bold');
-  sh.getRange('B2').setValue('上のKPIは日報の確定値。下の表は累計貼り付けからの内訳（貼りが古いと差が出ます）')
+  // ---- ヘッダ：みる月 ----
+  sh.getRange('A1').setValue('会員分析').setFontSize(16).setFontWeight('bold').setFontColor(theme.ink);
+  sh.getRange('A2').setValue('みる月').setFontWeight('bold').setFontSize(11).setBackground(theme.ink).setFontColor('#ffffff')
+    .setHorizontalAlignment('center');
+  var choices = memberMonthChoices_();
+  var defMonth = memberDefaultMonthLabel_();
+  if (choices.indexOf(defMonth) < 0) choices.unshift(defMonth);
+  sh.getRange('B2').setDataValidation(
+    SpreadsheetApp.newDataValidation().requireValueInList(choices, true).setAllowInvalid(false).build()
+  );
+  sh.getRange('B2').setValue(defMonth).setFontSize(12).setFontWeight('bold').setHorizontalAlignment('center')
+    .setBackground(theme.soft).setFontColor(theme.ink);
+  sh.getRange('C2').setValue('← ここを変えると、下の数字が全部その月基準になります')
+    .setFontSize(10).setFontColor(grey);
+  sh.getRange('C2:G2').merge();
+  sh.getRange('A3').setValue('累計入会・累計退会の全期間から集計。日報の「いま」ではなく、選んだ月の姿を見ます。グラフは使いません。')
     .setFontSize(9).setFontColor(grey);
-  sh.getRange('B2:G2').merge();
+  sh.getRange('A3:G3').merge();
+  sh.getRange('H2').setFormula('="更新 "&TEXT(NOW(),"M/d HH:mm")').setFontSize(9).setFontColor(grey);
 
-  // 隠し月セル
-  sh.getRange('AA1').setFormula('=IFERROR(EDATE(DATE(2000+INT(' + nip('B1') + '/100),MOD(' + nip('B1') + ',100),1),IF($B$1="月末会員",-1,0)),"")');
-  sh.getRange('AB1').setFormula('=IF($D$1="半年",EDATE($AA$1,-1),IF($D$1="昨年比",EDATE($AA$1,-12),""))');
-  sh.getRange('AC1').setFormula('=IF($D$1="半年",EDATE($AA$1,-2),"")');
+  // 隠し：選んだ月 / 前月 / 昨年同月
+  sh.getRange('AA1').setFormula(
+    '=IFERROR(DATE(VALUE(REGEXEXTRACT($B$2&"","([0-9]{4})")),VALUE(REGEXEXTRACT($B$2&"","年([0-9]{1,2})")),1),"")'
+  );
+  sh.getRange('AB1').setFormula('=IF($AA$1="","",EDATE($AA$1,-1))');
+  sh.getRange('AC1').setFormula('=IF($AA$1="","",EDATE($AA$1,-12))');
   sh.getRange('AA1:AC1').setNumberFormat('yyyy/m');
 
-  // ---- KPI（日報のみ・小さめ） ----
-  sh.getRange(3, 1, 1, 6).setValues([['月初会員', '当月入会', '当月退会', '純増', '月末安定', '退会率']]);
-  sh.getRange(3, 1, 1, 6).setBackground(theme.ink).setFontColor('#FFFFFF').setFontWeight('bold')
-    .setFontSize(9).setHorizontalAlignment('center');
-  sh.getRange(4, 1, 1, 6).setFormulas([[
-    '=IFERROR(' + nip('C12') + ',"")',
-    '=IFERROR(' + nip('C13') + ',"")',
-    '=IFERROR(' + nip('C15') + ',"")',
-    '=IFERROR(B4-C4,"")',
-    '=IFERROR(' + nip('C16') + ',"")',
-    '=IFERROR(C4/A4,"")'
-  ]]);
-  sh.getRange(4, 1, 1, 6).setFontSize(14).setFontWeight('bold').setHorizontalAlignment('center')
-    .setBackground(theme.soft).setFontColor(theme.ink);
-  sh.getRange(5, 1, 1, 6).setFormulas([[
-    '=IFERROR("男 "&' + nip('F12') + '&" / 女 "&' + nip('H12') + ',"")',
-    '=IFERROR("移籍"&' + nip('D14') + '&" 復会"&' + nip('F14') + '&" 紹介"&' + nip('H14') + ',"")',
-    '',
-    '="入会−退会"',
-    '=IFERROR("男 "&' + nip('F16') + '&" / 女 "&' + nip('H16') + ',"")',
-    '="退会÷月初"'
-  ]]);
-  sh.getRange(5, 1, 1, 6).setFontSize(8).setFontColor(grey).setHorizontalAlignment('center').setWrap(true);
-  sh.getRange('A4:E4').setNumberFormat('#,##0');
-  sh.getRange('D4').setNumberFormat('+#,##0;-#,##0;0');
-  sh.getRange('F4').setNumberFormat('0.00%');
-  sh.setRowHeight(4, 28);
-  sh.setRowHeight(5, 32);
+  // ---- 要約（テキスト） ----
+  sh.getRange('A5').setValue('この月の要約').setFontWeight('bold').setFontSize(12).setFontColor(theme.ink);
+  sh.getRange(6, 1, 1, 4).setValues([['', '選んだ月', '前月', '昨年同月']])
+    .setBackground(theme.ink).setFontColor('#ffffff').setFontWeight('bold').setFontSize(9).setHorizontalAlignment('center');
+  sh.getRange('B6').setFormula('=IF($AA$1="","",TEXT($AA$1,"yyyy年m月"))');
+  sh.getRange('C6').setFormula('=IF($AB$1="","",TEXT($AB$1,"yyyy年m月"))');
+  sh.getRange('D6').setFormula('=IF($AC$1="","",TEXT($AC$1,"yyyy年m月"))');
 
-  // ---- 日報 vs 累計（選択中の指標だけ） ----
-  sh.getRange('A7').setFormula('=$B$1&"：日報と累計"').setFontWeight('bold').setFontSize(11);
-  sh.getRange(8, 1, 1, 4).setValues([['', '日報（正）', '累計', '差']]).setBackground(theme.mid).setFontColor('#ffffff')
-    .setFontWeight('bold').setFontSize(9).setHorizontalAlignment('center');
-  sh.getRange('A9').setValue('人数');
-  sh.getRange('A10').setValue('男性');
-  sh.getRange('A11').setValue('女性');
-  sh.getRange('B9').setFormula('=IF($B$1="入会者",IFERROR(' + nip('C13') + ',""),IF($B$1="退会",IFERROR(' + nip('C15') + ',""),IF($B$1="月初会員",IFERROR(' + nip('C12') + ',""),IFERROR(' + nip('C16') + ',""))))');
-  sh.getRange('B10').setFormula('=IF($B$1="月末会員",IFERROR(' + nip('F16') + ',""),IF($B$1="月初会員",IFERROR(' + nip('F12') + ',""),""))');
-  sh.getRange('B11').setFormula('=IF($B$1="月末会員",IFERROR(' + nip('H16') + ',""),IF($B$1="月初会員",IFERROR(' + nip('H12') + ',""),""))');
-  sh.getRange('C9').setFormula(memberSliceFormula_('$AA$1', '', null, null));
-  sh.getRange('C10').setFormula(memberSliceFormula_('$AA$1', '男', null, null));
-  sh.getRange('C11').setFormula(memberSliceFormula_('$AA$1', '女', null, null));
-  sh.getRange('D9').setFormula('=IF(OR(B9="",C9=""),"",C9-B9)');
-  sh.getRange('D10').setFormula('=IF(OR(B10="",C10=""),"",C10-B10)');
-  sh.getRange('D11').setFormula('=IF(OR(B11="",C11=""),"",C11-B11)');
-  sh.getRange('A9:A11').setFontWeight('bold').setBackground(theme.soft).setFontSize(9);
-  sh.getRange('B9:D11').setNumberFormat('#,##0').setFontSize(10).setHorizontalAlignment('center');
-  sh.getRange('D9:D11').setNumberFormat('+#,##0;-#,##0;0');
-  sh.getRange('A9:D11').setBorder(true, true, true, true, true, true, theme.border, SpreadsheetApp.BorderStyle.SOLID);
-  sh.getRange('A12').setValue('差が大きい＝累計の貼り付けが古い／規約退会の反映待ち。日報側を正とする。')
-    .setFontSize(8).setFontColor(theme.red);
-  sh.getRange('A12:D12').merge();
-
-  function monthHead(cell) {
-    return '=IF(' + cell + '="","",TEXT(' + cell + ',"m月"))';
-  }
-  function writeBandTable(row, title) {
-    sh.getRange(row, 1, 1, wide).merge()
-      .setFormula(title).setBackground(theme.ink).setFontColor('#ffffff').setFontWeight('bold').setFontSize(10);
-    sh.setRowHeight(row, 22);
-    var head = ['="年代"'];
-    for (var h = 0; h < months.length; h++) {
-      head.push(monthHead(months[h]));
-      head.push('=IF(' + months[h] + '="","","%")');
-    }
-    sh.getRange(row + 1, 1, 1, wide).setFormulas([head]).setBackground(theme.mid).setFontColor('#ffffff')
-      .setFontWeight('bold').setFontSize(9).setHorizontalAlignment('center');
-    for (var i = 0; i < bands.length; i++) {
-      var r = row + 2 + i;
-      sh.getRange(r, 1).setValue(bands[i][0]).setFontWeight('bold').setBackground(theme.soft).setFontSize(9);
-      for (var k = 0; k < months.length; k++) {
-        var countA1 = columnLetter_(countCols[k]) + r;
-        var sumA1 = columnLetter_(countCols[k]) + '$' + (row + 2) + ':' + columnLetter_(countCols[k]) + '$' + (row + 1 + bands.length);
-        sh.getRange(r, countCols[k]).setFormula(memberSliceFormula_(months[k], '', bands[i][1], bands[i][2]));
-        sh.getRange(r, pctCols[k]).setFormula('=IF(OR(' + months[k] + '="",SUM(' + sumA1 + ')=0),"",' + countA1 + '/SUM(' + sumA1 + '))');
+  var summaryRows = [
+    ['入会', '入会者'],
+    ['退会', '退会'],
+    ['純増（入会−退会）', null],
+    ['月初の在籍（累計推定）', '月初会員'],
+    ['月末の在籍（累計推定）', '月末会員']
+  ];
+  for (var sr = 0; sr < summaryRows.length; sr++) {
+    var r = 7 + sr;
+    sh.getRange(r, 1).setValue(summaryRows[sr][0]).setFontWeight('bold').setBackground(theme.soft).setFontSize(10);
+    if (summaryRows[sr][1]) {
+      for (var mc = 0; mc < 3; mc++) {
+        sh.getRange(r, 2 + mc).setFormula(memberSliceFormula_(months[mc], '', null, null, summaryRows[sr][1]));
       }
+    } else {
+      sh.getRange(r, 2).setFormula('=IF(OR(B7="",B8=""),"",B7-B8)');
+      sh.getRange(r, 3).setFormula('=IF(OR(C7="",C8=""),"",C7-C8)');
+      sh.getRange(r, 4).setFormula('=IF(OR(D7="",D8=""),"",D7-D8)');
     }
-    sh.getRange(row + 2, 2, bands.length, wide - 1).setNumberFormat('#,##0').setFontSize(9);
-    for (var pf = 0; pf < pctCols.length; pf++) sh.getRange(row + 2, pctCols[pf], bands.length, 1).setNumberFormat('0%');
-    sh.getRange(row + 2, 1, bands.length, wide).setBorder(true, true, true, true, true, true, theme.border, SpreadsheetApp.BorderStyle.SOLID)
-      .setHorizontalAlignment('center');
-    sh.getRange(row + 2, 1, bands.length, 1).setHorizontalAlignment('left');
   }
-  writeBandTable(14, '=$B$1&"の年代（累計）"');
+  sh.getRange(7, 2, 5, 3).setNumberFormat('#,##0').setFontSize(12).setFontWeight('bold').setHorizontalAlignment('center');
+  sh.getRange(9, 2, 1, 3).setNumberFormat('+#,##0;-#,##0;0');
+  sh.getRange(6, 1, 6, 4).setBorder(true, true, true, true, true, true, theme.border, SpreadsheetApp.BorderStyle.SOLID);
 
-  // 男女
-  sh.getRange(24, 1, 1, wide).merge().setFormula('=$B$1&"の男女（累計）"')
-    .setBackground(theme.ink).setFontColor('#ffffff').setFontWeight('bold').setFontSize(10);
-  var gHead = ['="性別"'];
-  for (var gh = 0; gh < months.length; gh++) {
-    gHead.push(monthHead(months[gh]));
-    gHead.push('=IF(' + months[gh] + '="","","%")');
-  }
-  sh.getRange(25, 1, 1, wide).setFormulas([gHead]).setBackground(theme.mid).setFontColor('#ffffff')
+  // 読み上げ用一文
+  sh.getRange('A13').setFormula(
+    '=IF($AA$1="","",TEXT($AA$1,"yyyy年m月")&"は、入会 "&TEXT(B7,"#,##0")&"人・退会 "&TEXT(B8,"#,##0")&"人（純増 "&TEXT(B9,"+#,##0;-#,##0;0")&"）。"&' +
+    '"前月の入会は "&TEXT(C7,"#,##0")&"人、昨年同月は "&TEXT(D7,"#,##0")&"人。")'
+  ).setFontSize(11).setFontColor(theme.ink).setWrap(true);
+  sh.getRange('A13:G13').merge();
+  sh.setRowHeight(13, 36);
+
+  // ---- 入会の年代 ----
+  sh.getRange(15, 1, 1, wide).merge().setValue('入会の年代（累計）')
+    .setBackground(theme.ink).setFontColor('#ffffff').setFontWeight('bold').setFontSize(11);
+  var ageHead = [['年代', '選んだ月', '%', '前月', '%', '昨年同月', '%']];
+  sh.getRange(16, 1, 1, wide).setValues(ageHead).setBackground(theme.mid).setFontColor('#ffffff')
     .setFontWeight('bold').setFontSize(9).setHorizontalAlignment('center');
-  sh.getRange('A26').setValue('男').setFontWeight('bold').setBackground(theme.soft);
-  sh.getRange('A27').setValue('女').setFontWeight('bold').setBackground(theme.soft);
+  for (var i = 0; i < bands.length; i++) {
+    var ar = 17 + i;
+    sh.getRange(ar, 1).setValue(bands[i][0]).setFontWeight('bold').setBackground(theme.soft).setFontSize(9);
+    for (var k = 0; k < 3; k++) {
+      var countA1 = columnLetter_(countCols[k]) + ar;
+      var sumA1 = columnLetter_(countCols[k]) + '$17:' + columnLetter_(countCols[k]) + '$23';
+      sh.getRange(ar, countCols[k]).setFormula(memberSliceFormula_(months[k], '', bands[i][1], bands[i][2], '入会者'));
+      sh.getRange(ar, pctCols[k]).setFormula('=IF(OR(' + months[k] + '="",SUM(' + sumA1 + ')=0),"",' + countA1 + '/SUM(' + sumA1 + '))');
+    }
+  }
+  sh.getRange(17, 2, 7, 6).setNumberFormat('#,##0').setFontSize(10).setHorizontalAlignment('center');
+  for (var pf = 0; pf < pctCols.length; pf++) sh.getRange(17, pctCols[pf], 7, 1).setNumberFormat('0%');
+  sh.getRange(17, 1, 7, wide).setBorder(true, true, true, true, true, true, theme.border, SpreadsheetApp.BorderStyle.SOLID);
+
+  // ---- 入会の男女 ----
+  sh.getRange(25, 1, 1, wide).merge().setValue('入会の男女（累計）')
+    .setBackground(theme.ink).setFontColor('#ffffff').setFontWeight('bold').setFontSize(11);
+  sh.getRange(26, 1, 1, wide).setValues([['性別', '選んだ月', '%', '前月', '%', '昨年同月', '%']])
+    .setBackground(theme.mid).setFontColor('#ffffff').setFontWeight('bold').setFontSize(9).setHorizontalAlignment('center');
   var genders = ['男', '女'];
   for (var gi = 0; gi < 2; gi++) {
-    for (var gk = 0; gk < months.length; gk++) {
-      var gr = 26 + gi;
+    var gr = 27 + gi;
+    sh.getRange(gr, 1).setValue(genders[gi]).setFontWeight('bold').setBackground(theme.soft);
+    for (var gk = 0; gk < 3; gk++) {
       var gCount = columnLetter_(countCols[gk]) + gr;
-      var gSum = columnLetter_(countCols[gk]) + '$26:' + columnLetter_(countCols[gk]) + '$27';
-      sh.getRange(gr, countCols[gk]).setFormula(memberSliceFormula_(months[gk], genders[gi], null, null));
+      var gSum = columnLetter_(countCols[gk]) + '$27:' + columnLetter_(countCols[gk]) + '$28';
+      sh.getRange(gr, countCols[gk]).setFormula(memberSliceFormula_(months[gk], genders[gi], null, null, '入会者'));
       sh.getRange(gr, pctCols[gk]).setFormula('=IF(OR(' + months[gk] + '="",SUM(' + gSum + ')=0),"",' + gCount + '/SUM(' + gSum + '))');
     }
   }
-  sh.getRange(26, 2, 2, wide - 1).setNumberFormat('#,##0').setFontSize(9);
-  for (var pg = 0; pg < pctCols.length; pg++) sh.getRange(26, pctCols[pg], 2, 1).setNumberFormat('0%');
-  sh.getRange(26, 1, 2, wide).setBorder(true, true, true, true, true, true, theme.border, SpreadsheetApp.BorderStyle.SOLID)
-    .setHorizontalAlignment('center');
+  sh.getRange(27, 2, 2, 6).setNumberFormat('#,##0').setFontSize(10).setHorizontalAlignment('center');
+  for (var pg = 0; pg < pctCols.length; pg++) sh.getRange(27, pctCols[pg], 2, 1).setNumberFormat('0%');
+  sh.getRange(27, 1, 2, wide).setBorder(true, true, true, true, true, true, theme.border, SpreadsheetApp.BorderStyle.SOLID);
 
-  // 右：申込
-  var side = 9;
-  sh.getRange(14, side).setValue('申込（月別）').setBackground(theme.ink).setFontColor('#ffffff').setFontWeight('bold').setFontSize(10);
-  sh.getRange(14, side, 1, 4).merge();
-  sh.getRange(15, side).setValue('').setBackground(theme.mid);
-  for (var sm = 0; sm < months.length; sm++) {
-    sh.getRange(15, side + 1 + sm).setFormula(monthHead(months[sm])).setBackground(theme.mid).setFontColor('#ffffff')
-      .setFontWeight('bold').setFontSize(9).setHorizontalAlignment('center');
+  // ---- 直近12ヶ月の推移（テキスト表） ----
+  sh.getRange(30, 1, 1, 4).merge().setValue('直近12ヶ月の入会・退会（選んだ月まで）')
+    .setBackground(theme.ink).setFontColor('#ffffff').setFontWeight('bold').setFontSize(11);
+  sh.getRange(31, 1, 1, 4).setValues([['月', '入会', '退会', '純増']])
+    .setBackground(theme.mid).setFontColor('#ffffff').setFontWeight('bold').setFontSize(9).setHorizontalAlignment('center');
+  for (var t = 0; t < 12; t++) {
+    var tr = 32 + t;
+    var off = 11 - t; // older → newer, last row = selected month
+    sh.getRange(tr, 1).setFormula('=IF($AA$1="","",TEXT(EDATE($AA$1,-' + off + '),"yyyy年m月"))')
+      .setFontWeight('bold').setBackground(theme.soft).setFontSize(9);
+    sh.getRange(tr, 2).setFormula(memberSliceFormula_('EDATE($AA$1,-' + off + ')', '', null, null, '入会者'));
+    sh.getRange(tr, 3).setFormula(memberSliceFormula_('EDATE($AA$1,-' + off + ')', '', null, null, '退会'));
+    sh.getRange(tr, 4).setFormula('=IF(OR(B' + tr + '="",C' + tr + '=""),"",B' + tr + '-C' + tr + ')');
   }
+  sh.getRange(32, 2, 12, 3).setNumberFormat('#,##0').setFontSize(10).setHorizontalAlignment('center');
+  sh.getRange(32, 4, 12, 1).setNumberFormat('+#,##0;-#,##0;0');
+  sh.getRange(32, 1, 12, 4).setBorder(true, true, true, true, true, true, theme.border, SpreadsheetApp.BorderStyle.SOLID);
+  // 選んだ月の行を強調
+  sh.getRange(43, 1, 1, 4).setBackground('#FFF3CD');
+
+  // ---- 右：選んだ月の申込 ----
+  var side = 9;
+  sh.getRange(15, side).setValue('選んだ月の申込').setBackground(theme.ink).setFontColor('#ffffff')
+    .setFontWeight('bold').setFontSize(11);
+  sh.getRange(15, side, 1, 2).merge();
+  sh.getRange(16, side, 1, 2).setValues([['区分', '件数']]).setBackground(theme.mid).setFontColor('#ffffff')
+    .setFontWeight('bold').setFontSize(9).setHorizontalAlignment('center');
   var kinds = ['見学', '体験', '両方', '学割'];
   for (var si = 0; si < kinds.length; si++) {
-    var row = 16 + si;
+    var row = 17 + si;
     sh.getRange(row, side).setValue(kinds[si]).setFontWeight('bold').setBackground(theme.soft).setFontSize(9);
-    for (var sk = 0; sk < months.length; sk++) {
-      var cell = months[sk];
-      var formula = kinds[si] === '学割'
-        ? '=IF(' + cell + '="","",SUMPRODUCT((\'学割\'!A$2:A$400<>"")*(TEXT(\'学割\'!A$2:A$400,"yyyy-m")=TEXT(' + cell + ',"yyyy-m"))))'
-        : '=IF(' + cell + '="","",SUMPRODUCT((\'見学体験申請\'!K$2:K$400="' + kinds[si] + '")*(TEXT(\'見学体験申請\'!H$2:H$400,"yyyy-m")=TEXT(' + cell + ',"yyyy-m"))))';
-      sh.getRange(row, side + 1 + sk).setFormula(formula).setNumberFormat('#,##0').setFontSize(9).setHorizontalAlignment('center');
-    }
+    var formula = kinds[si] === '学割'
+      ? '=IF($AA$1="","",SUMPRODUCT((\'学割\'!A$2:A$400<>"")*(TEXT(\'学割\'!A$2:A$400,"yyyy-m")=TEXT($AA$1,"yyyy-m"))))'
+      : '=IF($AA$1="","",SUMPRODUCT((\'見学体験申請\'!K$2:K$400="' + kinds[si] + '")*(TEXT(\'見学体験申請\'!H$2:H$400,"yyyy-m")=TEXT($AA$1,"yyyy-m"))))';
+    sh.getRange(row, side + 1).setFormula(formula).setNumberFormat('#,##0').setFontSize(10).setHorizontalAlignment('center');
   }
-  sh.getRange(16, side, 4, 4).setBorder(true, true, true, true, true, true, theme.border, SpreadsheetApp.BorderStyle.SOLID);
+  sh.getRange(17, side, 4, 2).setBorder(true, true, true, true, true, true, theme.border, SpreadsheetApp.BorderStyle.SOLID);
 
-  // 右：日報オプション（旧・特典）
-  sh.getRange(21, side).setValue('日報オプション契約').setBackground(theme.ink).setFontColor('#ffffff').setFontWeight('bold').setFontSize(10);
-  sh.getRange(21, side, 1, 2).merge();
-  sh.getRange(22, side).setValue('日報 D21:E の契約数。オプション名と人数です。')
-    .setFontSize(8).setFontColor(grey);
+  sh.getRange(22, side).setValue('メモ').setBackground(theme.ink).setFontColor('#ffffff').setFontWeight('bold').setFontSize(11);
   sh.getRange(22, side, 1, 2).merge();
-  sh.getRange(23, side, 1, 2).setValues([['オプション', '人数']]).setBackground(theme.mid).setFontColor('#ffffff')
-    .setFontWeight('bold').setFontSize(9).setHorizontalAlignment('center');
-  sh.getRange(24, side).setFormula('=IFERROR(IMPORTRANGE("' + RECEPTION_SOURCE_ID_ + '","日報!B21:B36"),"")');
-  sh.getRange(24, side + 1).setFormula('=IFERROR(IMPORTRANGE("' + RECEPTION_SOURCE_ID_ + '","日報!C21:C36"),"")');
-  sh.getRange(24, side + 1, 16, 1).setNumberFormat('#,##0').setFontSize(9);
-  sh.getRange(24, side, 16, 1).setFontSize(9);
-
-  // グラフ用データ（非表示列）
-  ensureSheetColumns_(sh, 50);
-  for (var p = 0; p < bands.length; p++) {
-    var src = 16 + p; // age data rows
-    sh.getRange(10 + p, 40).setFormula('=IF(OR($AA$1="",A' + src + '=""),"",A' + src + ')');
-    sh.getRange(10 + p, 41).setFormula('=IF($AA$1="","",B' + src + ')');
-    sh.getRange(10 + p, 42).setFormula('=IF(OR($AB$1="",A' + src + '=""),"",A' + src + ')');
-    sh.getRange(10 + p, 43).setFormula('=IF($AB$1="","",D' + src + ')');
-    sh.getRange(10 + p, 44).setFormula('=IF(OR($AC$1="",A' + src + '=""),"",A' + src + ')');
-    sh.getRange(10 + p, 45).setFormula('=IF($AC$1="","",F' + src + ')');
-  }
-  sh.getRange(9, 40, 1, 6).setValues([['基準月年代', '人数', '比較1年代', '人数', '比較2年代', '人数']]);
+  sh.getRange(23, side).setValue(
+    '在籍の推定は累計の貼り付けベースです。日報の確定値とズレたら、累計の更新を先に。'
+  ).setFontSize(9).setFontColor(grey).setWrap(true);
+  sh.getRange(23, side, 3, 2).merge();
 
   safeHideColumns_(sh, 27, 3); // AA-AC
-  safeHideColumns_(sh, 40, 6);
-
-  var rules = [
-    SpreadsheetApp.newConditionalFormatRule().whenNumberNotEqualTo(0).setFontColor(theme.red).setBold(true)
-      .setRanges([sh.getRange('D9:D11')]).build()
-  ];
-  sh.setConditionalFormatRules(rules);
-
-  sh.getRange(1, 1, 40, 12).setFontFamily('Meiryo');
-  sh.setColumnWidth(1, 88);
-  sh.setColumnWidths(2, 6, 72);
-  sh.setColumnWidth(side, 110);
-  sh.setColumnWidths(side + 1, 3, 52);
-  sh.setFrozenRows(5);
-  memberAnalysisCharts_(sh);
+  sh.getRange(1, 1, 44, 12).setFontFamily('Meiryo');
+  sh.setColumnWidth(1, 160);
+  sh.setColumnWidths(2, 6, 78);
+  sh.setColumnWidth(side, 72);
+  sh.setColumnWidth(side + 1, 56);
+  sh.setFrozenRows(2);
   memberAnalysisNote_(ss, 'tables');
   return { ok: true };
 }
@@ -4409,56 +4386,10 @@ function safeHideColumns_(sh, start, num) {
   try { sh.hideColumns(start, num); } catch (e) {}
 }
 
-function memberAnalysisMonthTitles_(sh) {
-  var titles = [];
-  var cells = ['AA1', 'AB1', 'AC1'];
-  for (var i = 0; i < cells.length; i++) {
-    var v = sh.getRange(cells[i]).getValue();
-    if (!v) continue;
-    var d = v instanceof Date ? v : null;
-    if (!d) {
-      try { d = new Date(v); } catch (e) { d = null; }
-    }
-    if (d && !isNaN(d.getTime())) titles.push((d.getMonth() + 1) + '月');
-    else titles.push(String(v));
-  }
-  if (!titles.length) titles.push('基準月');
-  return titles;
-}
-
+/** グラフは使わない（旧版互換の空実装） */
 function memberAnalysisCharts_(sh) {
   if (!sh) return;
   sh.getCharts().forEach(function (ch) { sh.removeChart(ch); });
-  try { SpreadsheetApp.flush(); } catch (eF) {}
-  var titles = memberAnalysisMonthTitles_(sh);
-  var monthCells = ['AA1', 'AB1', 'AC1'];
-  var specs = [
-    { col: 40, anchorCol: 1 },
-    { col: 42, anchorCol: 5 },
-    { col: 44, anchorCol: 9 }
-  ];
-  for (var i = 0; i < specs.length; i++) {
-    var monthDisp = String(sh.getRange(monthCells[i]).getDisplayValue() || '').trim();
-    if (i > 0 && !monthDisp) continue;
-    var title = titles[i] || (monthDisp || '基準月');
-    var chart = sh.newChart()
-      .setChartType(Charts.ChartType.COLUMN)
-      .addRange(sh.getRange(10, specs[i].col, 7, 2))
-      .setNumHeaders(0)
-      .setOption('title', title + 'の年代')
-      .setOption('titleTextStyle', { fontName: 'Meiryo', fontSize: 12, bold: true, color: '#111111' })
-      .setOption('legend', { position: 'none' })
-      .setOption('colors', ['#111111'])
-      .setOption('backgroundColor', '#FFFFFF')
-      .setOption('hAxis', { textStyle: { fontName: 'Meiryo', fontSize: 9, color: '#111111' } })
-      .setOption('vAxis', { minValue: 0, gridlines: { color: '#E0E0E0', count: 5 }, textStyle: { fontName: 'Meiryo', fontSize: 9, color: '#7A7A7A' } })
-      .setOption('chartArea', { left: 40, top: 36, width: '80%', height: '70%' })
-      .setOption('width', 280)
-      .setOption('height', 220)
-      .setPosition(29, specs[i].anchorCol, 0, 0)
-      .build();
-    sh.insertChart(chart);
-  }
 }
 
 function linkUnpaidFollowup_(ss) {
