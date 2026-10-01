@@ -55,6 +55,12 @@ function onOpen() {
   .addItem('受付状況表の数値を更新', 'refreshReceptionNumbersFromMenu')
   .addItem('前回の更新時刻を確認', 'showReceptionRefreshStatus')
   .addToUi();
+  ui.createMenu('月初３ファイル')
+  .addItem('3ファイルを取り込む', 'openGessho3Files')
+  .addItem('日報の写しを出す', 'ensureNippoMirror')
+  .addToUi();
+  try { ensureNippoMirror_(); } catch (eMirror) { Logger.log(eMirror); }
+  try { installTokureiKaiinSheet(); } catch (eTokurei) { Logger.log(eTokurei); }
 }
 
 var JOIN_LIST_FIT365_ID_ = '1BbExBUCfyq1cfNqw4TvlwUriL-AfvghU9XT6McdzGTQ';
@@ -739,6 +745,87 @@ function inspectNamedSheetDeep_(name, maxRows, maxCols) {
  */
 var RECEPTION_SOURCE_ID_ = '14hxiLBzvGTuIpfZcoVjiHpz8b419OzUrtQAr5788h3w';
 var RECEPTION_LIVE_SHEET_ = '経堂_受付ライブ';
+var NIPPO_MIRROR_SHEET_ = '日報';
+
+/** 受付状況表の日報を Workspace「日報」へ IMPORTRANGE。月初３ファイルの反映がここに出る。 */
+function ensureNippoMirror_() {
+  var ss = null;
+  try {
+    var active = SpreadsheetApp.getActiveSpreadsheet();
+    if (active && active.getId() === WS_CONFIG.SPREADSHEET_ID) ss = active;
+  } catch (eActive) {}
+  if (!ss) ss = openWorkspaceSpreadsheet_();
+  var sh = ss.getSheetByName(NIPPO_MIRROR_SHEET_);
+  if (!sh) {
+    var master = ss.getSheetByName('経堂マスタ');
+    var index = master ? master.getIndex() + 1 : 1;
+    sh = ss.insertSheet(NIPPO_MIRROR_SHEET_, index);
+    sh.setTabColor('#111111');
+  }
+  var formula = '=IMPORTRANGE("' + RECEPTION_SOURCE_ID_ + '","\'日報\'!A1:I40")';
+  var current = String(sh.getRange('A1').getFormula() || '');
+  if (current.indexOf('日報') < 0 || current.indexOf(RECEPTION_SOURCE_ID_) < 0) {
+    sh.getRange('A1').setFormula(formula);
+  }
+  sh.getRange('K1').clearContent();
+  sh.setColumnWidth(11, 120);
+  formatNippoMirrorLook_(sh);
+  return { ok: true, gid: sh.getSheetId(), formula: sh.getRange('A1').getFormula() };
+}
+
+/** 写しの列幅・見出し・枠。IMPORTRANGEの値は触らない。 */
+function formatNippoMirrorLook_(sh) {
+  var widths = [32, 200, 72, 56, 72, 64, 64, 64, 52];
+  for (var c = 0; c < widths.length; c++) sh.setColumnWidth(c + 1, widths[c]);
+  sh.setHiddenGridlines(true);
+  var area = sh.getRange(1, 1, 40, 9);
+  area.setFontFamily('Meiryo');
+  area.setFontSize(10);
+  area.setFontColor('#111111');
+  area.setFontWeight('normal');
+  area.setVerticalAlignment('middle');
+  area.setWrap(false);
+  for (var r = 1; r <= 40; r++) sh.setRowHeight(r, r === 20 ? 26 : 22);
+
+  sh.getRange('B1').setFontWeight('bold').setFontSize(14).setHorizontalAlignment('center');
+  sh.getRange(5, 1, 3, 8).setFontWeight('bold').setHorizontalAlignment('left');
+  sh.getRange(9, 2, 10, 1).setFontWeight('bold').setHorizontalAlignment('left');
+  sh.getRange(9, 3, 10, 7).setHorizontalAlignment('center');
+
+  var header = sh.getRange(20, 2, 1, 5);
+  header.setFontWeight('bold');
+  header.setFontColor('#ffffff');
+  header.setBackground('#111111');
+  header.setHorizontalAlignment('center');
+
+  sh.getRange(20, 2, 17, 5).setBorder(true, true, true, true, true, true, '#000000', SpreadsheetApp.BorderStyle.SOLID);
+  sh.getRange(21, 2, 16, 1).setFontWeight('bold').setHorizontalAlignment('left').setBackground('#ffffff');
+  sh.getRange(21, 3, 16, 4).setHorizontalAlignment('center').setNumberFormat('0;-0;0').setBackground('#ffffff');
+  sh.getRange(21, 3, 16, 1).setBackground('#f2f2f2');
+
+  sh.getRange('A42').setValue('メニュー「月初３ファイル」で3つのExcelを入れると、この表も同じ数字になります。');
+  sh.getRange('A42').setFontColor('#666666').setFontSize(9).setFontWeight('normal');
+}
+
+function ensureNippoMirror() {
+  var result = ensureNippoMirror_();
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    UrlFetchApp.fetch(
+      'https://docs.google.com/spreadsheets/d/' + ss.getId() +
+        '/externaldata/addimportrangepermissions?donorDocId=' + RECEPTION_SOURCE_ID_,
+      {
+        method: 'post',
+        headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
+        muteHttpExceptions: true
+      }
+    );
+    ss.toast('日報の写しを出しました', '月初３ファイル', 5);
+  } catch (eGrant) {
+    Logger.log(eGrant);
+  }
+  return result;
+}
 var JOIN_LIST_SHEET_ = '入会者一覧＋自動メール管理';
 
 /** 受付状況表の「日報」シートを値コピー（IMPORTRANGE 不要） */
@@ -983,6 +1070,9 @@ function handleApiGet_(e) {
     }
     if (api === 'listSheets') {
       return jsonOutput_(listWorkspaceSheets_());
+    }
+    if (api === 'ensureNippoMirror') {
+      return jsonOutput_(ensureNippoMirror_());
     }
     if (api === 'diagnoseImports') {
       return jsonOutput_(diagnoseImportsHealth_());
@@ -3116,6 +3206,17 @@ function ensureMasterMemberNo_(ss) {
   if (f.indexOf(mark) < 0 || f.indexOf('HSTACK(') < 0) cell.setFormula(masterMemberNoFormula_(col));
 }
 
+/** 経堂マスタ B2（年月）は今日の月に自動で切り替える。AG5 以降の月計算はすべて B2 から作られる */
+var MASTER_MONTH_FORMULA_ = '=TEXT(TODAY(),"yyyy年m月")';
+
+function ensureMasterMonthAuto_(ss) {
+  var sh = ss.getSheetByName('経堂マスタ');
+  if (!sh) return;
+  var b2 = sh.getRange('B2');
+  if (b2.getFormula() === MASTER_MONTH_FORMULA_) return;
+  b2.clearDataValidations().setFormula(MASTER_MONTH_FORMULA_);
+}
+
 /** トップの引用元リンク（H列）の末尾にエンジョイポイント付与画面を足す。既にあれば何もしない */
 function ensureEnjoyPointLink_(ss) {
   var sh = ss.getSheetByName(HUB_HOME_SHEET_);
@@ -3745,6 +3846,7 @@ function billingPullTriggered() {
   try { billPull_(ss); } catch (e) { console.error(e); }
   try { memberAnalysisIfChanged_(ss); } catch (e2) { console.error(e2); }
   try { ensureEnjoyPointLink_(ss); } catch (e3) { console.error(e3); }
+  try { ensureMasterMonthAuto_(ss); } catch (e8) { console.error(e8); }
   try { ensureMasterMemberNo_(ss); } catch (e5) { console.error(e5); }
   try { ensureMasterApplyCheckmarks_(ss); } catch (e4) { console.error(e4); }
   try { linkJoinListLive_(ss, false); } catch (e6) { console.error(e6); }
@@ -4301,3 +4403,4 @@ function setupBillingLinkFromMenu() {
   if (sh) ss.setActiveSheet(sh);
   ss.toast(r.ok ? '請求報告の自動連携を有効にしました' : String(r.message), '請求・回収実績', 8);
 }
+

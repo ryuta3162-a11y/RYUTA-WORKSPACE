@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <style>
+    body { font-family: Meiryo, "Hiragino Sans", sans-serif; margin: 16px; color: #111; font-size: 13px; }
+    h1 { font-size: 16px; margin: 0 0 8px; }
+    p { margin: 0 0 10px; line-height: 1.5; }
+    button { background: #111; color: #fff; border: 0; padding: 8px 14px; margin-right: 8px; cursor: pointer; }
+    button.apply { background: #C21632; }
+    button:disabled { opacity: 0.45; cursor: default; }
+    .drop {
+      border: 2px dashed #111; background: #f7f7f7; padding: 22px 12px; text-align: center;
+      margin: 8px 0 12px;
+    }
+    .drop.over { background: #fff; }
+    .note { color: #333; background: #f4f4f4; padding: 8px 10px; margin: 10px 0; }
+    .warn { color: #C21632; }
+    table { border-collapse: collapse; width: 100%; margin-top: 8px; }
+    th, td { border-bottom: 1px solid #ddd; padding: 4px 6px; text-align: right; }
+    th:first-child, td:first-child { text-align: left; }
+    th { background: #111; color: #fff; }
+    #files { display: none; }
+  </style>
+</head>
+<body>
+  <h1>月初３ファイル</h1>
+  <p>3つのExcelをまとめてドロップできます。順番とファイル名はどれでも構いません。中身で会員数・オプション・年齢を見分けます。</p>
+  <div id="drop" class="drop">ここに3ファイルをまとめてドロップ<br>またはクリックして選択</div>
+  <input id="files" type="file" multiple accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
+  <p>
+    <button id="apply" class="apply" type="button" disabled>この月として保存</button>
+  </p>
+  <div id="msg"></div>
+  <script>
+    var preview = null;
+    var drop = document.getElementById("drop");
+    var input = document.getElementById("files");
+    drop.onclick = function () { input.click(); };
+    input.onchange = function () { if (input.files && input.files.length) readList(input.files); };
+    drop.ondragover = function (e) { e.preventDefault(); drop.className = "drop over"; };
+    drop.ondragleave = function () { drop.className = "drop"; };
+    drop.ondrop = function (e) {
+      e.preventDefault();
+      drop.className = "drop";
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) readList(e.dataTransfer.files);
+    };
+    document.getElementById("apply").onclick = function () { applyPreview(); };
+
+    function readList(fileList) {
+      var files = [];
+      for (var i = 0; i < fileList.length; i++) files.push(fileList[i]);
+      if (files.length < 3) {
+        show("Excelを3つまとめて入れてください。今は " + files.length + " 件です。", true);
+        return;
+      }
+      setBusy(true);
+      show("中身を見て、どのファイルか判別しています…", false);
+      Promise.all(files.map(readOne)).then(function (packed) {
+        google.script.run
+          .withSuccessHandler(function (res) {
+            setBusy(false);
+            if (!res || !res.ok) {
+              show((res && res.message) || "読み取れませんでした", true);
+              return;
+            }
+            preview = res.preview;
+            render(preview);
+          })
+          .withFailureHandler(function (err) {
+            setBusy(false);
+            show(String(err && err.message || err), true);
+          })
+          .previewGessho3Files(packed);
+      }).catch(function (err) {
+        setBusy(false);
+        show(String(err && err.message || err), true);
+      });
+    }
+
+    function applyPreview() {
+      if (!preview) return;
+      setBusy(true);
+      show((preview.monthLabel || "") + " として保存しています…", false);
+      google.script.run
+        .withSuccessHandler(function (res) {
+          if (!res || !res.ok) {
+            setBusy(false);
+            show((res && res.message) || "保存できませんでした", true);
+            return;
+          }
+          document.body.innerHTML = "<h1>" + (res.monthLabel || "") + " を保存しました</h1><p>日報の月初へ反映し、シート「" + (res.sheetName || "") + "」に残しました。この画面は閉じます。</p>";
+          setTimeout(function () { google.script.host.close(); }, 900);
+        })
+        .withFailureHandler(function (err) {
+          setBusy(false);
+          show(String(err && err.message || err), true);
+        })
+        .applyGessho3Files({ preview: preview, writeGender: true });
+    }
+
+    function render(data) {
+      var known = (data.files || []).map(function (f) {
+        return "<tr><td>" + f.name + "</td><td>" + f.label + "</td></tr>";
+      }).join("");
+      var genderNote = data.gender.fitsOpening
+        ? "男女も月初に入れます（男 " + data.gender.male + " / 女 " + data.gender.female + "）。"
+        : "年齢の男女は当月末 " + data.gender.total + "人（男 " + data.gender.male + " / 女 " + data.gender.female + "）です。月初 " + data.member.next + "人とは合計が違うので、日報の男女は変えず、月の保存シートには残します。";
+      var rows = data.options.map(function (row) {
+        return "<tr><td>" + row.name + "</td><td>" + row.current + "</td><td>" + row.next + "</td></tr>";
+      }).join("");
+      document.getElementById("msg").innerHTML =
+        "<div class='note'><b>" + (data.monthLabel || "") + "</b> として保存します。日報の月 " + (data.b1 || "") + "。<br>" +
+        "月初会員数 " + data.member.current + " → <b>" + data.member.next + "</b><br>" +
+        "<span class='" + (data.gender.fitsOpening ? "" : "warn") + "'>" + genderNote + "</span></div>" +
+        "<table><tr><th>ファイル</th><th>中身</th></tr>" + known + "</table>" +
+        "<table><tr><th>オプション</th><th>いまの月初</th><th>保存する月初</th></tr>" + rows + "</table>";
+      document.getElementById("apply").disabled = false;
+      document.getElementById("apply").textContent = (data.monthLabel || "この月") + "として保存";
+    }
+
+    function readOne(file) {
+      return new Promise(function (resolve, reject) {
+        var reader = new FileReader();
+        reader.onload = function () {
+          resolve({
+            name: file.name,
+            mime: file.type || "application/vnd.ms-excel",
+            base64: String(reader.result).split(",")[1]
+          });
+        };
+        reader.onerror = function () { reject(reader.error); };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function show(text, isError) {
+      document.getElementById("msg").innerHTML = "<p class='" + (isError ? "warn" : "") + "'>" + text + "</p>";
+    }
+
+    function setBusy(busy) {
+      document.getElementById("apply").disabled = busy || !preview;
+    }
+  </script>
+</body>
+</html>
