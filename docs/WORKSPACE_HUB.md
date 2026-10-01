@@ -187,9 +187,17 @@ https://script.google.com/macros/s/AKfycbzMELimQThNdPUShwo2_KBzJd8kGy9BNdRyOYNgu
 - 表は 1行目に「当月の申請」の式がある列から始まる（**9/30 に左へ会員番号列を挿入したので Q列〜**。タブ選択は Q2 の赤いプルダウン、月は AG5、受付ID は AG1）。スクリプトは列を固定せず `masterApplyCol_` で探す
 - **会員番号（P列）**: P4 の関数で、表示中の名前（紹介は被紹介者）を `累計入会データ` G列（空白無視）と照合し F列の番号を出す。同名が複数（再入会など754人）なら電話番号下9桁で絞り、**届出日（M列）が最新の番号**。口コミのように会員番号列がある表はそれをそのまま表示。未入会・未貼り付けは空欄（`ensureMasterMemberNo_`）
 - **☑/☐**: 表の QUERY を `LET(src_,…,MAP(…))` で包み TRUE/FALSE を ☑/☐ 表示（`ensureMasterApplyCheckmarks_`）。表示だけなので付与の記録は元シート側で
-- どちらも onOpen と5分トリガーで自動復旧
+- どちらも5分トリガー（＋開いた時の installable onOpen → `billingPullTriggered`）で自動復旧
 - 口コミの「来店日」が 46294 のような数値表示（未対応・ユーザー確認待ち）
 - トップ H10 に「エンジョイポイント付与（口コミ確認後）」リンク（`ensureEnjoyPointLink_`）
+
+## 整理整頓（2026-10-01）
+
+- 削除したシート: 受付状況表 `OP契約一覧`（約3.5万行・参照なし）／ワークスペース `見学体験申請_backup_0927_1814`・`経堂マスタ_backup_0927_1814`（数式333個が裏で再計算されていた）・`未納_同期`（9/28 の古いログ）
+- Workspace GAS（r.js）: 一度きりの初期設定・装飾・修復用の関数 69 個と、それを呼ぶ Web API 分岐（setupHubHome / setupUnpaidView / setupKengakuJoinLive / fixMasterActuals など）を削除。約236KB→約152KB。必要になったら git 履歴（2026-10-01 以前）から戻す
+- 空の `onEdit` を削除。simple `onOpen` はメニュー作成だけにし、自動復旧（入会者一覧の連動・未納リンク・エンジョイ・会員番号・☑）は `billingPullTriggered`（5分＋開いた時）に一本化
+- 受付状況表 GAS: 読み取り専用の `api=audit`（シートごとのサイズ・数式数・参照）と `api=triggers` を追加。Web アプリは @34
+- 受付状況表のトリガー（r-kusaka 分）は 10時・17時の数値更新の2本。20時/21時の更新＋送信は店舗アカウント側のトリガー
 
 ## 課題・未対応（2026-09-29 時点）
 
