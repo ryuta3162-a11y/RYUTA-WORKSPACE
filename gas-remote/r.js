@@ -59,6 +59,7 @@ function onOpen() {
     .addItem('請求・回収を取得', 'billPullFromMenu')
     .addItem('口コミ管理を作り直す', 'rebuildReviewDeskFromMenu')
     .addItem('会員分析を作り直す', 'rebuildMemberAnalysisFromMenu')
+    .addItem('会議用ダッシュボードを作り直す', 'rebuildMeetingDashboardFromMenu')
     .addItem('規約退会を更新・表示', 'syncAndShowKiyakuFromMenu')
     .addItem('規約退会を隠す', 'hideKiyakuListFromMenu')
     .addItem('トップを作り直す', 'rebuildTopFromMenu')
