@@ -3506,7 +3506,7 @@ function polishKansouWithGemini(rawText) {
 var BILL_SHEET_ = '請求・回収実績';
 var BILL_OLD_SHEET_ = '未納_請求報告';
 var BILL_ANALYSIS_ROW_ = 19;
-var BILL_ANALYSIS_VER_ = '4';
+var BILL_ANALYSIS_VER_ = '5';
 var BILL_SOURCE_ID_ = '1qFF8HGOlSOczshMI5Vg5iTAgN_iLQ2aemJLp35V3rbA';
 var BILL_STORE_ = '経堂';
 var BILL_REF_TAB_ = '26年6月度';
@@ -3549,9 +3549,43 @@ function billColumnKeys_(head) {
 }
 
 function billCanon_(src) {
-  var ref = src.getSheetByName(BILL_REF_TAB_);
-  if (!ref) throw new Error('基準タブがありません: ' + BILL_REF_TAB_);
-  return billColumnKeys_(ref.getRange(1, 1, 3, BILL_LAST_COL_).getDisplayValues());
+  var months = billMonths_();
+  var base = null;
+  var lists = [];
+  for (var i = 0; i < months.length; i++) {
+    var tab = src.getSheetByName(months[i]);
+    if (!tab) continue;
+    var lastCol = Math.max(tab.getLastColumn(), 3);
+    var keys = billColumnKeys_(tab.getRange(1, 1, 3, lastCol).getDisplayValues());
+    if (months[i] === BILL_REF_TAB_) base = keys;
+    lists.push(keys);
+  }
+  if (!base) {
+    if (!lists.length) throw new Error('基準タブがありません: ' + BILL_REF_TAB_);
+    base = lists[0].slice();
+  } else {
+    base = base.slice();
+  }
+  var have = {};
+  base.forEach(function (k) { have[k.key] = true; });
+  lists.forEach(function (keys) {
+    for (var i = 0; i < keys.length; i++) {
+      if (have[keys[i].key]) continue;
+      var insertAt = base.length;
+      for (var p = i - 1; p >= 0; p--) {
+        for (var b = 0; b < base.length; b++) {
+          if (base[b].key === keys[p].key) {
+            insertAt = b + 1;
+            p = -1;
+            break;
+          }
+        }
+      }
+      base.splice(insertAt, 0, keys[i]);
+      have[keys[i].key] = true;
+    }
+  });
+  return base;
 }
 
 function billTabInfo_(tab) {
