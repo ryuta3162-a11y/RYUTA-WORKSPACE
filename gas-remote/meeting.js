@@ -11,7 +11,7 @@ var MEETING_CALC_ = '分析用_期間集計';
 var MEETING_JOIN_ = '累計入会データ';
 var MEETING_LEAVE_ = '累計退会データ';
 var MEETING_END_ = 8000;
-var MEETING_VER_ = '3';
+var MEETING_VER_ = '4';
 
 function rebuildMeetingDashboardFromMenu() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -40,15 +40,20 @@ function buildMeetingDashboard_(ss) {
 }
 
 function meetingEnsureSheet_(ss, name, afterName) {
-  var sh = ss.getSheetByName(name);
-  if (!sh) {
-    var after = afterName ? ss.getSheetByName(afterName) : null;
-    sh = ss.insertSheet(name, after ? after.getIndex() : ss.getSheets().length);
+  var after = afterName ? ss.getSheetByName(afterName) : null;
+  var idx = after ? after.getIndex() : ss.getSheets().length;
+  var old = ss.getSheetByName(name);
+  if (old) {
+    // 古い入力規則・結合が残ると途中で落ちるので削除して作り直す
+    try { ss.deleteSheet(old); } catch (eDel) {
+      old.clear();
+      try { old.clearDataValidations(); } catch (eV) {}
+      try { old.getCharts().forEach(function (ch) { old.removeChart(ch); }); } catch (eC) {}
+      try { old.clearConditionalFormatRules(); } catch (eR) {}
+      return old;
+    }
   }
-  sh.clear();
-  sh.getCharts().forEach(function (ch) { sh.removeChart(ch); });
-  sh.clearConditionalFormatRules();
-  try { sh.getProtections(SpreadsheetApp.ProtectionType.SHEET).forEach(function (p) { p.remove(); }); } catch (eP) {}
+  var sh = ss.insertSheet(name, Math.min(idx, ss.getSheets().length));
   return sh;
 }
 
@@ -486,7 +491,7 @@ function meetingBuildDash_(sh, theme) {
   );
   ['B', 'C', 'D', 'E'].forEach(function (col) {
     sh.getRange(col + '6').setFormula('=IF(OR(' + col + '4="",' + col + '5=""),"",' + col + '5-' + col + '4+1)')
-      .setFontSize(9).setHorizontalAlignment('center');
+      .setNumberFormat('0').setFontSize(9).setHorizontalAlignment('center');
   });
   sh.getRange(3, 1, 4, 5).setBorder(true, true, true, true, true, true, line, SpreadsheetApp.BorderStyle.SOLID);
   for (var rh = 3; rh <= 6; rh++) sh.setRowHeight(rh, 20);

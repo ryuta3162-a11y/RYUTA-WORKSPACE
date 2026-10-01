@@ -4039,7 +4039,7 @@ function billingPullTriggered() {
 var MEMBER_SHEET_ = '会員分析';
 var MEMBER_JOIN_SRC_ = '累計入会データ';
 var MEMBER_LEAVE_SRC_ = '累計退会データ';
-  var MEMBER_ANALYSIS_VER_ = '22';
+  var MEMBER_ANALYSIS_VER_ = '23';
 
 function memberAnalysisNote_(ss, msg) {
   try {
@@ -4184,16 +4184,24 @@ function buildMemberAnalysis_(ss) {
   ensureMemberCalcColumns_(ss);
   ensureVisitKind_(ss);
   var sh = ss.getSheetByName(MEMBER_SHEET_);
-  if (!sh) {
-    var afterBill = ss.getSheetByName(BILL_SHEET_);
-    sh = ss.insertSheet(MEMBER_SHEET_, afterBill ? afterBill.getIndex() : ss.getSheets().length);
+  var afterBill = ss.getSheetByName(BILL_SHEET_);
+  var idx = afterBill ? afterBill.getIndex() : ss.getSheets().length;
+  if (sh) {
+    // 古い入力規則が残ると K2 等で途中停止するため削除して作り直す
+    try {
+      ss.deleteSheet(sh);
+      sh = null;
+    } catch (eDel) {
+      sh.clear();
+      try { sh.clearDataValidations(); } catch (eV0) {}
+      try { sh.getCharts().forEach(function (ch) { sh.removeChart(ch); }); } catch (eC0) {}
+      try { sh.clearConditionalFormatRules(); } catch (eR0) {}
+    }
   }
+  if (!sh) sh = ss.insertSheet(MEMBER_SHEET_, Math.min(idx, ss.getSheets().length));
   ensureSheetColumns_(sh, 40);
-  sh.clear();
-  sh.getCharts().forEach(function (ch) { sh.removeChart(ch); });
-  sh.clearConditionalFormatRules();
-  try { sh.getRange(1, 1, Math.min(sh.getMaxRows(), 80), 36).breakApart(); } catch (eB) {}
   try { sh.clearDataValidations(); } catch (eV) {}
+  try { sh.getRange(1, 1, sh.getMaxRows(), sh.getMaxColumns()).clearDataValidations(); } catch (eV2) {}
   sh.setHiddenGridlines(true);
   sh.setTabColor('#9E9E9E');
 
