@@ -51,27 +51,18 @@ var RECEPTION_REFRESH_TOKEN_ = 'kyodo-ws-refresh-7f3c91';
 
 function onOpen() {
   var ui = SpreadsheetApp.getUi();
-  ui.createMenu('数値更新')
-  .addItem('受付状況表の数値を更新', 'refreshReceptionNumbersFromMenu')
-  .addItem('前回の更新時刻を確認', 'showReceptionRefreshStatus')
-  .addToUi();
-  ui.createMenu('月初３ファイル')
-  .addItem('3ファイルを取り込む', 'openGessho3Files')
-  .addItem('会員動向へ月初を転記（日報→本部）', 'syncHqOpeningFromMenu')
-  .addItem('会員動向の自動項目を数値転記', 'syncHqFormulasFromMenu')
-  .addItem('日報の写しを出す', 'ensureNippoMirror')
-  .addItem('累計入会・退会を整える', 'formatCumulativeSheets_')
-  .addItem('10月の日報を直す', 'fixOctoberNippo_')
-  .addToUi();
+  ui.createMenu('月初')
+    .addItem('取り込む', 'runMonthStartFromMenu')
+    .addToUi();
   ui.createMenu('ワークスペース')
-  .addItem('口コミ管理を作り直す', 'rebuildReviewDeskFromMenu')
-  .addItem('会員分析を作り直す', 'rebuildMemberAnalysisFromMenu')
-  .addItem('請求・回収を今すぐ取得', 'billPullFromMenu')
-  .addItem('規約退会リストを表示する', 'showKiyakuListFromMenu')
-  .addItem('規約退会リストを隠す', 'hideKiyakuListFromMenu')
-  .addItem('規約退会を今すぐ更新', 'syncKiyakuFromMenu')
-  .addItem('トップを作り直す', 'rebuildTopFromMenu')
-  .addToUi();
+    .addItem('受付の数値を更新', 'refreshReceptionNumbersFromMenu')
+    .addItem('請求・回収を取得', 'billPullFromMenu')
+    .addItem('口コミ管理を作り直す', 'rebuildReviewDeskFromMenu')
+    .addItem('会員分析を作り直す', 'rebuildMemberAnalysisFromMenu')
+    .addItem('規約退会を更新・表示', 'syncAndShowKiyakuFromMenu')
+    .addItem('規約退会を隠す', 'hideKiyakuListFromMenu')
+    .addItem('トップを作り直す', 'rebuildTopFromMenu')
+    .addToUi();
   try { hideGesshoSideSheets_(); } catch (eHideSide) { Logger.log(eHideSide); }
   try { ensureNippoMirror_(); } catch (eMirror) { Logger.log(eMirror); }
   try { installTokureiKaiinSheet(); } catch (eTokurei) { Logger.log(eTokurei); }
@@ -81,6 +72,12 @@ function onOpen() {
       formatCumulativeSheets_();
     }
   } catch (eLook) { Logger.log(eLook); }
+}
+
+/** 規約退会を更新して表示（メニュー統合用） */
+function syncAndShowKiyakuFromMenu() {
+  try { syncKiyakuFromMenu(); } catch (e1) { Logger.log(e1); }
+  try { showKiyakuListFromMenu(); } catch (e2) { Logger.log(e2); }
 }
 
 var JOIN_LIST_FIT365_ID_ = '1BbExBUCfyq1cfNqw4TvlwUriL-AfvghU9XT6McdzGTQ';

@@ -40,7 +40,33 @@ function openGessho3Files() {
   var html = HtmlService.createHtmlOutputFromFile('gessho3ui')
     .setWidth(760)
     .setHeight(640);
-  SpreadsheetApp.getUi().showModalDialog(html, '月初３ファイル');
+  SpreadsheetApp.getUi().showModalDialog(html, '月初');
+}
+
+/**
+ * メニュー「月初 → 取り込む」
+ * 1) いまの日報・請求から会員動向へ数値転記
+ * 2) 3ファイル取込ダイアログを開く
+ */
+function runMonthStartFromMenu() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  try {
+    ensureNippoMirror_();
+  } catch (eMirror) { Logger.log(eMirror); }
+  try {
+    var r = gessho3SyncHqFromNippo_();
+    if (r && r.ok) {
+      var autoN = r.auto && r.auto.wrote ? r.auto.wrote : 0;
+      ss.toast(
+        '会員動向を更新しました（' + (r.month || '') + '月・自動' + autoN + '件）。続けてExcelがあれば取り込んでください。',
+        '月初',
+        8
+      );
+    }
+  } catch (eHq) {
+    Logger.log(eHq);
+  }
+  openGessho3Files();
 }
 
 function previewGessho3Files(files) {
