@@ -956,6 +956,34 @@ function ensureNippoOpeningFemale_() {
   h12.setFormula('=C12-F12').setNumberFormat('0');
 }
 
+/**
+ * 日報 月末安定・翌月月初の男女。メールに載らない J〜N 列に計算を置く。
+ * 当月入会の男 = 累計入会データで性別が分かる当月開始者の男 ＋ まだ載っていない人数 × 月初の男比率
+ * 当月末退会の男 = 当月末退会 × 月初の男比率（退会メールに性別がないため）
+ */
+function ensureNippoGenderFlow_() {
+  var nippo = gessho3Nippo_();
+  var minus = gessho3GenderMinus_(nippo.getRange('B1').getDisplayValue());
+  var known = [[minus.startMale, minus.startMale + minus.startFemale]];
+  var cur = nippo.getRange('M13:N13').getValues();
+  if (cur[0][0] !== known[0][0] || cur[0][1] !== known[0][1]) nippo.getRange('M13:N13').setValues(known);
+  var want = {
+    J12: '男の内訳（メール外）', M12: '分かる男', N12: '分かる人数',
+    J13: '当月入会の男', J15: '当月末退会の男',
+    K13: '=IF(C13<=0,0,IF(N13>=C13,ROUND(C13*M13/MAX(N13,1)),M13+ROUND((C13-N13)*F12/C12)))',
+    K15: '=IF(C12<=0,0,ROUND(C15*F12/C12))',
+    F16: '=F12+K13', F17: '=F16-K15'
+  };
+  var changed = false;
+  Object.keys(want).forEach(function (a1) {
+    var rg = nippo.getRange(a1);
+    var v = want[a1];
+    if (v.charAt(0) === '=') { if (rg.getFormula() !== v) { rg.setFormula(v); changed = true; } }
+    else if (rg.getDisplayValue() !== v) { rg.setValue(v); changed = true; }
+  });
+  if (changed) nippo.getRange('J12:N15').setFontColor('#888888').setFontSize(9);
+}
+
 function fixOctoberNippo_() {
   var props = PropertiesService.getDocumentProperties();
   if (props.getProperty('OCTOBER_NIPPO_FIX') === 'v1') return { ok: true, skipped: true };
