@@ -11,7 +11,17 @@ var MEETING_CALC_ = '分析用_期間集計';
 var MEETING_JOIN_ = '累計入会データ';
 var MEETING_LEAVE_ = '累計退会データ';
 var MEETING_END_ = 8000;
-var MEETING_VER_ = '5';
+var MEETING_VER_ = '6';
+
+/** 日付をシリアルに（文字日付で N()=0 になる罠を避ける。ISNUMBER優先） */
+function meetingDateSerialExpr_(rangeA1) {
+  return 'IF(ISNUMBER(' + rangeA1 + '),' + rangeA1 + ',IFERROR(DATEVALUE(' + rangeA1 + '),0))';
+}
+
+/** 退会理由コード一覧（空欄・その他含む。合計＝期間内退会になること） */
+function meetingReasonCodes_() {
+  return ['M', 'A', 'N', 'U', 'B', 'D', 'W', 'S', 'X', 'R', 'V', 'I', 'T', 'J', '空欄', 'その他'];
+}
 
 function rebuildMeetingDashboardFromMenu() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -230,19 +240,25 @@ function meetingBuildCalc_(sh, theme) {
     }
   });
 
-  // 退会理由（行番号を+1: 51→52）
+  // 退会理由（空欄・J含む。合計が退会と一致すること）
   sh.getRange('A48').setValue('退会理由').setFontWeight('bold');
   sh.getRange(49, 1, 1, 5).setValues([['理由', 'A', 'B', 'C', 'D']]).setBackground(theme.mid).setFontColor('#ffffff');
-  var reasons = ['M', 'A', 'N', 'U', 'B', 'D', 'W', 'S', 'X', 'R', 'V', 'I', 'T', 'その他'];
+  var reasons = meetingReasonCodes_();
   for (var ri = 0; ri < reasons.length; ri++) {
     sh.getRange(50 + ri, 1).setValue(reasons[ri]).setBackground(theme.soft);
     for (var p4 = 0; p4 < 4; p4++) {
       sh.getRange(50 + ri, 2 + p4).setFormula(meetingReasonFormula_(p4, reasons[ri]));
     }
   }
+  // 理由合計（検算用）= 50〜65
+  sh.getRange(66, 1).setValue('理由合計').setFontWeight('bold').setBackground(theme.soft);
+  for (var pSum = 0; pSum < 4; pSum++) {
+    var sc = meetingPeriodCol_(pSum);
+    sh.getRange(66, 2 + pSum).setFormula('=IF(' + sc + '6="","",SUM(' + sc + '50:' + sc + '65))');
+  }
 
   // 在籍期間
-  sh.getRange('A65').setValue('退会者の在籍期間').setFontWeight('bold');
+  sh.getRange('A68').setValue('退会者の在籍期間').setFontWeight('bold');
   var tens = [
     ['0〜3ヶ月', 0, 3],
     ['4〜6ヶ月', 4, 6],
@@ -251,11 +267,11 @@ function meetingBuildCalc_(sh, theme) {
     ['25〜36ヶ月', 25, 36],
     ['37ヶ月以上', 37, 9999]
   ];
-  sh.getRange(66, 1, 1, 5).setValues([['在籍期間', 'A', 'B', 'C', 'D']]).setBackground(theme.mid).setFontColor('#ffffff');
+  sh.getRange(69, 1, 1, 5).setValues([['在籍期間', 'A', 'B', 'C', 'D']]).setBackground(theme.mid).setFontColor('#ffffff');
   for (var ti = 0; ti < tens.length; ti++) {
-    sh.getRange(67 + ti, 1).setValue(tens[ti][0]).setBackground(theme.soft);
+    sh.getRange(70 + ti, 1).setValue(tens[ti][0]).setBackground(theme.soft);
     for (var p5 = 0; p5 < 4; p5++) {
-      sh.getRange(67 + ti, 2 + p5).setFormula(meetingTenureFormula_(p5, tens[ti][1], tens[ti][2]));
+      sh.getRange(70 + ti, 2 + p5).setFormula(meetingTenureFormula_(p5, tens[ti][1], tens[ti][2]));
     }
   }
 
@@ -304,9 +320,9 @@ function meetingMetricFormula_(kind, p) {
   function sp(expr) {
     return '=IF(OR(' + start + '="",' + end + '=""),"",IFERROR(SUMPRODUCT((' + expr + ')*(' + base + ')),0))';
   }
-  // 日付比較：数値 / 文字日付の両方に耐える
-  var jd = 'IFERROR(N(' + joinDate + '),IFERROR(DATEVALUE(' + joinDate + '),0))';
-  var ld = 'IFERROR(N(' + leaveDate + '),IFERROR(DATEVALUE(' + leaveDate + '),0))';
+  // N(文字日付)=0 の罠を避け、ISNUMBER → DATEVALUE
+  var jd = meetingDateSerialExpr_(joinDate);
+  var ld = meetingDateSerialExpr_(leaveDate);
 
   if (kind === 'join') {
     return sp('(' + joinDate + '<>"")*(' + jd + '>=N(' + start + '))*(' + jd + '<=N(' + end + '))');
@@ -315,7 +331,6 @@ function meetingMetricFormula_(kind, p) {
     return sp('(' + leaveDate + '<>"")*(' + ld + '>=N(' + start + '))*(' + ld + '<=N(' + end + '))');
   }
   if (kind === 'transfer') {
-    // 移籍は日報の当月値のみ（累計に日次移籍が無い）。期間が今月を含むときだけ表示
     return '=IF(OR(' + start + '="",' + end + '=""),"",' +
       'IF(AND(N(' + start + ')<=EOMONTH(TODAY(),0),N(' + end + ')>=DATE(YEAR(TODAY()),MONTH(TODAY()),1)),' +
       'IFERROR(VALUE(\'日報\'!D14),0),""))';
@@ -361,7 +376,7 @@ function meetingAgeJoinFormula_(p, amin, amax) {
   var f = meetingFilterParts_();
   var joinDate = M + 'M$2:M$' + MEETING_END_;
   var birth = M + 'V$2:V$' + MEETING_END_;
-  var jd = 'IFERROR(N(' + joinDate + '),IFERROR(DATEVALUE(' + joinDate + '),0))';
+  var jd = meetingDateSerialExpr_(joinDate);
   var ageExpr = '(YEAR(' + end + ')-YEAR(' + birth + '))';
   var ageCond = amax >= 200
     ? '(' + birth + '<>"")*(' + ageExpr + '>=' + amin + ')'
@@ -377,7 +392,7 @@ function meetingGenderJoinFormula_(p, gender) {
   var end = col + '7';
   var f = meetingFilterParts_();
   var joinDate = M + 'M$2:M$' + MEETING_END_;
-  var jd = 'IFERROR(N(' + joinDate + '),IFERROR(DATEVALUE(' + joinDate + '),0))';
+  var jd = meetingDateSerialExpr_(joinDate);
   return '=IF(OR(' + start + '="",' + end + '=""),"",IFERROR(SUMPRODUCT((' + joinDate + '<>"")*(' + jd + '>=N(' + start + '))*(' + jd + '<=N(' + end + '))*(' +
     M + 'E$2:E$' + MEETING_END_ + '="' + gender + '")*(' + f.contract + ')*(' + f.proc + ')),0))';
 }
@@ -389,15 +404,20 @@ function meetingReasonFormula_(p, code) {
   var end = col + '7';
   var f = meetingFilterParts_();
   var leaveDate = M + 'O$2:O$' + MEETING_END_;
-  var reason = M + 'Q$2:Q$' + MEETING_END_;
-  var ld = 'IFERROR(N(' + leaveDate + '),IFERROR(DATEVALUE(' + leaveDate + '),0))';
-  if (code === 'その他') {
-    var known = '("M","A","N","U","B","D","W","S","X","R","V","I","T")';
-    return '=IF(OR(' + start + '="",' + end + '=""),"",IFERROR(SUMPRODUCT((' + leaveDate + '<>"")*(' + ld + '>=N(' + start + '))*(' + ld + '<=N(' + end + '))*(' +
-      reason + '<>"")*(ISNA(MATCH(' + reason + ',{' + known.slice(1, -1) + '},0)))*(' + f.gender + ')*(' + f.contract + ')*(' + f.proc + ')),0))';
+  var reason = 'TRIM(' + M + 'Q$2:Q$' + MEETING_END_ + '&"")';
+  var ld = meetingDateSerialExpr_(leaveDate);
+  var leaveIn = '(' + leaveDate + '<>"")*(' + ld + '>=N(' + start + '))*(' + ld + '<=N(' + end + '))';
+  if (code === '空欄') {
+    return '=IF(OR(' + start + '="",' + end + '=""),"",IFERROR(SUMPRODUCT(' + leaveIn + '*(' + reason + '="")*(' +
+      f.gender + ')*(' + f.contract + ')*(' + f.proc + ')),0))';
   }
-  return '=IF(OR(' + start + '="",' + end + '=""),"",IFERROR(SUMPRODUCT((' + leaveDate + '<>"")*(' + ld + '>=N(' + start + '))*(' + ld + '<=N(' + end + '))*(' +
-    reason + '="' + code + '")*(' + f.gender + ')*(' + f.contract + ')*(' + f.proc + ')),0))';
+  if (code === 'その他') {
+    var known = '{"M","A","N","U","B","D","W","S","X","R","V","I","T","J"}';
+    return '=IF(OR(' + start + '="",' + end + '=""),"",IFERROR(SUMPRODUCT(' + leaveIn + '*(' + reason + '<>"")*(ISNA(MATCH(' + reason + ',' + known + ',0)))*(' +
+      f.gender + ')*(' + f.contract + ')*(' + f.proc + ')),0))';
+  }
+  return '=IF(OR(' + start + '="",' + end + '=""),"",IFERROR(SUMPRODUCT(' + leaveIn + '*(' + reason + '="' + code + '")*(' +
+    f.gender + ')*(' + f.contract + ')*(' + f.proc + ')),0))';
 }
 
 function meetingTenureFormula_(p, tmin, tmax) {
@@ -408,7 +428,7 @@ function meetingTenureFormula_(p, tmin, tmax) {
   var f = meetingFilterParts_();
   var leaveDate = M + 'O$2:O$' + MEETING_END_;
   var tenure = M + 'R$2:R$' + MEETING_END_;
-  var ld = 'IFERROR(N(' + leaveDate + '),IFERROR(DATEVALUE(' + leaveDate + '),0))';
+  var ld = meetingDateSerialExpr_(leaveDate);
   return '=IF(OR(' + start + '="",' + end + '=""),"",IFERROR(SUMPRODUCT((' + leaveDate + '<>"")*(' + ld + '>=N(' + start + '))*(' + ld + '<=N(' + end + '))*' +
     '(IFERROR(VALUE(' + tenure + '),-1)>=' + tmin + ')*(IFERROR(VALUE(' + tenure + '),-1)<=' + tmax + ')*(' +
     f.gender + ')*(' + f.contract + ')*(' + f.proc + ')),0))';
@@ -508,8 +528,8 @@ function meetingBuildDash_(sh, theme) {
   kpiRow(9, '入会', 20, SHOW_JOIN, '#,##0');
   kpiRow(10, '退会', 21, SHOW_LEAVE, '#,##0');
   kpiRow(11, '移籍', 22, SHOW_MOVE, '#,##0');
-  // 純増は入会か退会を見ているとき
-  kpiRow(12, '純増', 23, 'OR(' + SHOW_JOIN + ',' + SHOW_LEAVE + ')', '+#,##0;-#,##0;0');
+  // 純増は入会と退会の差。片方だけだと誤解しやすいので両方ONのときだけ
+  kpiRow(12, '純増', 23, 'AND(' + SHOW_JOIN + ',' + SHOW_LEAVE + ')', '+#,##0;-#,##0;0');
   kpiRow(13, '退会率', 24, SHOW_LEAVE, '0.0%');
   kpiRow(14, '入会/日', 25, SHOW_JOIN, '0.00');
   kpiRow(15, '退会/日', 26, SHOW_LEAVE, '0.00');
@@ -533,9 +553,16 @@ function meetingBuildDash_(sh, theme) {
     sh.getRange(ar, 12).setFormula('=IF(OR(J' + ar + '="",K' + ar + '=""),"",J' + ar + '-K' + ar + ')');
     sh.getRange(ar, 13).setFormula('=IF(OR(J' + ar + '="",SUM($J$4:$J$10)=0),"",J' + ar + '/SUM($J$4:$J$10))');
   }
-  sh.getRange(4, 10, 7, 3).setNumberFormat('#,##0').setFontSize(9).setHorizontalAlignment('center');
-  sh.getRange(4, 13, 7, 1).setNumberFormat('0%').setFontSize(8).setFontColor(mute);
-  sh.getRange(3, 9, 8, 5).setBorder(true, true, true, true, true, true, line, SpreadsheetApp.BorderStyle.SOLID);
+  // 年代合計＝入会（検算）
+  sh.getRange(11, 9).setValue('合計').setFontWeight('bold').setBackground(mid).setFontSize(8);
+  sh.getRange(11, 10).setFormula('=IF(' + SHOW_JOIN + ',SUM(J4:J10),"")');
+  sh.getRange(11, 11).setFormula('=IF(' + SHOW_JOIN + ',SUM(K4:K10),"")');
+  sh.getRange(11, 12).setFormula('=IF(OR(J11="",K11=""),"",J11-K11)');
+  sh.getRange(11, 13).setFormula('=IF(OR(J11="",B9=""),"",J11-B9)');
+  sh.getRange(4, 10, 8, 3).setNumberFormat('#,##0').setFontSize(9).setHorizontalAlignment('center');
+  sh.getRange(4, 13, 8, 1).setNumberFormat('0%;+0%;0%').setFontSize(8).setFontColor(mute);
+  sh.getRange(11, 10, 1, 4).setNumberFormat('#,##0').setFontSize(8);
+  sh.getRange(3, 9, 9, 5).setBorder(true, true, true, true, true, true, line, SpreadsheetApp.BorderStyle.SOLID);
 
   // ---- 右：性別 ----
   sh.getRange(3, 15, 1, 4).setValues([['性別', '①', '②', '差']])
@@ -548,15 +575,19 @@ function meetingBuildDash_(sh, theme) {
     sh.getRange(gr, 17).setFormula('=IF(' + SHOW_JOIN + ',' + C + 'C' + (44 + gi) + ',"")');
     sh.getRange(gr, 18).setFormula('=IF(OR(P' + gr + '="",Q' + gr + '=""),"",P' + gr + '-Q' + gr + ')');
   });
-  sh.getRange(4, 16, 2, 3).setNumberFormat('#,##0').setFontSize(9).setHorizontalAlignment('center');
-  sh.getRange(3, 15, 3, 4).setBorder(true, true, true, true, true, true, line, SpreadsheetApp.BorderStyle.SOLID);
+  sh.getRange(6, 15).setValue('合計').setFontWeight('bold').setBackground(mid).setFontSize(8);
+  sh.getRange(6, 16).setFormula('=IF(' + SHOW_JOIN + ',SUM(P4:P5),"")');
+  sh.getRange(6, 17).setFormula('=IF(' + SHOW_JOIN + ',SUM(Q4:Q5),"")');
+  sh.getRange(6, 18).setFormula('=IF(OR(P6="",B9=""),"",P6-B9)');
+  sh.getRange(4, 16, 3, 3).setNumberFormat('#,##0').setFontSize(9).setHorizontalAlignment('center');
+  sh.getRange(3, 15, 4, 4).setBorder(true, true, true, true, true, true, line, SpreadsheetApp.BorderStyle.SOLID);
 
   // ---- 右：退会理由（横） ----
   sh.getRange(12, 9).setValue('退会理由').setFontWeight('bold').setFontSize(8).setBackground(mid);
   sh.getRange(12, 9, 1, 5).setBackground(mid);
   sh.getRange(13, 9, 1, 5).setValues([['理由', '①', '②', '差', '']])
     .setBackground(soft).setFontWeight('bold').setFontSize(8).setHorizontalAlignment('center');
-  var reasons = ['M', 'A', 'N', 'U', 'B', 'D', 'W', 'S', 'X', 'R', 'V', 'I', 'T', 'その他'];
+  var reasons = meetingReasonCodes_();
   for (var ri = 0; ri < reasons.length; ri++) {
     var rr = 14 + ri;
     var srcR = 50 + ri;
@@ -565,8 +596,17 @@ function meetingBuildDash_(sh, theme) {
     sh.getRange(rr, 11).setFormula('=IF(' + SHOW_LEAVE + ',' + C + 'C' + srcR + ',"")');
     sh.getRange(rr, 12).setFormula('=IF(OR(J' + rr + '="",K' + rr + '=""),"",J' + rr + '-K' + rr + ')');
   }
-  sh.getRange(14, 10, 14, 3).setNumberFormat('#,##0').setFontSize(8).setHorizontalAlignment('center');
-  sh.getRange(12, 9, 16, 4).setBorder(true, true, true, true, true, true, line, SpreadsheetApp.BorderStyle.SOLID);
+  var sumRow = 14 + reasons.length;
+  sh.getRange(sumRow, 9).setValue('合計').setFontWeight('bold').setBackground(mid).setFontSize(8);
+  sh.getRange(sumRow, 10).setFormula('=IF(' + SHOW_LEAVE + ',SUM(J14:J' + (sumRow - 1) + '),"")');
+  sh.getRange(sumRow, 11).setFormula('=IF(' + SHOW_LEAVE + ',SUM(K14:K' + (sumRow - 1) + '),"")');
+  sh.getRange(sumRow, 12).setFormula('=IF(OR(J' + sumRow + '="",K' + sumRow + '=""),"",J' + sumRow + '-K' + sumRow + ')');
+  // 退会との差（0であるべき）
+  sh.getRange(sumRow + 1, 9).setValue('対退会').setFontWeight('bold').setBackground(soft).setFontSize(8);
+  sh.getRange(sumRow + 1, 10).setFormula('=IF(OR(J' + sumRow + '="",B10=""),"",J' + sumRow + '-B10)');
+  sh.getRange(sumRow + 1, 11).setFormula('=IF(OR(K' + sumRow + '="",C10=""),"",K' + sumRow + '-C10)');
+  sh.getRange(14, 10, reasons.length + 2, 3).setNumberFormat('#,##0').setFontSize(8).setHorizontalAlignment('center');
+  sh.getRange(12, 9, reasons.length + 3, 4).setBorder(true, true, true, true, true, true, line, SpreadsheetApp.BorderStyle.SOLID);
 
   // ---- 在籍期間（退会）横並び ----
   sh.getRange(12, 15, 1, 4).setValues([['在籍', '①', '②', '差']])
@@ -576,12 +616,19 @@ function meetingBuildDash_(sh, theme) {
   for (var ti = 0; ti < tens.length; ti++) {
     var tr = 13 + ti;
     sh.getRange(tr, 15).setValue(tens[ti]).setBackground(soft).setFontSize(8);
-    sh.getRange(tr, 16).setFormula('=IF(' + SHOW_LEAVE + ',' + C + 'B' + (67 + ti) + ',"")');
-    sh.getRange(tr, 17).setFormula('=IF(' + SHOW_LEAVE + ',' + C + 'C' + (67 + ti) + ',"")');
+    sh.getRange(tr, 16).setFormula('=IF(' + SHOW_LEAVE + ',' + C + 'B' + (70 + ti) + ',"")');
+    sh.getRange(tr, 17).setFormula('=IF(' + SHOW_LEAVE + ',' + C + 'C' + (70 + ti) + ',"")');
     sh.getRange(tr, 18).setFormula('=IF(OR(P' + tr + '="",Q' + tr + '=""),"",P' + tr + '-Q' + tr + ')');
   }
-  sh.getRange(13, 16, 6, 3).setNumberFormat('#,##0').setFontSize(8).setHorizontalAlignment('center');
-  sh.getRange(12, 15, 7, 4).setBorder(true, true, true, true, true, true, line, SpreadsheetApp.BorderStyle.SOLID);
+  sh.getRange(19, 15).setValue('合計').setFontWeight('bold').setBackground(mid).setFontSize(8);
+  sh.getRange(19, 16).setFormula('=IF(' + SHOW_LEAVE + ',SUM(P13:P18),"")');
+  sh.getRange(19, 17).setFormula('=IF(' + SHOW_LEAVE + ',SUM(Q13:Q18),"")');
+  sh.getRange(19, 18).setFormula('=IF(OR(P19="",Q19=""),"",P19-Q19)');
+  sh.getRange(20, 15).setValue('対退会').setFontWeight('bold').setBackground(soft).setFontSize(8);
+  sh.getRange(20, 16).setFormula('=IF(OR(P19="",B10=""),"",P19-B10)');
+  sh.getRange(20, 17).setFormula('=IF(OR(Q19="",C10=""),"",Q19-C10)');
+  sh.getRange(13, 16, 8, 3).setNumberFormat('#,##0').setFontSize(8).setHorizontalAlignment('center');
+  sh.getRange(12, 15, 9, 4).setBorder(true, true, true, true, true, true, line, SpreadsheetApp.BorderStyle.SOLID);
 
   // 列幅
   sh.setColumnWidth(1, 72);
