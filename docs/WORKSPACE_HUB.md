@@ -221,7 +221,13 @@ https://script.google.com/macros/s/AKfycbzMELimQThNdPUShwo2_KBzJd8kGy9BNdRyOYNgu
 ## 今後やりたいこと（案）
 
 - 会員分析：退会理由別、入会月（7月キャンペーン等）ごとの継続率比較、早期退会者の特徴（年代×プラン）
-- 請求・回収実績と会員分析をトップのタイルに出す（`hubCatalog_` には追加済み。`setupHubHome` の再構築で表示）
+
+## トップ（2026-10 シンプル化）
+
+- クリックで開閉する仕組み（`onSelectionChange` / `handleHubHomeSelect_` / キー列 AX〜）は廃止。トップはただのリンク集
+- `ensureTopSimple_`（billingPullTriggered 内）が `TOP_LAYOUT_VERSION_` の版ごとに1回だけ作り直す。並びは `topSections_()`、右の外部リンクは `topExternalLinks_()`。変えたら版を上げて push
+- 区分：数字（経堂マスタ・日報・会員分析・会員動向）／未納（未納管理・推移・請求・回収実績）／現場（5枚）／販促（4枚）／データ（累計入会・累計退会）
+- `#gid=` リンクは非表示シートを開けないので、トップに載せたシートは表示のまま。経堂_* ・Tasks・WorkspaceSync・月初系は非表示
 
 ## ハマりどころ（GAS から数式を入れるとき）
 
