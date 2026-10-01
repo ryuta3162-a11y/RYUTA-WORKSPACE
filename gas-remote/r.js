@@ -3223,7 +3223,7 @@ function ensureEnjoyPointLink_(ss) {
 }
 
 /** トップの作り（版を上げると次の自動実行で作り直す） */
-var TOP_LAYOUT_VERSION_ = 'simple-v2';
+var TOP_LAYOUT_VERSION_ = 'simple-v3';
 var TOP_SRC_RECEPTION_ = 'https://docs.google.com/spreadsheets/d/14hxiLBzvGTuIpfZcoVjiHpz8b419OzUrtQAr5788h3w/edit';
 var TOP_SRC_UNPAID_ = 'https://docs.google.com/spreadsheets/d/10vpQRDfTdwx_Wb7JaSm3lZCkTk8msLyf8ggAHhI1shI/edit';
 var TOP_SRC_TRIAL_ = 'https://docs.google.com/spreadsheets/d/1RPUw0slNCit9ZwJgINGfv89oc2Hxw8zzAZyMt6g_QuY/edit';
@@ -3271,6 +3271,7 @@ function topExternalLinks_() {
   return [
     ['経堂　受付状況表', TOP_SRC_RECEPTION_],
     ['26年度未納管理ドライブ【経堂】', TOP_SRC_UNPAID_],
+    ['未納マニュアル', 'https://docs.google.com/presentation/d/1bcjGsBP2ZsjN8hzZ5Z7C-5ZXDxcuWCFgvqniVyn8gcA/edit'],
     ['経堂　見学・体験フォーム', TOP_SRC_TRIAL_],
     ['学校関係者割フォーム', 'https://docs.google.com/spreadsheets/d/1mmG_xM1WoWFKgpmOl5obsKXo_0GjWLnAnLY9hTGanVg/edit'],
     ['EAST口コミ回答者', TOP_SRC_REVIEW_],
