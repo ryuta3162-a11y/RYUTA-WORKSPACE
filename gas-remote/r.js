@@ -3379,7 +3379,7 @@ function ensureTopSimple_(ss) {
       var sub = sh.getRange(top + 1, col);
       var target = ss.getSheetByName(items[i].name);
       if (target) {
-        if (target.isSheetHidden()) { try { target.showSheet(); } catch (eS) {} }
+        // 非表示シートは自動で出さない（ユーザーが隠したタブを保つ）
         tile.setFormula(topLinkFormula_('#gid=' + target.getSheetId(), items[i].name));
         shown.push(items[i].name);
       } else {
@@ -4170,12 +4170,13 @@ function buildMemberAnalysis_(ss) {
     var afterBill = ss.getSheetByName(BILL_SHEET_);
     sh = ss.insertSheet(MEMBER_SHEET_, afterBill ? afterBill.getIndex() : ss.getSheets().length);
   }
+  // 先に列を足りるようにしてから触る（「列は範囲外」防止）。他シートの表示／非表示は一切変えない。
+  ensureSheetColumns_(sh, 50);
   sh.clear();
   sh.getCharts().forEach(function (ch) { sh.removeChart(ch); });
   sh.clearConditionalFormatRules();
-  try { sh.getRange(1, 1, Math.min(sh.getMaxRows(), 120), Math.min(sh.getMaxColumns(), 50)).breakApart(); } catch (eB) {}
+  try { sh.getRange(1, 1, Math.min(sh.getMaxRows(), 120), 12).breakApart(); } catch (eB) {}
   try { sh.getRange(1, 1, 2, 8).clearDataValidations(); } catch (eV) {}
-  try { sh.showColumns(1, Math.min(sh.getMaxColumns(), 50)); } catch (eShow) {}
   sh.setHiddenGridlines(true);
   sh.setTabColor('#111111');
 
@@ -4361,8 +4362,8 @@ function buildMemberAnalysis_(ss) {
   sh.getRange(24, side + 1, 16, 1).setNumberFormat('#,##0').setFontSize(9);
   sh.getRange(24, side, 16, 1).setFontSize(9);
 
-  // グラフ用データ（非表示）AN=年代名+%、AO=人数（基準月） / AP=AQ 比較1 / AR=AS 比較2
-  if (sh.getMaxColumns() < 50) sh.insertColumnsAfter(sh.getMaxColumns(), 50 - sh.getMaxColumns());
+  // グラフ用データ（非表示列）
+  ensureSheetColumns_(sh, 50);
   for (var p = 0; p < bands.length; p++) {
     var src = 16 + p; // age data rows
     sh.getRange(10 + p, 40).setFormula('=IF(OR($AA$1="",A' + src + '=""),"",A' + src + ')');
@@ -4374,8 +4375,8 @@ function buildMemberAnalysis_(ss) {
   }
   sh.getRange(9, 40, 1, 6).setValues([['基準月年代', '人数', '比較1年代', '人数', '比較2年代', '人数']]);
 
-  try { sh.hideColumns(27, 3); } catch (eDate) {} // AA-AC
-  try { sh.hideColumns(40, 6); } catch (eH) {}
+  safeHideColumns_(sh, 27, 3); // AA-AC
+  safeHideColumns_(sh, 40, 6);
 
   var rules = [
     SpreadsheetApp.newConditionalFormatRule().whenNumberNotEqualTo(0).setFontColor(theme.red).setBold(true)
@@ -4392,6 +4393,21 @@ function buildMemberAnalysis_(ss) {
   memberAnalysisCharts_(sh);
   memberAnalysisNote_(ss, 'tables');
   return { ok: true };
+}
+
+/** シートの列数を最低 n まで増やす（他シートには触れない） */
+function ensureSheetColumns_(sh, n) {
+  if (!sh) return;
+  var max = sh.getMaxColumns();
+  if (max < n) {
+    sh.insertColumnsAfter(max, n - max);
+  }
+}
+
+function safeHideColumns_(sh, start, num) {
+  if (!sh || num < 1) return;
+  if (start + num - 1 > sh.getMaxColumns()) return;
+  try { sh.hideColumns(start, num); } catch (e) {}
 }
 
 function memberAnalysisMonthTitles_(sh) {
