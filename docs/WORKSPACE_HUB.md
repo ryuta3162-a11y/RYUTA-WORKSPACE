@@ -197,7 +197,8 @@ https://script.google.com/macros/s/AKfycbzMELimQThNdPUShwo2_KBzJd8kGy9BNdRyOYNgu
 - Workspace GAS（r.js）: 一度きりの初期設定・装飾・修復用の関数 69 個と、それを呼ぶ Web API 分岐（setupHubHome / setupUnpaidView / setupKengakuJoinLive / fixMasterActuals など）を削除。約236KB→約152KB。必要になったら git 履歴（2026-10-01 以前）から戻す
 - 空の `onEdit` を削除。simple `onOpen` はメニュー作成だけにし、自動復旧（入会者一覧の連動・未納リンク・エンジョイ・会員番号・☑）は `billingPullTriggered`（5分＋開いた時）に一本化
 - 受付状況表 GAS: 読み取り専用の `api=audit`（シートごとのサイズ・数式数・参照）と `api=triggers` を追加。Web アプリは @34
-- 受付状況表のトリガー（r-kusaka 分）は 10時・17時の数値更新の2本。20時/21時の更新＋送信は店舗アカウント側のトリガー
+- 受付状況表のトリガー（r-kusaka 分）は 10時・17時の数値更新の2本。20時/21時の更新＋送信は店舗アカウント側のトリガー（送信直前に数値更新が走る。`api=triggers` の sentDays で毎日送信を確認できる）
+- 日報 D21:E（契約・解約）は **受付状況表の数値更新だけ**が書く（10/17/20/21時の自動＋ワークスペースのメニュー「受付状況表の数値を更新」）。旧 `日報オプションをB1連動`（関数を書き込む版）は削除
 
 ## 課題・未対応（2026-09-29 時点）
 
