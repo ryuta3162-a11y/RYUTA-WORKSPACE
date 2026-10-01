@@ -657,10 +657,13 @@ function gessho3WriteNippo_(nippo, preview, writeGender) {
 }
 
 /**
- * 会員動向（本部シート「経堂」31〜46行）の当月の列へ、オプション区分別実績表の当月末契約数を入れる。
- * すでに数字が入っているセルは上書きしない。
+ * 会員動向（本部シート「経堂」）の当月列へ、日報と同じ「月初」を転記する。
+ * - 3行: 月初会員数
+ * - 31〜46行: オプション月初（日報 C21:C36 / preview.options[].next）
+ * 取込のたびに上書きする（空のときだけだと昔の当月末が残るため）。
  */
 var GESSHO3_HQ_ID_ = '1LOOUG97wuiKbhzl0BjJstXgLaaSCZAKNFdD8P3I5x_o';
+var GESSHO3_HQ_MEMBER_ROW_ = 3;
 var GESSHO3_HQ_ROWS_ = [
   [31, '安心サポート'], [32, '安心サポートVIP'], [33, 'オンラインレッスン'], [34, 'セルフエステ'],
   [35, 'タンニング'], [36, 'プロテイン12杯'], [37, 'プロテイン無制限'], [38, 'ホットスタジオ'],
@@ -678,15 +681,70 @@ function gessho3WriteHq_(preview) {
   var sh = SpreadsheetApp.openById(GESSHO3_HQ_ID_).getSheetByName('経堂');
   if (!sh) return { ok: false, message: '会員動向に経堂シートがありません' };
   if (Number(sh.getRange(1, col).getValue()) !== month) return { ok: false, message: '会員動向の月の列が見つかりません' };
-  var cur = sh.getRange(31, col, 16, 1).getValues();
+
   var wrote = 0;
-  GESSHO3_HQ_ROWS_.forEach(function (pair, i) {
+  if (preview.member && preview.member.next != null && preview.member.next !== '') {
+    sh.getRange(GESSHO3_HQ_MEMBER_ROW_, col).setValue(Number(preview.member.next)).setNumberFormat('0')
+      .setNote('月初３ファイル→日報と同じ月初会員（自動転記）');
+    wrote++;
+  }
+  GESSHO3_HQ_ROWS_.forEach(function (pair) {
     var row = byKey[pair[1]];
-    if (!row || !row.end || cur[i][0] !== '') return;
-    sh.getRange(pair[0], col).setValue(row.end);
+    if (!row || row.next === '' || row.next == null) return;
+    sh.getRange(pair[0], col).setValue(Number(row.next)).setNumberFormat('0');
     wrote++;
   });
-  return { ok: true, column: col, wrote: wrote };
+  return { ok: true, column: col, month: month, wrote: wrote, kind: 'opening' };
+}
+
+/**
+ * すでに日報へ入っている月初を会員動向へ転記（Excelの再取込なし）。
+ * 日報 B1 の月から列を決め、C12 と C21:C36 を書く。
+ */
+function gessho3SyncHqFromNippo_() {
+  var nippo = gessho3Nippo_();
+  var b1 = String(nippo.getRange('B1').getDisplayValue() || '');
+  var monthLabel = gessho3MonthLabel_(b1);
+  var labels = nippo.getRange(GESSHO3_START_ROW_, GESSHO3_LABEL_COL_, GESSHO3_OP_LIST_.length, 1).getDisplayValues();
+  var opening = nippo.getRange(GESSHO3_START_ROW_, GESSHO3_OPENING_COL_, GESSHO3_OP_LIST_.length, 1).getValues();
+  var options = [];
+  for (var i = 0; i < GESSHO3_OP_LIST_.length; i++) {
+    options.push({
+      name: GESSHO3_OP_LIST_[i],
+      next: gessho3Num_(opening[i][0])
+    });
+    // 日報のラベルが別名でもマッチできるように、表示名でも載せる
+    var shown = String(labels[i][0] || '').trim();
+    if (shown && gessho3MatchKey_(shown) !== GESSHO3_OP_LIST_[i]) {
+      options.push({ name: shown, next: gessho3Num_(opening[i][0]) });
+    }
+  }
+  var preview = {
+    monthLabel: monthLabel,
+    member: { next: gessho3Num_(nippo.getRange('C12').getValue()) },
+    options: options
+  };
+  return gessho3WriteHq_(preview);
+}
+
+function syncHqOpeningFromMenu() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  try {
+    var r = gessho3SyncHqFromNippo_();
+    if (!r || !r.ok) {
+      ss.toast(String(r && r.message || '転記できませんでした'), '会員動向', 10);
+      return r;
+    }
+    ss.toast(
+      '会員動向へ月初を転記しました（' + (r.month || '') + '月列・' + r.wrote + '件）',
+      '会員動向',
+      10
+    );
+    return r;
+  } catch (err) {
+    ss.toast('転記エラー: ' + String(err && err.message ? err.message : err), '会員動向', 12);
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
 }
 
 function gessho3MonthLabel_(b1) {
@@ -718,7 +776,7 @@ function gessho3SaveMonth_(preview, written) {
     ['女', preview.gender.female, '年齢表（当月末）'],
     ['休会', preview.member.pause, written.genderWritten ? '男女は日報へ書いた' : '男女は月初と合計が違うため日報には未記入'],
     [],
-    ['オプション', '月初', '取込前の日報', '当月末（会員動向へ）']
+    ['オプション', '月初（日報・会員動向へ）', '取込前の日報', '当月末（参考）']
   ];
   preview.options.forEach(function (row) {
     rows.push([row.name, row.next, row.current, row.end]);
