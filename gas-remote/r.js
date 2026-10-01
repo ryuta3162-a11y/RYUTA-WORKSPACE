@@ -61,6 +61,13 @@ function onOpen() {
   .addItem('累計入会・退会を整える', 'formatCumulativeSheets_')
   .addItem('10月の日報を直す', 'fixOctoberNippo_')
   .addToUi();
+  ui.createMenu('ワークスペース')
+  .addItem('口コミ管理を作り直す', 'rebuildReviewDeskFromMenu')
+  .addItem('会員分析を作り直す', 'rebuildMemberAnalysisFromMenu')
+  .addItem('請求・回収を今すぐ取得', 'billPullFromMenu')
+  .addItem('規約退会リストを今すぐ更新', 'syncKiyakuFromMenu')
+  .addItem('トップを作り直す', 'rebuildTopFromMenu')
+  .addToUi();
   try { hideGesshoSideSheets_(); } catch (eHideSide) { Logger.log(eHideSide); }
   try { ensureNippoMirror_(); } catch (eMirror) { Logger.log(eMirror); }
   try { installTokureiKaiinSheet(); } catch (eTokurei) { Logger.log(eTokurei); }
@@ -3047,28 +3054,49 @@ var UNPAID_SOURCE_ID_ = '10vpQRDfTdwx_Wb7JaSm3lZCkTk8msLyf8ggAHhI1shI';
 var UNPAID_SHEET_ = '未納管理';
 var HUB_HOME_SHEET_ = 'トップ';
 
-/** デスノート寄りの配色。クリーム紙・墨・血赤。大きくは変えない */
-function dnTheme_() {
+/**
+ * ワークスペース共通の見た目（未納管理ベース）。
+ * 白・黒・グレー＋赤1色。カラフルにしない。
+ */
+function hubTheme_() {
   return {
-    ink: '#140C0C',
-    paper: '#F4ECD9',
-    cream: '#E9DCC6',
+    ink: '#111111',
+    paper: '#FFFFFF',
+    soft: '#F5F5F5',
+    mute: '#7A7A7A',
+    line: '#D9D9D9',
+    border: '#E0E0E0',
+    red: '#B91C1C',
     blood: '#8B1216',
-    apple: '#B91C1C',
     ash: '#5C5346',
-    line: '#C9B896',
-    ghost: '#FBF6EA'
+    mid: '#424242',
+    chart: ['#111111', '#424242', '#6B6B6B', '#9E9E9E', '#B91C1C', '#D4D4D4', '#F5F5F5']
+  };
+}
+
+/** 旧名。hubTheme_ に揃える（クリーム紙はやめて白黒＋赤） */
+function dnTheme_() {
+  var h = hubTheme_();
+  return {
+    ink: h.ink,
+    paper: h.paper,
+    cream: h.soft,
+    blood: h.blood,
+    apple: h.red,
+    ash: h.ash,
+    line: h.line,
+    ghost: h.soft
   };
 }
 
 function hubTabColorFor_(name) {
-  var t = dnTheme_();
-  if (name === HUB_HOME_SHEET_) return '#111111';
-  if (name === '経堂マスタ') return t.ink;
-  if (name.indexOf('未納') === 0 || name === '請求・回収実績') return t.blood;
+  var t = hubTheme_();
+  if (name === HUB_HOME_SHEET_) return t.ink;
+  if (name === '経堂マスタ' || name === '会員分析') return t.ink;
+  if (name.indexOf('未納') === 0 || name === '請求・回収実績' || name === '規約退会リスト') return t.blood;
+  if (name === '口コミ管理' || name.indexOf('口コミ') === 0) return t.blood;
   if (name.indexOf('見学体験') === 0 && name.indexOf('backup') === -1) return '#6B3A1F';
   if (name.indexOf('販促_') === 0) return '#3F4A28';
-  if (name.indexOf('口コミ') === 0) return '#5A1F2A';
   if (name.indexOf('マシンレクチャー') === 0) return '#2C4A3A';
   if (name.indexOf('入会者一覧') === 0) return '#3A3228';
   if (name.indexOf('会員動向') !== -1) return '#4A4038';
@@ -3223,7 +3251,7 @@ function ensureEnjoyPointLink_(ss) {
 }
 
 /** トップの作り（版を上げると次の自動実行で作り直す） */
-var TOP_LAYOUT_VERSION_ = 'simple-v3';
+var TOP_LAYOUT_VERSION_ = 'simple-v4';
 var TOP_SRC_RECEPTION_ = 'https://docs.google.com/spreadsheets/d/14hxiLBzvGTuIpfZcoVjiHpz8b419OzUrtQAr5788h3w/edit';
 var TOP_SRC_UNPAID_ = 'https://docs.google.com/spreadsheets/d/10vpQRDfTdwx_Wb7JaSm3lZCkTk8msLyf8ggAHhI1shI/edit';
 var TOP_SRC_TRIAL_ = 'https://docs.google.com/spreadsheets/d/1RPUw0slNCit9ZwJgINGfv89oc2Hxw8zzAZyMt6g_QuY/edit';
@@ -3250,6 +3278,7 @@ function topSections_() {
     { label: '現場', items: [
       { name: '見学体験申請', sub: TOP_SRC_TRIAL_ },
       { name: '学割', sub: TOP_SRC_SCHOOL_ },
+      { name: '口コミ管理', sub: { text: '付与→エンジョイまでこの1枚' } },
       { name: '口コミ_経堂', sub: TOP_SRC_REVIEW_ },
       { name: 'マシンレクチャー申込', sub: TOP_SRC_LECTURE_ },
       { name: '入会者一覧＋自動メール管理', sub: TOP_SRC_LECTURE_ }
@@ -3506,14 +3535,14 @@ function polishKansouWithGemini(rawText) {
 var BILL_SHEET_ = '請求・回収実績';
 var BILL_OLD_SHEET_ = '未納_請求報告';
 var BILL_ANALYSIS_ROW_ = 19;
-var BILL_ANALYSIS_VER_ = '5';
+var BILL_ANALYSIS_VER_ = '6';
 var BILL_SOURCE_ID_ = '1qFF8HGOlSOczshMI5Vg5iTAgN_iLQ2aemJLp35V3rbA';
 var BILL_STORE_ = '経堂';
 var BILL_REF_TAB_ = '26年6月度';
 var BILL_LAST_COL_ = 34;
 var BILL_FIRST_ROW_ = 5;
-var BILL_RED_ = '#f4cccc';
-var BILL_CALC_ = '#eeeeee';
+var BILL_RED_ = '#F4CCCC';
+var BILL_CALC_ = '#EEEEEE';
 var BILL_NOTE_ = '白いセルに入力すると元シートの経堂行へすぐ反映　赤＝未入力　グレー＝元シートの自動計算（入力不可）';
 var UNPAID_FOLLOWUP_ID_ = '1NvIIRTXC9XCAuib5USFouigkvmM8H2WDBOTWLjfN8oM';
 
@@ -3836,17 +3865,21 @@ function billEnsureAnalysis_(sh, canon) {
     .addRange(sh.getRange('A' + hdr + ':B' + last))
     .addRange(sh.getRange('D' + hdr + ':D' + last))
     .setNumHeaders(1)
-    .setOption('title', '売上（棒・左の目盛り）と客単価（赤線・右の目盛り）')
+    .setOption('title', '売上（棒・左）と客単価（赤線・右）')
+    .setOption('titleTextStyle', { fontName: 'Meiryo', fontSize: 13, bold: true, color: '#111111' })
     .setOption('seriesType', 'bars')
     .setOption('series', {
-      0: { type: 'bars', color: '#424242', targetAxisIndex: 0 },
-      1: { type: 'line', color: '#c5221f', lineWidth: 2, pointSize: 6, targetAxisIndex: 1, dataLabel: 'value' }
+      0: { type: 'bars', color: '#111111', targetAxisIndex: 0 },
+      1: { type: 'line', color: '#B91C1C', lineWidth: 2, pointSize: 5, targetAxisIndex: 1, dataLabel: 'value' }
     })
     .setOption('vAxes', {
-      0: { format: 'short', viewWindow: { min: 0 }, gridlines: { count: 4 } },
-      1: { format: '¥#,##0', viewWindow: { min: 0, max: 12000 }, gridlines: { count: 4 } }
+      0: { format: 'short', viewWindow: { min: 0 }, gridlines: { count: 4, color: '#E0E0E0' }, textStyle: { color: '#7A7A7A' } },
+      1: { format: '¥#,##0', viewWindow: { min: 0, max: 12000 }, gridlines: { count: 4, color: '#E0E0E0' }, textStyle: { color: '#7A7A7A' } }
     })
-    .setOption('legend', { position: 'bottom' })
+    .setOption('hAxis', { textStyle: { fontName: 'Meiryo', fontSize: 10, color: '#111111' } })
+    .setOption('legend', { position: 'bottom', textStyle: { fontName: 'Meiryo', fontSize: 10, color: '#111111' } })
+    .setOption('backgroundColor', '#FFFFFF')
+    .setOption('chartArea', { left: 56, top: 48, width: '78%', height: '65%' })
     .setOption('width', 620)
     .setOption('height', 300)
     .setPosition(chartRow, 1, 0, 0)
@@ -3858,11 +3891,15 @@ function billEnsureAnalysis_(sh, canon) {
     .addRange(sh.getRange('F' + hdr + ':F' + last))
     .setNumHeaders(1)
     .setOption('title', '回収率（回収金額 ÷ 売上）')
+    .setOption('titleTextStyle', { fontName: 'Meiryo', fontSize: 13, bold: true, color: '#111111' })
     .setOption('series', {
-      0: { color: '#000000', lineWidth: 3, pointSize: 6, dataLabel: 'value' }
+      0: { color: '#B91C1C', lineWidth: 3, pointSize: 5, dataLabel: 'value' }
     })
-    .setOption('vAxis', { format: '0%', viewWindow: { min: 0.8, max: 1 }, gridlines: { count: 5 } })
+    .setOption('vAxis', { format: '0%', viewWindow: { min: 0.8, max: 1 }, gridlines: { count: 5, color: '#E0E0E0' }, textStyle: { color: '#7A7A7A' } })
+    .setOption('hAxis', { textStyle: { fontName: 'Meiryo', fontSize: 10, color: '#111111' } })
     .setOption('legend', { position: 'none' })
+    .setOption('backgroundColor', '#FFFFFF')
+    .setOption('chartArea', { left: 56, top: 48, width: '78%', height: '65%' })
     .setOption('width', 620)
     .setOption('height', 300)
     .setPosition(chartRow, 8, 0, 0)
@@ -3952,6 +3989,8 @@ function billingPullTriggered() {
   try { ensureMasterApplyCheckmarks_(ss); } catch (e4) { console.error(e4); }
   try { linkJoinListLive_(ss, false); } catch (e6) { console.error(e6); }
   try { linkUnpaidFollowup_(ss); } catch (e7) { console.error(e7); }
+  try { ensureReviewDesk_(ss, false); } catch (e16) { console.error(e16); }
+  try { ensureReviewSheetChrome_(ss); } catch (e17) { console.error(e17); }
   try { syncKiyakuList_(ss, false); } catch (e13) { console.error(e13); }
   try { fixHqSeptLeave_(); } catch (e14) { console.error(e14); }
   try { fixNippoOctKiyaku_(); } catch (e15) { console.error(e15); }
@@ -3965,7 +4004,7 @@ function billingPullTriggered() {
 var MEMBER_SHEET_ = '会員分析';
 var MEMBER_JOIN_SRC_ = '累計入会データ';
 var MEMBER_LEAVE_SRC_ = '累計退会データ';
-var MEMBER_ANALYSIS_VER_ = '16';
+var MEMBER_ANALYSIS_VER_ = '17';
 
 function memberAnalysisNote_(ss, msg) {
   try {
@@ -4360,7 +4399,8 @@ function memberAnalysisMonthTitles_(sh) {
 function memberAnalysisCharts_(sh) {
   if (!sh) return;
   sh.getCharts().forEach(function (ch) { sh.removeChart(ch); });
-  var colors = ['#2F6FED', '#14B8A6', '#3FA34D', '#E2B007', '#E07A2F', '#D94B4B', '#7C5CBF'];
+  var theme = hubTheme_();
+  var colors = theme.chart;
   var titles = memberAnalysisMonthTitles_(sh);
   var sources = [40, 43, 46];
   var anchors = [1, 5, 9];
@@ -4370,17 +4410,18 @@ function memberAnalysisCharts_(sh) {
       .addRange(sh.getRange(10, sources[i], 7, 2))
       .setNumHeaders(0)
       .setOption('title', titles[i])
-      .setOption('pieHole', 0.42)
+      .setOption('pieHole', 0.46)
       .setOption('pieSliceText', 'percentage')
       .setOption('sliceVisibilityThreshold', 0)
-      .setOption('pieSliceTextStyle', { fontName: 'Meiryo', fontSize: 12 })
-      .setOption('legend', { position: 'right', textStyle: { fontName: 'Meiryo', fontSize: 12, color: '#111111' } })
-      .setOption('titleTextStyle', { fontName: 'Meiryo', fontSize: 15, bold: true, color: '#111111' })
+      .setOption('pieSliceTextStyle', { fontName: 'Meiryo', fontSize: 11, color: '#111111' })
+      .setOption('legend', { position: 'right', textStyle: { fontName: 'Meiryo', fontSize: 11, color: '#111111' } })
+      .setOption('titleTextStyle', { fontName: 'Meiryo', fontSize: 14, bold: true, color: '#111111' })
       .setOption('colors', colors)
-      .setOption('backgroundColor', '#ffffff')
-      .setOption('pieSliceBorderColor', '#ffffff')
+      .setOption('backgroundColor', '#FFFFFF')
+      .setOption('pieSliceBorderColor', '#FFFFFF')
+      .setOption('chartArea', { left: 16, top: 40, width: '90%', height: '80%' })
       .setOption('width', 400)
-      .setOption('height', 360)
+      .setOption('height', 340)
       .setPosition(28, anchors[i], 0, 0)
       .build();
     sh.insertChart(chart);
@@ -4394,6 +4435,152 @@ function linkUnpaidFollowup_(ss) {
   if (/HYPERLINK/i.test(String(a4.getFormula() || ''))) return;
   sh.getRange('A3').copyTo(a4, SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
   a4.setFormula('=HYPERLINK("https://docs.google.com/spreadsheets/d/' + UNPAID_FOLLOWUP_ID_ + '/edit","対応後☑用シートを開く ↗")');
+}
+
+var REVIEW_DESK_SHEET_ = '口コミ管理';
+var REVIEW_LIST_SHEET_ = '口コミ_経堂';
+var REVIEW_DESK_VER_ = 'v2';
+var REVIEW_CHROME_VER_ = 'v2';
+
+function rebuildReviewDeskFromMenu() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  PropertiesService.getDocumentProperties().deleteProperty('REVIEW_DESK_V');
+  var r = ensureReviewDesk_(ss, true);
+  try { ensureReviewSheetChrome_(ss); } catch (e) {}
+  ss.toast(r && r.ok ? '口コミ管理を作り直しました' : String(r && r.message || '失敗'), '口コミ管理', 8);
+  var sh = ss.getSheetByName(REVIEW_DESK_SHEET_);
+  if (sh) ss.setActiveSheet(sh);
+}
+
+function rebuildMemberAnalysisFromMenu() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  PropertiesService.getDocumentProperties().deleteProperty('MEMBER_ANALYSIS_SIG');
+  memberAnalysisIfChanged_(ss);
+  ss.toast('会員分析を作り直しました（グラフは白黒＋赤）', '会員分析', 8);
+  var sh = ss.getSheetByName(MEMBER_SHEET_);
+  if (sh) ss.setActiveSheet(sh);
+}
+
+function billPullFromMenu() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var r = billPull_(ss);
+  ss.toast(r && r.ok ? ('請求・回収を更新しました（' + r.months + '月×' + r.cols + '列）') : String(r && r.message || '失敗'), '請求・回収実績', 8);
+  var sh = ss.getSheetByName(BILL_SHEET_);
+  if (sh) ss.setActiveSheet(sh);
+}
+
+function syncKiyakuFromMenu() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var r = syncKiyakuList_(ss, true);
+  ss.toast(r && r.ok ? ('規約退会リスト ' + (r.count != null ? r.count + '名' : '更新')) : String(r && r.message || '失敗'), '規約退会', 8);
+  var sh = ss.getSheetByName(KIYAKU_SHEET_);
+  if (sh) ss.setActiveSheet(sh);
+}
+
+function rebuildTopFromMenu() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  PropertiesService.getDocumentProperties().deleteProperty('TOP_LAYOUT_V');
+  ensureTopSimple_(ss);
+  ss.toast('トップを作り直しました', 'トップ', 6);
+  var sh = ss.getSheetByName(HUB_HOME_SHEET_);
+  if (sh) ss.setActiveSheet(sh);
+}
+
+/**
+ * 口コミの司令塔。付与アプリ→エンジョイまでを1枚にまとめ、未付与件数を見せる。
+ * 元シートへの書き込みはしない（EASTアプリ側）。
+ */
+function ensureReviewDesk_(ss, force) {
+  var props = PropertiesService.getDocumentProperties();
+  if (!force && props.getProperty('REVIEW_DESK_V') === REVIEW_DESK_VER_ && ss.getSheetByName(REVIEW_DESK_SHEET_)) {
+    return { ok: true, skipped: true };
+  }
+  var theme = hubTheme_();
+  var listSh = ss.getSheetByName(REVIEW_LIST_SHEET_);
+  var after = listSh || ss.getSheetByName('見学体験申請');
+  var sh = ss.getSheetByName(REVIEW_DESK_SHEET_);
+  if (!sh) sh = ss.insertSheet(REVIEW_DESK_SHEET_, after ? Math.max(after.getIndex() - 1, 0) : 0);
+  sh.clear();
+  sh.getCharts().forEach(function (ch) { sh.removeChart(ch); });
+  try { sh.getRange(1, 1, Math.min(sh.getMaxRows(), 40), Math.min(sh.getMaxColumns(), 12)).breakApart(); } catch (eB) {}
+  sh.setHiddenGridlines(true);
+  sh.setTabColor(theme.blood);
+  sh.setFrozenRows(6);
+
+  sh.getRange('A1').setValue('口コミ管理').setFontSize(18).setFontWeight('bold').setFontColor(theme.ink);
+  sh.getRange('B1').setFormula('="更新 "&TEXT(NOW(),"M/d HH:mm")').setFontSize(9).setFontColor(theme.mute);
+  sh.getRange('A2').setValue('経堂の口コミ確認 → ポイント付与 → エンジョイ付与まで、このシートから辿る。元データは読むだけ。付与の操作は下のリンク先で行う。')
+    .setFontSize(9).setFontColor(theme.mute);
+  sh.getRange('A2:F2').merge();
+
+  sh.getRange(3, 1, 1, 4).setValues([['口コミ件数', '付与済み', '未付与', '付与率']]);
+  sh.getRange(3, 1, 1, 4).setBackground(theme.ink).setFontColor('#FFFFFF').setFontWeight('bold')
+    .setHorizontalAlignment('center').setFontSize(10);
+  var list = "'" + REVIEW_LIST_SHEET_ + "'";
+  sh.getRange(4, 1).setFormula('=IFERROR(COUNTA(' + list + '!E3:E),"")');
+  sh.getRange(4, 2).setFormula('=IFERROR(COUNTIF(' + list + '!V3:V,TRUE)+COUNTIF(' + list + '!V3:V,"TRUE")+COUNTIF(' + list + '!V3:V,"☑"),"")');
+  sh.getRange(4, 3).setFormula('=IFERROR(MAX(0,A4-B4),"")');
+  sh.getRange(4, 4).setFormula('=IFERROR(B4/A4,"")');
+  sh.getRange(4, 1, 1, 3).setFontSize(20).setFontWeight('bold').setHorizontalAlignment('center').setNumberFormat('#,##0');
+  sh.getRange(4, 4).setFontSize(20).setFontWeight('bold').setHorizontalAlignment('center').setNumberFormat('0.0%');
+  sh.getRange(4, 3).setFontColor(theme.red);
+  sh.getRange(4, 1, 1, 4).setBackground(theme.soft);
+  sh.getRange(5, 1, 1, 4).setValues([['口コミ_経堂の氏名列', 'ポイント付与済=TRUE', '件数−付与済み', '付与済み÷件数']])
+    .setFontSize(9).setFontColor(theme.mute).setHorizontalAlignment('center');
+
+  sh.getRange('A7').setValue('やること').setFontWeight('bold').setFontSize(12);
+  sh.getRange(8, 1, 1, 3).setValues([['手順', 'リンク', 'メモ']]);
+  sh.getRange(8, 1, 1, 3).setBackground(theme.ink).setFontColor('#FFFFFF').setFontWeight('bold').setHorizontalAlignment('center');
+  sh.getRange(9, 1, 4, 3).setValues([
+    ['1. 口コミ一覧を確認', '', '氏名・評価・来店日を見る'],
+    ['2. EASTでポイント付与', '', '付与済みになると上の「付与済み」が増える'],
+    ['3. エンジョイポイント付与', '', '口コミ確認後に店の付与画面へ'],
+    ['4. 元の回答シート（全店）', '', '必要なら全体を見る（Workspaceは経堂のみ）']
+  ]);
+  var listGid = listSh ? listSh.getSheetId() : '';
+  sh.getRange(9, 2).setFormula(listGid !== ''
+    ? '=HYPERLINK("#gid=' + listGid + '","口コミ_経堂を開く ↗")'
+    : '="口コミ_経堂がありません"');
+  sh.getRange(10, 2).setFormula('=HYPERLINK("' + REVIEW_GRANT_APP_URL_ + '","口コミ付与アプリ ↗")');
+  sh.getRange(11, 2).setFormula('=HYPERLINK("' + ENJOY_POINT_URL_ + '","' + ENJOY_POINT_TITLE_ + ' ↗")');
+  sh.getRange(12, 2).setFormula('=HYPERLINK("' + TOP_SRC_REVIEW_ + '","EAST口コミ回答者 ↗")');
+  sh.getRange(9, 1, 4, 1).setFontWeight('bold').setBackground(theme.soft);
+  sh.getRange(9, 1, 4, 3).setBorder(true, true, true, true, true, true, theme.border, SpreadsheetApp.BorderStyle.SOLID)
+    .setVerticalAlignment('middle').setFontSize(10);
+  sh.getRange(9, 2, 4, 1).setFontColor(theme.ink).setFontWeight('bold');
+
+  sh.getRange('A14').setValue('未付与の口コミ（直近）').setFontWeight('bold').setFontSize(12);
+  sh.getRange('A15').setFormula(
+    '=IFERROR(QUERY(' + list + '!A2:W,"select Col1,Col5,Col6,Col4,Col10,Col22 where Col5 is not null and Col22 <> true and Col22 <> \'TRUE\' and Col22 <> \'☑\' order by Col1 desc limit 30",1),"未付与なし／口コミ_経堂を確認")'
+  );
+
+  sh.setColumnWidth(1, 200);
+  sh.setColumnWidth(2, 280);
+  sh.setColumnWidth(3, 280);
+  sh.setColumnWidth(4, 120);
+  sh.setColumnWidths(5, 4, 110);
+  sh.setRowHeight(1, 36);
+  sh.setRowHeight(4, 40);
+  props.setProperty('REVIEW_DESK_V', REVIEW_DESK_VER_);
+  return { ok: true };
+}
+
+/** 口コミ_経堂の来店日を日付表示にし、見た目を白黒＋赤に寄せる（IMPORTRANGE式は触らない） */
+function ensureReviewSheetChrome_(ss) {
+  var props = PropertiesService.getDocumentProperties();
+  if (props.getProperty('REVIEW_CHROME_V') === REVIEW_CHROME_VER_) return { ok: true, skipped: true };
+  var sh = ss.getSheetByName(REVIEW_LIST_SHEET_);
+  if (!sh) return { ok: false, message: 'no sheet' };
+  var theme = hubTheme_();
+  try { sh.setTabColor(theme.blood); } catch (eT) {}
+  try { sh.setHiddenGridlines(true); } catch (eG) {}
+  sh.getRange(1, 1, 1, Math.min(Math.max(sh.getLastColumn(), 1), 23))
+    .setBackground(theme.ink).setFontColor('#FFFFFF').setFontWeight('bold').setFontFamily('Meiryo');
+  try { sh.getRange('A3:A1000').setNumberFormat('yyyy/mm/dd HH:mm'); } catch (eA) {}
+  try { sh.getRange('J3:J1000').setNumberFormat('yyyy/mm/dd'); } catch (eJ) {}
+  try { sh.getRange('W3:W1000').setNumberFormat('yyyy/mm/dd HH:mm'); } catch (eW) {}
+  props.setProperty('REVIEW_CHROME_V', REVIEW_CHROME_VER_);
+  return { ok: true };
 }
 
 function setupBillingLinkFromMenu() {
