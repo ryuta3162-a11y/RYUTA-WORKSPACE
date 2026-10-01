@@ -58,9 +58,15 @@ function onOpen() {
   ui.createMenu('月初３ファイル')
   .addItem('3ファイルを取り込む', 'openGessho3Files')
   .addItem('日報の写しを出す', 'ensureNippoMirror')
+  .addItem('累計入会・退会を整える', 'formatCumulativeSheets_')
   .addToUi();
   try { ensureNippoMirror_(); } catch (eMirror) { Logger.log(eMirror); }
   try { installTokureiKaiinSheet(); } catch (eTokurei) { Logger.log(eTokurei); }
+  try {
+    if (PropertiesService.getDocumentProperties().getProperty('CUMULATIVE_LOOK_V') !== 'v1') {
+      formatCumulativeSheets_();
+    }
+  } catch (eLook) { Logger.log(eLook); }
 }
 
 var JOIN_LIST_FIT365_ID_ = '1BbExBUCfyq1cfNqw4TvlwUriL-AfvghU9XT6McdzGTQ';
@@ -3217,6 +3223,38 @@ function ensureMasterMonthAuto_(ss) {
   b2.clearDataValidations().setFormula(MASTER_MONTH_FORMULA_);
 }
 
+/** 5ヶ月データベース「入会実績」の下に、各月1日〜今日と同じ日までの入会数（経堂_入会）を出す */
+var MASTER_SAMEDAY_LABEL_ = '入会 同日比較';
+
+function masterSameDayFormula_(offset) {
+  return '=LET(m,EDATE($AG$5,' + offset + '),d,MIN(DAY(TODAY()),DAY(EOMONTH(m,0))),' +
+    'IFERROR(COUNTIFS(\'経堂_入会\'!$C:$C,TEXT(m,"yyyy年m月"),\'経堂_入会\'!$A:$A,"<"&(m+d)),))';
+}
+
+function ensureMasterSameDayRow_(ss) {
+  var sh = ss.getSheetByName('経堂マスタ');
+  if (!sh) return;
+  var labels = sh.getRange('A1:A80').getDisplayValues();
+  var base = -1;
+  for (var i = 0; i < labels.length; i++) {
+    if (labels[i][0] === '入会実績') { base = i + 1; break; }
+  }
+  if (base < 0) return;
+  var row = base + 1;
+  if (labels[base][0] !== MASTER_SAMEDAY_LABEL_) {
+    sh.getRange(row, 1, 1, 15).insertCells(SpreadsheetApp.Dimension.ROWS);
+    sh.getRange(base, 1, 1, 15).copyTo(sh.getRange(row, 1, 1, 15), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+    sh.getRange(row, 7, 1, 9).clearContent();
+  }
+  var f = [];
+  for (var k = -4; k <= 0; k++) f.push(masterSameDayFormula_(k));
+  if (sh.getRange(row, 2).getFormula() === f[0] && sh.getRange(row, 10).getFormula()) return;
+  sh.getRange(row, 1).setValue(MASTER_SAMEDAY_LABEL_)
+    .setNote('各月の1日〜今日と同じ日までの入会数（経堂_入会：入会メールの自動カウント）。月途中でも前月までと同じ条件で比べられます');
+  sh.getRange(row, 2, 1, 5).setFormulas([f]);
+  sh.getRange(row, 10).setFormula('=IF(AND(ISNUMBER(F' + row + '),ISNUMBER(E' + row + ')),F' + row + '-E' + row + ',)');
+}
+
 /** トップの引用元リンク（H列）の末尾にエンジョイポイント付与画面を足す。既にあれば何もしない */
 function ensureEnjoyPointLink_(ss) {
   var sh = ss.getSheetByName(HUB_HOME_SHEET_);
@@ -3847,6 +3885,7 @@ function billingPullTriggered() {
   try { memberAnalysisIfChanged_(ss); } catch (e2) { console.error(e2); }
   try { ensureEnjoyPointLink_(ss); } catch (e3) { console.error(e3); }
   try { ensureMasterMonthAuto_(ss); } catch (e8) { console.error(e8); }
+  try { ensureMasterSameDayRow_(ss); } catch (e9) { console.error(e9); }
   try { ensureMasterMemberNo_(ss); } catch (e5) { console.error(e5); }
   try { ensureMasterApplyCheckmarks_(ss); } catch (e4) { console.error(e4); }
   try { linkJoinListLive_(ss, false); } catch (e6) { console.error(e6); }

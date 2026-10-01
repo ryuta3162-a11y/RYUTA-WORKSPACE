@@ -188,6 +188,7 @@ https://script.google.com/macros/s/AKfycbzMELimQThNdPUShwo2_KBzJd8kGy9BNdRyOYNgu
 - **会員番号（P列）**: P4 の関数で、表示中の名前（紹介は被紹介者）を `累計入会データ` G列（空白無視）と照合し F列の番号を出す。同名が複数（再入会など754人）なら電話番号下9桁で絞り、**届出日（M列）が最新の番号**。口コミのように会員番号列がある表はそれをそのまま表示。未入会・未貼り付けは空欄（`ensureMasterMemberNo_`）
 - **☑/☐**: 表の QUERY を `LET(src_,…,MAP(…))` で包み TRUE/FALSE を ☑/☐ 表示（`ensureMasterApplyCheckmarks_`）。表示だけなので付与の記録は元シート側で
 - **年月（B2）**: `=TEXT(TODAY(),"yyyy年m月")` で毎月自動切替（2026-10-01〜。以前は手入力で9月のまま止まっていた）。AG5・5ヶ月データベース・当月の申請はすべて B2 から計算。`ensureMasterMonthAuto_` が式を守る
+- **入会 同日比較（5ヶ月データベース・入会実績の下の行）**: 各月の1日〜今日と同じ日までの入会数。`経堂_入会` の C列（月度＝利用開始月）と A列（メール受信日時）で COUNTIFS。A〜O列だけ挿入したので右の申請一覧は動いていない（`ensureMasterSameDayRow_`）
 - どちらも5分トリガー（＋開いた時の installable onOpen → `billingPullTriggered`）で自動復旧
 - 口コミの「来店日」が 46294 のような数値表示（未対応・ユーザー確認待ち）
 - トップ H10 に「エンジョイポイント付与（口コミ確認後）」リンク（`ensureEnjoyPointLink_`）
