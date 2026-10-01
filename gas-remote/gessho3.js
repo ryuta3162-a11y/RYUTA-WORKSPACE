@@ -1,7 +1,9 @@
 /**
  * Workspace メニュー「月初３ファイル」
  * 会員数・オプション・年齢男女のExcelをまとめて読み、受付状況表の日報月初へ書く。
- * 日報の月初 = Excelの「次月月初」。契約・解約の列は触らない。
+ * 日報の月初は次月月初を使わない。
+ * 会員は当月末在籍から、法人都度・OGF・ゴールドと当月開始を引く。
+ * オプションは当月末契約数から当月開始数を引く。契約・解約の列は触らない。
  */
 
 var GESSHO3_RECEPTION_ID_ = '14hxiLBzvGTuIpfZcoVjiHpz8b419OzUrtQAr5788h3w';
@@ -14,6 +16,7 @@ var GESSHO3_OP_LIST_ = [
   'プロテイン無制限', 'プロテイン＋水素水', 'レンタルタオル', 'タンニング',
   'セルフエステ', 'ホットスタジオ', 'ヨガロッカー', 'ピラティスリフォーマー'
 ];
+var GESSHO3_EXCLUDE_ = ['法人会員(都度利用)', 'OGF会員', 'ゴールド会員'];
 var GESSHO3_OP_SOURCES_ = {
   '安心サポート': ['JOYFITあんしんサポート', 'あんしんサポート', '安心サポート'],
   '安心サポートVIP': ['VIPあんしんサポート', 'VIP安心サポート'],
@@ -56,7 +59,7 @@ function applyGessho3Files(payload) {
     if (!preview || !preview.member) throw new Error('先にExcelを読み取ってください');
     var optionSum = (preview.options || []).reduce(function (sum, row) { return sum + gessho3Num_(row.next); }, 0);
     if (preview.options && preview.options.length && !optionSum) {
-      throw new Error('オプションの次月月初が読めていません。保存を止めています');
+      throw new Error('オプションの月初が読めていません。保存を止めています');
     }
     var nippo = gessho3Nippo_();
     var written = gessho3WriteNippo_(nippo, preview, payload.writeGender === true);
@@ -439,9 +442,10 @@ function gessho3ParseCounts_(values) {
   var colName = gessho3FindCol_(header, '契約名称');
   var colPrev = gessho3FindCol_(header, '前月末');
   var colEnd = gessho3FindCol_(header, '当月末');
+  var colStart = gessho3StartCol_(header, sub);
   var colNext = gessho3OpeningCol_(header, sub);
   var colPause = gessho3FindCol_(sub, '休会');
-  if (colNext < 0 || colName < 0) throw new Error('次月月初の列がありません');
+  if (colEnd < 0 || colStart < 0 || colName < 0) throw new Error('当月末または当月開始の列がありません');
   var total = null;
   var contracts = [];
   for (var i = headerRow + 2; i < values.length; i++) {
@@ -451,8 +455,9 @@ function gessho3ParseCounts_(values) {
     if (lead === '合計') {
       total = {
         prev: gessho3Num_(row[colPrev]),
+        start: gessho3Num_(row[colStart]),
         end: gessho3Num_(row[colEnd]),
-        next: gessho3Num_(row[colNext]),
+        next: colNext < 0 ? 0 : gessho3Num_(row[colNext]),
         pause: colPause < 0 ? 0 : gessho3Num_(row[colPause])
       };
       continue;
@@ -461,8 +466,9 @@ function gessho3ParseCounts_(values) {
     contracts.push({
       name: name,
       prev: gessho3Num_(row[colPrev]),
+      start: gessho3Num_(row[colStart]),
       end: gessho3Num_(row[colEnd]),
-      next: gessho3Num_(row[colNext])
+      next: colNext < 0 ? 0 : gessho3Num_(row[colNext])
     });
   }
   if (!total) throw new Error('合計行がありません');
@@ -486,7 +492,7 @@ function gessho3BuildPreview_(parsed, nippo) {
   var labels = nippo.getRange(GESSHO3_START_ROW_, GESSHO3_LABEL_COL_, GESSHO3_OP_LIST_.length, 1).getDisplayValues();
   var currentOpening = nippo.getRange(GESSHO3_START_ROW_, GESSHO3_OPENING_COL_, GESSHO3_OP_LIST_.length, 1).getValues();
   var mapped = gessho3MapOptions_(parsed.option.contracts);
-  var opening = parsed.member.total.next;
+  var opening = gessho3MemberOpening_(parsed.member);
   var options = [];
   for (var i = 0; i < GESSHO3_OP_LIST_.length; i++) {
     var label = String(labels[i][0] || '') || GESSHO3_OP_LIST_[i];
@@ -500,6 +506,8 @@ function gessho3BuildPreview_(parsed, nippo) {
     });
   }
   var b1 = String(nippo.getRange('B1').getDisplayValue() || '');
+  var minus = gessho3GenderMinus_(b1);
+  var male = parsed.gender.male - minus.exMale - minus.startMale;
   return {
     b1: b1,
     monthLabel: gessho3MonthLabel_(b1),
@@ -512,14 +520,44 @@ function gessho3BuildPreview_(parsed, nippo) {
       pause: parsed.member.total.pause
     },
     gender: {
-      male: parsed.gender.male,
-      female: parsed.gender.female,
-      total: parsed.gender.total,
-      fitsOpening: parsed.gender.male + parsed.gender.female === opening
+      rawMale: parsed.gender.male,
+      rawFemale: parsed.gender.female,
+      male: male,
+      female: opening - male,
+      total: opening,
+      minus: minus,
+      fitsOpening: male > 0 && male < opening
     },
     options: options,
     unused: mapped.unused
   };
+}
+
+/**
+ * 年齢表（当月末在籍）から、月初会員と同じ人を男女別に引く。
+ * 特例（法人都度・OGF・ゴールド）は gessho3TokureiRows_、当月開始は累計入会データの利用開始年月が当月の人。
+ * 女は「月初会員 − 男」にするので、合計は必ず月初会員と一致する。
+ */
+function gessho3GenderMinus_(b1) {
+  var out = { exMale: 0, exFemale: 0, startMale: 0, startFemale: 0 };
+  gessho3TokureiRows_().forEach(function (row) {
+    if (row[4] === '男') out.exMale++;
+    else if (row[4] === '女') out.exFemale++;
+  });
+  var label = gessho3MonthLabel_(b1);
+  var m = label.match(/(\d{4})年(\d{1,2})月/);
+  if (!m) return out;
+  var ym = m[1] + '/' + ('0' + m[2]).slice(-2);
+  var ss = SpreadsheetApp.getActiveSpreadsheet() || SpreadsheetApp.openById('1deuG2zYdIMegMnCCT7lVl4AD7J75K8KisEsH2NVH10Q');
+  var src = ss.getSheetByName('累計入会データ');
+  if (!src || src.getLastRow() < 2) return out;
+  var rows = src.getRange(2, 9, src.getLastRow() - 1, 6).getDisplayValues();
+  rows.forEach(function (r) {
+    if (String(r[5]).replace(/\s/g, '').indexOf(ym) !== 0) return;
+    if (r[0] === '男') out.startMale++;
+    else if (r[0] === '女') out.startFemale++;
+  });
+  return out;
 }
 
 function gessho3MapOptions_(contracts) {
@@ -542,7 +580,7 @@ function gessho3MapOptions_(contracts) {
     if (!hit) continue;
     used[i] = true;
     if (!byName[hit]) byName[hit] = { next: 0 };
-    byName[hit].next += contract.next;
+    byName[hit].next += contract.end - contract.start;
   }
   var unused = [];
   for (var u = 0; u < contracts.length; u++) {
@@ -566,16 +604,19 @@ function gessho3WriteNippo_(nippo, preview, writeGender) {
   memberCell.setValue(preview.member.next);
   memberCell.setNumberFormat('0');
   memberCell.setNote(
-    '月初３ファイルの次月月初。前月末 ' + preview.member.prev +
+    '月初会員 = 当月末在籍 − 法人都度 − OGF − ゴールド − 当月開始。前月末 ' + preview.member.prev +
       ' / 当月末 ' + preview.member.end +
       ' / 休会 ' + preview.member.pause
   );
   var values = preview.options.map(function (row) { return [row.next]; });
   nippo.getRange(GESSHO3_START_ROW_, GESSHO3_OPENING_COL_, values.length, 1).setValues(values);
   var genderWritten = false;
-  if (writeGender && preview.gender.fitsOpening) {
-    nippo.getRange('F12').setValue(preview.gender.male).setNumberFormat('0');
-    nippo.getRange('H12').setValue(preview.gender.female).setNumberFormat('0');
+  if (preview.gender.fitsOpening) {
+    var g = preview.gender;
+    nippo.getRange('F12').setValue(g.male).setNumberFormat('0').setNote(
+      '年齢表の男 ' + g.rawMale + ' − 特例 ' + g.minus.exMale + ' − 当月開始 ' + g.minus.startMale + ' = ' + g.male
+    );
+    nippo.getRange('H12').setFormula('=C12-F12').setNumberFormat('0');
     genderWritten = true;
   }
   return { member: preview.member.next, genderWritten: genderWritten, options: preview.options.length };
@@ -655,6 +696,25 @@ function gessho3UpdateIndex_(ss, monthLabel, sheetName, preview) {
     sheetName
   ]]);
   index.getRange(row, 6).setFormula('=HYPERLINK("#gid=' + ss.getSheetByName(sheetName).getSheetId() + '","' + sheetName + '")');
+}
+
+function gessho3MemberOpening_(member) {
+  var excluded = 0;
+  (member.contracts || []).forEach(function (row) {
+    if (GESSHO3_EXCLUDE_.indexOf(gessho3Norm_(row.name)) !== -1) excluded += row.end;
+  });
+  return member.total.end - excluded - member.total.start;
+}
+
+function gessho3StartCol_(header, sub) {
+  for (var i = 0; i < header.length; i++) {
+    var head = gessho3Norm_(header[i]);
+    var child = gessho3Norm_(sub[i]);
+    if ((head.indexOf('当月利用') !== -1 || head.indexOf('当月契約') !== -1) && child.indexOf('開始') !== -1) {
+      return i;
+    }
+  }
+  return -1;
 }
 
 function gessho3OpeningCol_(header, sub) {
@@ -871,4 +931,68 @@ function formatCumulativeSheet_(sh, hideCols, widths) {
   sh.getRange(1, 1).setNote(
     '分析に使わない列は隠しています。列ごと削除すると、右側の数字の位置がずれます。年齢・性別・電話が空の行は、あとから入力してください。'
   );
+}
+
+/**
+ * 2026年10月の取り込みは次月月初を書いていた。日報の月初だけを基準の数へ直し、保存シートは隠す。
+ * 契約・解約・増減は触らない。
+ */
+function hideGesshoSideSheets_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (!ss) return { ok: false };
+  ['月初_2026年10月', '月初３ファイル', '月初の内訳', '経堂_入会'].forEach(function (name) {
+    var sh = ss.getSheetByName(name);
+    if (!sh) return;
+    try { sh.hideSheet(); } catch (eHide) {}
+  });
+  return { ok: true };
+}
+
+/** 日報 月初の女（H12）は 月初会員 − 男 の式で持つ（合計が必ず合う） */
+function ensureNippoOpeningFemale_() {
+  var nippo = gessho3Nippo_();
+  var h12 = nippo.getRange('H12');
+  if (h12.getFormula() === '=C12-F12') return;
+  h12.setFormula('=C12-F12').setNumberFormat('0');
+}
+
+function fixOctoberNippo_() {
+  var props = PropertiesService.getDocumentProperties();
+  if (props.getProperty('OCTOBER_NIPPO_FIX') === 'v1') return { ok: true, skipped: true };
+  var options = [23, 211, 132, 72, 152, 26, 74, 2, 3, 112, 113, 66, 27, 229, 39, 21];
+  var nippo = gessho3Nippo_();
+  nippo.getRange('C12').setValue(1516).setNumberFormat('0').setNote(
+    '月初会員 = 当月末在籍 1535 − 法人都度6 − OGF3 − ゴールド3 − 当月開始7 = 1516'
+  );
+  nippo.getRange('F12').setValue(1075).setNumberFormat('0');
+  nippo.getRange('H12').setValue(441).setNumberFormat('0');
+  nippo.getRange(21, 3, options.length, 1).setValues(options.map(function (n) { return [n]; }));
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (!ss) ss = SpreadsheetApp.openById('1deuG2zYdIMegMnCCT7lVl4AD7J75K8KisEsH2NVH10Q');
+  var arch = ss.getSheetByName('月初_2026年10月');
+  if (arch) {
+    arch.getRange('B3').setValue(1516);
+    arch.getRange('C3').setValue('当月末 1535 − 特例12 − 当月開始7');
+    arch.getRange('B4').setValue(1075);
+    arch.getRange('C4').setValue('年齢表1086 − 特例男5 − 当月入会男6');
+    arch.getRange('B5').setValue(441);
+    arch.getRange('C5').setValue('年齢表449 − 特例女7 − 当月入会女1');
+    arch.getRange('C6').setValue('男女は日報へ書いた');
+    arch.getRange(9, 2, options.length, 1).setValues(options.map(function (n) { return [n]; }));
+    try { arch.hideSheet(); } catch (eArch) {}
+  }
+  var index = ss.getSheetByName('月初３ファイル');
+  if (index) {
+    var last = Math.max(index.getLastRow(), 1);
+    var months = last > 1 ? index.getRange(2, 1, last - 1, 1).getDisplayValues() : [];
+    for (var i = 0; i < months.length; i++) {
+      if (String(months[i][0]) === '2026年10月') {
+        index.getRange(i + 2, 3, 1, 3).setValues([[1516, 1075, 441]]);
+      }
+    }
+    try { index.hideSheet(); } catch (eIndex) {}
+  }
+  props.setProperty('OCTOBER_NIPPO_FIX', 'v1');
+  return { ok: true };
 }

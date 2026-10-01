@@ -59,9 +59,12 @@ function onOpen() {
   .addItem('3ファイルを取り込む', 'openGessho3Files')
   .addItem('日報の写しを出す', 'ensureNippoMirror')
   .addItem('累計入会・退会を整える', 'formatCumulativeSheets_')
+  .addItem('10月の日報を直す', 'fixOctoberNippo_')
   .addToUi();
+  try { hideGesshoSideSheets_(); } catch (eHideSide) { Logger.log(eHideSide); }
   try { ensureNippoMirror_(); } catch (eMirror) { Logger.log(eMirror); }
   try { installTokureiKaiinSheet(); } catch (eTokurei) { Logger.log(eTokurei); }
+  try { fixOctoberNippo_(); } catch (eOct) { Logger.log(eOct); }
   try {
     if (PropertiesService.getDocumentProperties().getProperty('CUMULATIVE_LOOK_V') !== 'v1') {
       formatCumulativeSheets_();
@@ -3886,6 +3889,8 @@ function billingPullTriggered() {
   try { ensureEnjoyPointLink_(ss); } catch (e3) { console.error(e3); }
   try { ensureMasterMonthAuto_(ss); } catch (e8) { console.error(e8); }
   try { ensureMasterSameDayRow_(ss); } catch (e9) { console.error(e9); }
+  try { fixOctoberNippo_(); } catch (e10) { console.error(e10); }
+  try { ensureNippoOpeningFemale_(); } catch (e11) { console.error(e11); }
   try { ensureMasterMemberNo_(ss); } catch (e5) { console.error(e5); }
   try { ensureMasterApplyCheckmarks_(ss); } catch (e4) { console.error(e4); }
   try { linkJoinListLive_(ss, false); } catch (e6) { console.error(e6); }
