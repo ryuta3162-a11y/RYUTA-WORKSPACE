@@ -75,9 +75,8 @@ function 日報オプションをB1連動() {
     fForms.push(['=IFERROR(D' + row + '-E' + row + ',0)']);
   }
   var num = last - 20;
-  var note = '日報B1の入会月で自動集計（診断の検出OP＋OP追加。月末夜の翌月入会も拾う）';
-  sh.getRange(21, 4, num, 1).setFormulas(dForms).setNote(note);
-  sh.getRange(21, 5, num, 1).setFormulas(eForms).setNote(note);
+  sh.getRange(21, 4, num, 1).setFormulas(dForms).clearNote();
+  sh.getRange(21, 5, num, 1).setFormulas(eForms).clearNote();
   sh.getRange(21, 6, num, 1).setFormulas(fForms);
   sh.getRange(21, 4, num, 3).setNumberFormat('0');
   SpreadsheetApp.flush();
