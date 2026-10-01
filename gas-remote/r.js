@@ -4039,7 +4039,7 @@ function billingPullTriggered() {
 var MEMBER_SHEET_ = '会員分析';
 var MEMBER_JOIN_SRC_ = '累計入会データ';
 var MEMBER_LEAVE_SRC_ = '累計退会データ';
-var MEMBER_ANALYSIS_VER_ = '20';
+  var MEMBER_ANALYSIS_VER_ = '21';
 
 function memberAnalysisNote_(ss, msg) {
   try {
@@ -4161,7 +4161,7 @@ function memberMonthChoices_() {
   var now = new Date();
   for (var i = 0; i < 36; i++) {
     var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    out.push(d.getFullYear() + '年' + (d.getMonth() + 1) + '月');
+    out.push(d);
   }
   return out;
 }
@@ -4173,11 +4173,11 @@ function memberDefaultMonthLabel_() {
     if (b1.length >= 4) {
       var y = b1.length >= 6 ? Number(b1.slice(0, 4)) : 2000 + Number(b1.slice(0, 2));
       var m = Number(b1.slice(-2));
-      if (y && m) return y + '年' + m + '月';
+      if (y && m) return new Date(y, m - 1, 1);
     }
   } catch (e) {}
   var now = new Date();
-  return now.getFullYear() + '年' + (now.getMonth() + 1) + '月';
+  return new Date(now.getFullYear(), now.getMonth(), 1);
 }
 
 function buildMemberAnalysis_(ss) {
@@ -4212,13 +4212,22 @@ function buildMemberAnalysis_(ss) {
   sh.getRange('A1').setValue('会員分析').setFontSize(16).setFontWeight('bold').setFontColor(theme.ink);
   sh.getRange('A2').setValue('みる月').setFontWeight('bold').setFontSize(11).setBackground(theme.ink).setFontColor('#ffffff')
     .setHorizontalAlignment('center');
-  var choices = memberMonthChoices_();
+  var choices = memberMonthChoices_(); // Date objects
   var defMonth = memberDefaultMonthLabel_();
-  if (choices.indexOf(defMonth) < 0) choices.unshift(defMonth);
+  var choiceLabels = choices.map(function (d) {
+    return d.getFullYear() + '年' + (d.getMonth() + 1) + '月';
+  });
+  var defLabel = defMonth.getFullYear() + '年' + (defMonth.getMonth() + 1) + '月';
+  if (choiceLabels.indexOf(defLabel) < 0) {
+    choices.unshift(defMonth);
+    choiceLabels.unshift(defLabel);
+  }
+  // 表示は「yyyy年m月」、実体は日付（AA1の正規表現パース失敗を防ぐ）
   sh.getRange('B2').setDataValidation(
-    SpreadsheetApp.newDataValidation().requireValueInList(choices, true).setAllowInvalid(false).build()
+    SpreadsheetApp.newDataValidation().requireValueInList(choiceLabels, true).setAllowInvalid(true).build()
   );
-  sh.getRange('B2').setValue(defMonth).setFontSize(12).setFontWeight('bold').setHorizontalAlignment('center')
+  sh.getRange('B2').setValue(defMonth).setNumberFormat('yyyy"年"m"月"')
+    .setFontSize(12).setFontWeight('bold').setHorizontalAlignment('center')
     .setBackground(theme.soft).setFontColor(theme.ink);
   sh.getRange('C2').setValue('← ここを変えると、下の数字が全部その月基準になります')
     .setFontSize(10).setFontColor(grey);
@@ -4228,9 +4237,10 @@ function buildMemberAnalysis_(ss) {
   sh.getRange('A3:G3').merge();
   sh.getRange('H2').setFormula('="更新 "&TEXT(NOW(),"M/d HH:mm")').setFontSize(9).setFontColor(grey);
 
-  // 隠し：選んだ月 / 前月 / 昨年同月
+  // 隠し：選んだ月 / 前月 / 昨年同月（B2が日付でも「yyyy年m月」文字列でも可）
   sh.getRange('AA1').setFormula(
-    '=IFERROR(DATE(VALUE(REGEXEXTRACT($B$2&"","([0-9]{4})")),VALUE(REGEXEXTRACT($B$2&"","年([0-9]{1,2})")),1),"")'
+    '=IFERROR(DATE(YEAR($B$2),MONTH($B$2),1),' +
+    'IFERROR(DATE(VALUE(LEFT($B$2&"",4)),VALUE(SUBSTITUTE(REPLACE($B$2&"",1,FIND("年",$B$2&""),""),"月","")),1),""))'
   );
   sh.getRange('AB1').setFormula('=IF($AA$1="","",EDATE($AA$1,-1))');
   sh.getRange('AC1').setFormula('=IF($AA$1="","",EDATE($AA$1,-12))');

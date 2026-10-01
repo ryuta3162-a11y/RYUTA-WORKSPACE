@@ -11,7 +11,7 @@ var MEETING_CALC_ = '分析用_期間集計';
 var MEETING_JOIN_ = '累計入会データ';
 var MEETING_LEAVE_ = '累計退会データ';
 var MEETING_END_ = 8000;
-var MEETING_VER_ = '1';
+var MEETING_VER_ = '2';
 
 function rebuildMeetingDashboardFromMenu() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -93,32 +93,25 @@ function meetingBuildMaster_(sh, theme) {
   sh.getRange('K2').setFormula('=ARRAYFORMULA(IF(' + J + 'F2:F' + end + '="","",' + J + 'B2:B' + end + '))');
   // L 手続
   sh.getRange('L2').setFormula('=ARRAYFORMULA(IF(' + J + 'F2:F' + end + '="","",' + J + 'O2:O' + end + '))');
-  // M 届出日（日単位の入会日として使う）
-  sh.getRange('M2').setFormula('=ARRAYFORMULA(IF(' + J + 'F2:F' + end + '="","",' + J + 'M2:M' + end + '))');
-  // N 利用開始年月（月単位。会員動向の入会定義に近い）
-  sh.getRange('N2').setFormula('=ARRAYFORMULA(IF(' + J + 'F2:F' + end + '="","",' + J + 'N2:N' + end + '))');
-  // O 退会届出日（番号キー照合）
-  sh.getRange('O2').setFormula(
-    '=ARRAYFORMULA(IF(' + J + 'F2:F' + end + '="","",IFERROR(XLOOKUP(TEXT(VALUE(' + J + 'F2:F' + end + '),"0"),' +
-    L + 'T2:T' + end + ',' + L + 'Q2:Q' + end + ',IFERROR(XLOOKUP(' + J + 'F2:F' + end + ',' + L + 'F2:F' + end + ',' + L + 'Q2:Q' + end + '),""))))'
-  );
-  // P 退会年月
-  sh.getRange('P2').setFormula(
-    '=ARRAYFORMULA(IF(' + J + 'F2:F' + end + '="","",IFERROR(XLOOKUP(TEXT(VALUE(' + J + 'F2:F' + end + '),"0"),' +
-    L + 'T2:T' + end + ',' + L + 'R2:R' + end + ',IFERROR(XLOOKUP(' + J + 'F2:F' + end + ',' + L + 'F2:F' + end + ',' + L + 'R2:R' + end + '),""))))'
-  );
-  // Q 退会理由
-  sh.getRange('Q2').setFormula(
-    '=ARRAYFORMULA(IF(' + J + 'F2:F' + end + '="","",IFERROR(XLOOKUP(TEXT(VALUE(' + J + 'F2:F' + end + '),"0"),' +
-    L + 'T2:T' + end + ',' + L + 'S2:S' + end + ',IFERROR(XLOOKUP(' + J + 'F2:F' + end + ',' + L + 'F2:F' + end + ',' + L + 'S2:S' + end + '),""))))'
-  );
-  // R 在籍期間月（退会側P列）
-  sh.getRange('R2').setFormula(
-    '=ARRAYFORMULA(IF(' + J + 'F2:F' + end + '="","",IFERROR(XLOOKUP(TEXT(VALUE(' + J + 'F2:F' + end + '),"0"),' +
-    L + 'T2:T' + end + ',' + L + 'P2:P' + end + ',IFERROR(XLOOKUP(' + J + 'F2:F' + end + ',' + L + 'F2:F' + end + ',' + L + 'P2:P' + end + '),""))))'
-  );
-  // S 番号キー
+  // S 番号キー（先に置く。退会照合で使う）
   sh.getRange('S2').setFormula('=ARRAYFORMULA(IF(' + J + 'F2:F' + end + '="","",IFERROR(TEXT(VALUE(' + J + 'F2:F' + end + '),"0"),' + J + 'F2:F' + end + ')))');
+  // M 届出日（日付シリアルに正規化。文字列だと期間比較が全部0になる）
+  sh.getRange('M2').setFormula(
+    '=ARRAYFORMULA(IF(' + J + 'F2:F' + end + '="","",' +
+    'IF(ISNUMBER(' + J + 'M2:M' + end + '),' + J + 'M2:M' + end + ',' +
+    'IFERROR(DATEVALUE(' + J + 'M2:M' + end + '),IFERROR(DATEVALUE(TEXT(' + J + 'M2:M' + end + ',"yyyy/m/d")),""))))'
+  );
+  // N 利用開始年月（月単位。会員動向の入会定義に近い）
+  sh.getRange('N2').setFormula(
+    '=ARRAYFORMULA(IF(' + J + 'F2:F' + end + '="","",' +
+    'IF(ISNUMBER(' + J + 'N2:N' + end + '),' + J + 'N2:N' + end + ',' +
+    'IFERROR(DATEVALUE(' + J + 'N2:N' + end + '),IFERROR(DATEVALUE(TEXT(' + J + 'N2:N' + end + ',"yyyy/m/d")),' + J + 'N2:N' + end + '))))'
+  );
+  // O〜R 退会側（番号キーSで単段照合。ネストXLOOKUPのARRAYFORMULAは#ERROR!になる）
+  sh.getRange('O2').setFormula(meetingLeaveMapFormula_(L, end, 'Q', true));
+  sh.getRange('P2').setFormula(meetingLeaveMapFormula_(L, end, 'R', true));
+  sh.getRange('Q2').setFormula(meetingLeaveMapFormula_(L, end, 'S', false));
+  sh.getRange('R2').setFormula(meetingLeaveMapFormula_(L, end, 'P', false));
   // T 再入会フラグ（手続「復」＝確定。候補判定は会議用の検索・定義欄を参照）
   sh.getRange('T2').setFormula(
     '=ARRAYFORMULA(IF(' + J + 'F2:F' + end + '="","",IF(' + J + 'O2:O' + end + '="復","再入会","")))'
@@ -275,6 +268,17 @@ function meetingBuildCalc_(sh, theme) {
   try { sh.hideSheet(); } catch (eH2) {}
 }
 
+/**
+ * 退会マスタ照合（行ごとMAP）。asDate=true なら日付シリアルへ正規化。
+ */
+function meetingLeaveMapFormula_(leaveSheetRef, end, resultCol, asDate) {
+  var body = asDate
+    ? 'IF(d="","" ,IF(ISNUMBER(d),d,IFERROR(DATEVALUE(d),IFERROR(DATEVALUE(TEXT(d,"yyyy/m/d")),""))))'
+    : 'd';
+  return '=MAP(S2:S' + end + ',LAMBDA(k,IF(k="","",LET(d,IFERROR(XLOOKUP(k,' +
+    leaveSheetRef + 'T2:T' + end + ',' + leaveSheetRef + resultCol + '2:' + resultCol + end + ',""),""),' + body + '))))';
+}
+
 /** フィルタ付き期間条件の共通部品（SUMPRODUCT用） */
 function meetingFilterParts_() {
   var M = "'" + MEETING_MASTER_ + "'!";
@@ -305,18 +309,21 @@ function meetingMetricFormula_(kind, p) {
   function sp(expr) {
     return '=IF(OR(' + start + '="",' + end + '=""),"",IFERROR(SUMPRODUCT((' + expr + ')*(' + base + ')),0))';
   }
+  // 日付は N() で数値化（空は0）。文字日付の比較ズレを防ぐ
+  var jd = 'IFERROR(N(' + joinDate + '),0)';
+  var ld = 'IFERROR(N(' + leaveDate + '),0)';
 
   if (kind === 'join') {
-    return sp('(' + joinDate + '<>"")*(' + joinDate + '>=' + start + ')*(' + joinDate + '<=' + end + ')');
+    return sp('(' + joinDate + '<>"")*(' + jd + '>=N(' + start + '))*(' + jd + '<=N(' + end + '))');
   }
   if (kind === 'leave') {
-    return sp('(' + leaveDate + '<>"")*(' + leaveDate + '>=' + start + ')*(' + leaveDate + '<=' + end + ')');
+    return sp('(' + leaveDate + '<>"")*(' + ld + '>=N(' + start + '))*(' + ld + '<=N(' + end + '))');
   }
   if (kind === 'start') {
-    return sp('(' + joinDate + '<>"")*(' + joinDate + '<' + start + ')*((' + leaveDate + '="")+(' + leaveDate + '>=' + start + '))');
+    return sp('(' + joinDate + '<>"")*(' + jd + '<N(' + start + '))*((' + leaveDate + '="")+(' + ld + '>=N(' + start + ')))');
   }
   if (kind === 'end') {
-    return sp('(' + joinDate + '<>"")*(' + joinDate + '<=' + end + ')*((' + leaveDate + '="")+(' + leaveDate + '>' + end + '))');
+    return sp('(' + joinDate + '<>"")*(' + jd + '<=N(' + end + '))*((' + leaveDate + '="")+(' + ld + '>N(' + end + ')))');
   }
   if (kind === 'net') {
     return '=IF(OR(' + start + '="",' + end + '=""),"",' + col + '20-' + col + '21)';
@@ -331,13 +338,13 @@ function meetingMetricFormula_(kind, p) {
     return '=IF(OR(' + start + '="",' + end + '="",' + days + '=0),"",' + col + '21/' + days + ')';
   }
   if (kind === 'rejoin') {
-    return sp('(' + joinDate + '<>"")*(' + joinDate + '>=' + start + ')*(' + joinDate + '<=' + end + ')*(' + rejoin + '="再入会")');
+    return sp('(' + joinDate + '<>"")*(' + jd + '>=N(' + start + '))*(' + jd + '<=N(' + end + '))*(' + rejoin + '="再入会")');
   }
   if (kind === 'rejoinCand') {
-    return sp('(' + joinDate + '<>"")*(' + joinDate + '>=' + start + ')*(' + joinDate + '<=' + end + ')*(' + rejoin + '="再入会候補")');
+    return sp('(' + joinDate + '<>"")*(' + jd + '>=N(' + start + '))*(' + jd + '<=N(' + end + '))*(' + rejoin + '="再入会候補")');
   }
   if (kind === 'short6') {
-    return sp('(' + leaveDate + '<>"")*(' + leaveDate + '>=' + start + ')*(' + leaveDate + '<=' + end + ')*(IFERROR(VALUE(' + tenure + '),999)<=6)');
+    return sp('(' + leaveDate + '<>"")*(' + ld + '>=N(' + start + '))*(' + ld + '<=N(' + end + '))*(IFERROR(VALUE(' + tenure + '),999)<=6)');
   }
   if (kind === 'short6Rate') {
     return '=IF(OR(' + start + '="",' + end + '="",' + col + '21=0),"",' + col + '28/' + col + '21)';
@@ -353,11 +360,12 @@ function meetingAgeJoinFormula_(p, amin, amax) {
   var f = meetingFilterParts_();
   var joinDate = M + 'M$2:M$' + MEETING_END_;
   var birth = M + 'V$2:V$' + MEETING_END_;
+  var jd = 'IFERROR(N(' + joinDate + '),0)';
   var ageExpr = '(YEAR(' + end + ')-YEAR(' + birth + '))';
   var ageCond = amax >= 200
     ? '(' + birth + '<>"")*(' + ageExpr + '>=' + amin + ')'
     : '(' + birth + '<>"")*(' + ageExpr + '>=' + amin + ')*(' + ageExpr + '<' + amax + ')';
-  return '=IF(OR(' + start + '="",' + end + '=""),"",IFERROR(SUMPRODUCT((' + joinDate + '<>"")*(' + joinDate + '>=' + start + ')*(' + joinDate + '<=' + end + ')*(' + ageCond + ')*(' +
+  return '=IF(OR(' + start + '="",' + end + '=""),"",IFERROR(SUMPRODUCT((' + joinDate + '<>"")*(' + jd + '>=N(' + start + '))*(' + jd + '<=N(' + end + '))*(' + ageCond + ')*(' +
     f.gender + ')*(' + f.contract + ')*(' + f.proc + ')),0))';
 }
 
@@ -368,7 +376,8 @@ function meetingGenderJoinFormula_(p, gender) {
   var end = col + '7';
   var f = meetingFilterParts_();
   var joinDate = M + 'M$2:M$' + MEETING_END_;
-  return '=IF(OR(' + start + '="",' + end + '=""),"",IFERROR(SUMPRODUCT((' + joinDate + '<>"")*(' + joinDate + '>=' + start + ')*(' + joinDate + '<=' + end + ')*(' +
+  var jd = 'IFERROR(N(' + joinDate + '),0)';
+  return '=IF(OR(' + start + '="",' + end + '=""),"",IFERROR(SUMPRODUCT((' + joinDate + '<>"")*(' + jd + '>=N(' + start + '))*(' + jd + '<=N(' + end + '))*(' +
     M + 'E$2:E$' + MEETING_END_ + '="' + gender + '")*(' + f.contract + ')*(' + f.proc + ')),0))';
 }
 
@@ -380,12 +389,13 @@ function meetingReasonFormula_(p, code) {
   var f = meetingFilterParts_();
   var leaveDate = M + 'O$2:O$' + MEETING_END_;
   var reason = M + 'Q$2:Q$' + MEETING_END_;
+  var ld = 'IFERROR(N(' + leaveDate + '),0)';
   if (code === 'その他') {
     var known = '("M","A","N","U","B","D","W","S","X","R","V","I","T")';
-    return '=IF(OR(' + start + '="",' + end + '=""),"",IFERROR(SUMPRODUCT((' + leaveDate + '<>"")*(' + leaveDate + '>=' + start + ')*(' + leaveDate + '<=' + end + ')*(' +
+    return '=IF(OR(' + start + '="",' + end + '=""),"",IFERROR(SUMPRODUCT((' + leaveDate + '<>"")*(' + ld + '>=N(' + start + '))*(' + ld + '<=N(' + end + '))*(' +
       reason + '<>"")*(ISNA(MATCH(' + reason + ',{' + known.slice(1, -1) + '},0)))*(' + f.gender + ')*(' + f.contract + ')*(' + f.proc + ')),0))';
   }
-  return '=IF(OR(' + start + '="",' + end + '=""),"",IFERROR(SUMPRODUCT((' + leaveDate + '<>"")*(' + leaveDate + '>=' + start + ')*(' + leaveDate + '<=' + end + ')*(' +
+  return '=IF(OR(' + start + '="",' + end + '=""),"",IFERROR(SUMPRODUCT((' + leaveDate + '<>"")*(' + ld + '>=N(' + start + '))*(' + ld + '<=N(' + end + '))*(' +
     reason + '="' + code + '")*(' + f.gender + ')*(' + f.contract + ')*(' + f.proc + ')),0))';
 }
 
@@ -397,7 +407,8 @@ function meetingTenureFormula_(p, tmin, tmax) {
   var f = meetingFilterParts_();
   var leaveDate = M + 'O$2:O$' + MEETING_END_;
   var tenure = M + 'R$2:R$' + MEETING_END_;
-  return '=IF(OR(' + start + '="",' + end + '=""),"",IFERROR(SUMPRODUCT((' + leaveDate + '<>"")*(' + leaveDate + '>=' + start + ')*(' + leaveDate + '<=' + end + ')*' +
+  var ld = 'IFERROR(N(' + leaveDate + '),0)';
+  return '=IF(OR(' + start + '="",' + end + '=""),"",IFERROR(SUMPRODUCT((' + leaveDate + '<>"")*(' + ld + '>=N(' + start + '))*(' + ld + '<=N(' + end + '))*' +
     '(IFERROR(VALUE(' + tenure + '),-1)>=' + tmin + ')*(IFERROR(VALUE(' + tenure + '),-1)<=' + tmax + ')*(' +
     f.gender + ')*(' + f.contract + ')*(' + f.proc + ')),0))';
 }
@@ -539,10 +550,10 @@ function meetingBuildDash_(sh, theme) {
   sh.getRange('A25').setValue('今回の注目ポイント（期間A vs B・数式判定）').setFontWeight('bold').setFontSize(12);
   sh.getRange('A26').setFormula(
     '=IF(OR(B14="",C14=""),"期間A・Bの開始日と終了日を入れてください",' +
-    'IF(AND(ISNUMBER(B14),ISNUMBER(C14),C14<>0,B14/C14-1<=-0.2),"⚠ 入会が比較期間より20%以上減少","")&' +
-    'IF(AND(ISNUMBER(B17),ISNUMBER(C17),B17-C17>=0.01)," ⚠ 退会率が+1pt以上悪化","")&' +
-    'IF(AND(ISNUMBER(B23),ISNUMBER(C23),B23-C23>=0.01)," ⚠ 6ヶ月以内退会率が悪化","")&' +
-    'IF(AND(ISNUMBER(B20),ISNUMBER(C20),C20<>0,B20/C20-1>=0.2)," ✓ 再入会（復）が増加","")&' +
+    'IF(IFERROR(AND(ISNUMBER(B14),ISNUMBER(C14),C14<>0,B14/C14-1<=-0.2),FALSE),"⚠ 入会が比較期間より20%以上減少","")&' +
+    'IF(IFERROR(AND(ISNUMBER(B17),ISNUMBER(C17),B17-C17>=0.01),FALSE)," ⚠ 退会率が+1pt以上悪化","")&' +
+    'IF(IFERROR(AND(ISNUMBER(B23),ISNUMBER(C23),B23-C23>=0.01),FALSE)," ⚠ 6ヶ月以内退会率が悪化","")&' +
+    'IF(IFERROR(AND(ISNUMBER(B20),ISNUMBER(C20),C20<>0,B20/C20-1>=0.2),FALSE)," ✓ 再入会（復）が増加","")&' +
     'IF(AND(ISNUMBER(B16),B16>0)," ✓ 純増がプラス","")&' +
     'IF(AND(ISNUMBER(B16),B16<0)," ⚠ 純増がマイナス",""))'
   ).setFontSize(11).setWrap(true);
