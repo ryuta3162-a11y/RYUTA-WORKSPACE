@@ -106,13 +106,17 @@
       var genderNote = data.gender.fitsOpening
         ? "男女も月初に入れます（男 " + data.gender.male + " / 女 " + data.gender.female + "）。"
         : "年齢の男女は当月末 " + data.gender.total + "人（男 " + data.gender.male + " / 女 " + data.gender.female + "）です。月初 " + data.member.next + "人とは合計が違うので、日報の男女は変えず、月の保存シートには残します。";
+      var avgNote = (data.gender.avgAge != null && data.gender.avgAge !== "")
+        ? "平均年齢 " + (Math.round(Number(data.gender.avgAge) * 10) / 10) + " を会員動向へ記入します。"
+        : "";
       var rows = data.options.map(function (row) {
         return "<tr><td>" + row.name + "</td><td>" + row.current + "</td><td>" + row.next + "</td></tr>";
       }).join("");
       document.getElementById("msg").innerHTML =
         "<div class='note'><b>" + (data.monthLabel || "") + "</b> として保存します。日報の月 " + (data.b1 || "") + "。<br>" +
         "月初会員数 " + data.member.current + " → <b>" + data.member.next + "</b><br>" +
-        "<span class='" + (data.gender.fitsOpening ? "" : "warn") + "'>" + genderNote + "</span></div>" +
+        "<span class='" + (data.gender.fitsOpening ? "" : "warn") + "'>" + genderNote + "</span>" +
+        (avgNote ? "<br>" + avgNote : "") + "</div>" +
         "<table><tr><th>ファイル</th><th>中身</th></tr>" + known + "</table>" +
         "<table><tr><th>オプション</th><th>いまの月初</th><th>保存する月初</th></tr>" + rows + "</table>";
       document.getElementById("apply").disabled = false;

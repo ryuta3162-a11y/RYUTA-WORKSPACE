@@ -58,6 +58,7 @@ function onOpen() {
   ui.createMenu('月初３ファイル')
   .addItem('3ファイルを取り込む', 'openGessho3Files')
   .addItem('会員動向へ月初を転記（日報→本部）', 'syncHqOpeningFromMenu')
+  .addItem('会員動向の自動関数を設定', 'syncHqFormulasFromMenu')
   .addItem('日報の写しを出す', 'ensureNippoMirror')
   .addItem('累計入会・退会を整える', 'formatCumulativeSheets_')
   .addItem('10月の日報を直す', 'fixOctoberNippo_')
