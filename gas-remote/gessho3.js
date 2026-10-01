@@ -64,6 +64,7 @@ function applyGessho3Files(payload) {
     var nippo = gessho3Nippo_();
     var written = gessho3WriteNippo_(nippo, preview, payload.writeGender === true);
     var saved = gessho3SaveMonth_(preview, written);
+    try { written.hq = gessho3WriteHq_(preview); } catch (eHq) { written.hq = { ok: false, message: String(eHq.message || eHq) }; }
     return { ok: true, written: written, monthLabel: saved.monthLabel, sheetName: saved.sheetName };
   } catch (err) {
     return { ok: false, message: String(err && err.message ? err.message : err) };
@@ -502,12 +503,16 @@ function gessho3BuildPreview_(parsed, nippo) {
       name: label,
       current: gessho3Num_(currentOpening[i][0]),
       next: found ? found.next : 0,
+      end: found ? found.end : 0,
       missing: !found
     });
   }
   var b1 = String(nippo.getRange('B1').getDisplayValue() || '');
   var minus = gessho3GenderMinus_(b1);
-  var male = parsed.gender.male - minus.exMale - minus.startMale;
+  var kiyaku = gessho3KiyakuMinus_(gessho3MonthLabel_(b1));
+  opening -= kiyaku.total;
+  minus.kiyakuMale = kiyaku.male;
+  var male = parsed.gender.male - minus.exMale - minus.startMale - kiyaku.male;
   return {
     b1: b1,
     monthLabel: gessho3MonthLabel_(b1),
@@ -517,7 +522,9 @@ function gessho3BuildPreview_(parsed, nippo) {
       next: opening,
       prev: parsed.member.total.prev,
       end: parsed.member.total.end,
-      pause: parsed.member.total.pause
+      pause: parsed.member.total.pause,
+      kiyaku: kiyaku.total,
+      kiyakuNames: kiyaku.names
     },
     gender: {
       rawMale: parsed.gender.male,
@@ -560,6 +567,30 @@ function gessho3GenderMinus_(b1) {
   return out;
 }
 
+/** 規約退会リストで退会年月が当月の人（月初の強制退会）。会員数の表にはまだ残っているので月初から外す */
+function gessho3KiyakuMinus_(monthLabel) {
+  var out = { total: 0, male: 0, names: [] };
+  var m = String(monthLabel || '').match(/(\d{4})年(\d{1,2})月/);
+  if (!m) return out;
+  var ss = SpreadsheetApp.getActiveSpreadsheet() || SpreadsheetApp.openById('1deuG2zYdIMegMnCCT7lVl4AD7J75K8KisEsH2NVH10Q');
+  var list = ss.getSheetByName('規約退会リスト');
+  if (!list || list.getLastRow() < 4) return out;
+  var rows = list.getRange(4, 1, list.getLastRow() - 3, 11).getValues();
+  var join = ss.getSheetByName('累計入会データ');
+  var gender = {};
+  if (join && join.getLastRow() > 1) {
+    join.getRange(2, 6, join.getLastRow() - 1, 4).getDisplayValues().forEach(function (r) { gender[String(r[0]).trim()] = r[3]; });
+  }
+  rows.forEach(function (r) {
+    var ym = r[10];
+    if (!(ym instanceof Date) || ym.getFullYear() !== Number(m[1]) || ym.getMonth() + 1 !== Number(m[2])) return;
+    out.total++;
+    out.names.push(r[3]);
+    if (gender[String(r[2]).trim()] === '男') out.male++;
+  });
+  return out;
+}
+
 function gessho3MapOptions_(contracts) {
   var byName = {};
   var used = {};
@@ -579,8 +610,9 @@ function gessho3MapOptions_(contracts) {
     }
     if (!hit) continue;
     used[i] = true;
-    if (!byName[hit]) byName[hit] = { next: 0 };
+    if (!byName[hit]) byName[hit] = { next: 0, end: 0 };
     byName[hit].next += contract.end - contract.start;
+    byName[hit].end += contract.end;
   }
   var unused = [];
   for (var u = 0; u < contracts.length; u++) {
@@ -604,7 +636,9 @@ function gessho3WriteNippo_(nippo, preview, writeGender) {
   memberCell.setValue(preview.member.next);
   memberCell.setNumberFormat('0');
   memberCell.setNote(
-    '月初会員 = 当月末在籍 − 法人都度 − OGF − ゴールド − 当月開始。前月末 ' + preview.member.prev +
+    '月初会員 = 当月末在籍 − 法人都度 − OGF − ゴールド − 当月開始 − 規約退会' +
+      (preview.member.kiyaku ? ' ' + preview.member.kiyaku + '（' + (preview.member.kiyakuNames || []).join('・') + '）' : ' 0') +
+      '。前月末 ' + preview.member.prev +
       ' / 当月末 ' + preview.member.end +
       ' / 休会 ' + preview.member.pause
   );
@@ -620,6 +654,39 @@ function gessho3WriteNippo_(nippo, preview, writeGender) {
     genderWritten = true;
   }
   return { member: preview.member.next, genderWritten: genderWritten, options: preview.options.length };
+}
+
+/**
+ * 会員動向（本部シート「経堂」31〜46行）の当月の列へ、オプション区分別実績表の当月末契約数を入れる。
+ * すでに数字が入っているセルは上書きしない。
+ */
+var GESSHO3_HQ_ID_ = '1LOOUG97wuiKbhzl0BjJstXgLaaSCZAKNFdD8P3I5x_o';
+var GESSHO3_HQ_ROWS_ = [
+  [31, '安心サポート'], [32, '安心サポートVIP'], [33, 'オンラインレッスン'], [34, 'セルフエステ'],
+  [35, 'タンニング'], [36, 'プロテイン12杯'], [37, 'プロテイン無制限'], [38, 'ホットスタジオ'],
+  [39, '体組成計'], [40, 'レンタルマット'], [41, 'ヨガロッカー'], [42, 'レンタルタオル'],
+  [43, '契約ロッカー1,500'], [44, '水素水'], [45, 'プロテイン＋水素水'], [46, 'ピラティスリフォーマー']
+];
+
+function gessho3WriteHq_(preview) {
+  var m = String(preview.monthLabel || '').match(/(\d{4})年(\d{1,2})月/);
+  if (!m) return { ok: false, message: '月が分かりません' };
+  var month = Number(m[2]);
+  var col = ((month + 8) % 12) + 3;
+  var byKey = {};
+  (preview.options || []).forEach(function (row) { byKey[gessho3MatchKey_(row.name)] = row; });
+  var sh = SpreadsheetApp.openById(GESSHO3_HQ_ID_).getSheetByName('経堂');
+  if (!sh) return { ok: false, message: '会員動向に経堂シートがありません' };
+  if (Number(sh.getRange(1, col).getValue()) !== month) return { ok: false, message: '会員動向の月の列が見つかりません' };
+  var cur = sh.getRange(31, col, 16, 1).getValues();
+  var wrote = 0;
+  GESSHO3_HQ_ROWS_.forEach(function (pair, i) {
+    var row = byKey[pair[1]];
+    if (!row || !row.end || cur[i][0] !== '') return;
+    sh.getRange(pair[0], col).setValue(row.end);
+    wrote++;
+  });
+  return { ok: true, column: col, wrote: wrote };
 }
 
 function gessho3MonthLabel_(b1) {
@@ -651,16 +718,16 @@ function gessho3SaveMonth_(preview, written) {
     ['女', preview.gender.female, '年齢表（当月末）'],
     ['休会', preview.member.pause, written.genderWritten ? '男女は日報へ書いた' : '男女は月初と合計が違うため日報には未記入'],
     [],
-    ['オプション', '月初', '取込前の日報']
+    ['オプション', '月初', '取込前の日報', '当月末（会員動向へ）']
   ];
   preview.options.forEach(function (row) {
-    rows.push([row.name, row.next, row.current]);
+    rows.push([row.name, row.next, row.current, row.end]);
   });
-  sh.getRange(1, 1, rows.length, 3).setValues(rows.map(function (row) {
-    return [row[0] || '', row[1] === undefined ? '' : row[1], row[2] === undefined ? '' : row[2]];
+  sh.getRange(1, 1, rows.length, 4).setValues(rows.map(function (row) {
+    return [0, 1, 2, 3].map(function (i) { return row[i] === undefined || row[i] === null ? '' : row[i]; });
   }));
-  sh.getRange(1, 1, 1, 3).setFontWeight('bold').setBackground('#111111').setFontColor('#ffffff');
-  sh.getRange(8, 1, 1, 3).setFontWeight('bold').setBackground('#111111').setFontColor('#ffffff');
+  sh.getRange(1, 1, 1, 4).setFontWeight('bold').setBackground('#111111').setFontColor('#ffffff');
+  sh.getRange(8, 1, 1, 4).setFontWeight('bold').setBackground('#111111').setFontColor('#ffffff');
   sh.setColumnWidth(1, 220);
   sh.setColumnWidth(2, 140);
   sh.setColumnWidth(3, 360);
