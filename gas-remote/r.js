@@ -57,6 +57,7 @@ function onOpen() {
   .addToUi();
   ui.createMenu('月初３ファイル')
   .addItem('3ファイルを取り込む', 'openGessho3Files')
+  .addItem('会員動向へ月初を転記（日報→本部）', 'syncHqOpeningFromMenu')
   .addItem('日報の写しを出す', 'ensureNippoMirror')
   .addItem('累計入会・退会を整える', 'formatCumulativeSheets_')
   .addItem('10月の日報を直す', 'fixOctoberNippo_')
@@ -3254,7 +3255,7 @@ function ensureEnjoyPointLink_(ss) {
 }
 
 /** トップの作り（版を上げると次の自動実行で作り直す） */
-var TOP_LAYOUT_VERSION_ = 'simple-v5';
+var TOP_LAYOUT_VERSION_ = 'simple-v6';
 var TOP_SRC_RECEPTION_ = 'https://docs.google.com/spreadsheets/d/14hxiLBzvGTuIpfZcoVjiHpz8b419OzUrtQAr5788h3w/edit';
 var TOP_SRC_UNPAID_ = 'https://docs.google.com/spreadsheets/d/10vpQRDfTdwx_Wb7JaSm3lZCkTk8msLyf8ggAHhI1shI/edit';
 var TOP_SRC_TRIAL_ = 'https://docs.google.com/spreadsheets/d/1RPUw0slNCit9ZwJgINGfv89oc2Hxw8zzAZyMt6g_QuY/edit';
@@ -4039,7 +4040,7 @@ function billingPullTriggered() {
 var MEMBER_SHEET_ = '会員分析';
 var MEMBER_JOIN_SRC_ = '累計入会データ';
 var MEMBER_LEAVE_SRC_ = '累計退会データ';
-var MEMBER_ANALYSIS_VER_ = '18';
+var MEMBER_ANALYSIS_VER_ = '19';
 
 function memberAnalysisNote_(ss, msg) {
   try {
@@ -4510,9 +4511,14 @@ function rebuildReviewDeskFromMenu() {
 
 function rebuildMemberAnalysisFromMenu() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  PropertiesService.getDocumentProperties().deleteProperty('MEMBER_ANALYSIS_SIG');
-  memberAnalysisIfChanged_(ss);
-  ss.toast('会員分析を作り直しました（グラフは白黒＋赤）', '会員分析', 8);
+  try {
+    PropertiesService.getDocumentProperties().deleteProperty('MEMBER_ANALYSIS_SIG');
+    memberAnalysisIfChanged_(ss);
+    ss.toast('会員分析を作り直しました', '会員分析', 8);
+  } catch (err) {
+    ss.toast('会員分析エラー: ' + String(err && err.message ? err.message : err), '会員分析', 12);
+    throw err;
+  }
   var sh = ss.getSheetByName(MEMBER_SHEET_);
   if (sh) ss.setActiveSheet(sh);
 }
