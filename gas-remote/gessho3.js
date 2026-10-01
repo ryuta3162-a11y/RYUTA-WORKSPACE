@@ -688,7 +688,7 @@ var GESSHO3_HQ_AUTO_MAP_ = [
   { key: '休会', row: 20, format: '0', emptyOnly: false },
   { key: '復会', row: 25, format: '0', emptyOnly: false },
   { key: '移籍', row: 26, format: '0', emptyOnly: false },
-  { key: '未納率', row: 27, format: '0.00%', emptyOnly: true },
+  { key: '未納率', row: 27, format: '0.00%', emptyOnly: false },
   { key: '紹介', row: 28, format: '0', emptyOnly: false },
   { key: '見学・体験母数', row: 29, format: '0', emptyOnly: false }
 ];
@@ -707,20 +707,18 @@ function gessho3WriteHq_(preview) {
 
   var wrote = 0;
   if (preview.member && preview.member.next != null && preview.member.next !== '') {
-    sh.getRange(GESSHO3_HQ_MEMBER_ROW_, col).setValue(Number(preview.member.next)).setNumberFormat('0')
-      .setNote('月初３ファイル→日報と同じ月初会員（自動転記）');
+    gessho3HqSetValue_(sh.getRange(GESSHO3_HQ_MEMBER_ROW_, col), Number(preview.member.next), '0');
     wrote++;
   }
   GESSHO3_HQ_ROWS_.forEach(function (pair) {
     var row = byKey[pair[1]];
     if (!row || row.next === '' || row.next == null) return;
-    sh.getRange(pair[0], col).setValue(Number(row.next)).setNumberFormat('0');
+    gessho3HqSetValue_(sh.getRange(pair[0], col), Number(row.next), '0');
     wrote++;
   });
   if (preview.gender && preview.gender.avgAge != null && preview.gender.avgAge !== '') {
     var avg = Math.round(Number(preview.gender.avgAge) * 10) / 10;
-    sh.getRange(GESSHO3_HQ_AVG_AGE_ROW_, col).setValue(avg).setNumberFormat('0.0')
-      .setNote('月初３ファイルの年齢表「合計・平均年齢」から自動記入');
+    gessho3HqSetValue_(sh.getRange(GESSHO3_HQ_AVG_AGE_ROW_, col), avg, '0.0');
     wrote++;
   }
   var auto = gessho3PushHqAutoValues_(sh, col, year, month);
@@ -735,9 +733,17 @@ function gessho3WriteHq_(preview) {
   };
 }
 
+/** 本部セルへ数値だけ書く（関数・メモは付けない。既存メモは消す） */
+function gessho3HqSetValue_(cell, value, format) {
+  cell.clearNote();
+  cell.setValue(value);
+  if (format) cell.setNumberFormat(format);
+}
+
 /**
  * Workspace「会員動向_自動」に関数を用意し、計算結果だけ本部の当月列へ数値で書く。
- * 本部側には関数を置かない（見た目は手入力の数値）。
+ * 未納率は請求・回収実績の AM 列を全月分まとめて数値転記する。
+ * 本部側には関数を置かない。
  */
 function gessho3PushHqAutoValues_(hqSh, col, year, month) {
   var src = gessho3EnsureHqAutoSheet_(year, month);
@@ -749,18 +755,49 @@ function gessho3PushHqAutoValues_(hqSh, col, year, month) {
     if (!key) continue;
     values[key] = body[i][1];
   }
-  var note = 'Workspace「会員動向_自動」から数値転記（関数は本部に無し）';
   var wrote = 0;
   GESSHO3_HQ_AUTO_MAP_.forEach(function (item) {
+    if (item.key === '未納率') return; // 全月は下でまとめて書く
     if (!(item.key in values)) return;
     var v = values[item.key];
     if (v === '' || v == null || (typeof v === 'number' && isNaN(v))) return;
     var cell = hqSh.getRange(item.row, col);
     if (item.emptyOnly && !gessho3HqCellBlankOrFormula_(cell)) return;
-    cell.setValue(v).setNumberFormat(item.format).setNote(note);
+    gessho3HqSetValue_(cell, v, item.format);
     wrote++;
   });
+  wrote += gessho3PushHqUnpaidRates_(hqSh);
+  // 以前付けたメモが残っていたら、自動項目の当月列だけ消す
+  [16, 20, 25, 26, 27, 28, 29].forEach(function (row) {
+    try { hqSh.getRange(row, col).clearNote(); } catch (eN) {}
+  });
   return { wrote: wrote, sheet: GESSHO3_HQ_AUTO_SHEET_, year: year, month: month };
+}
+
+/**
+ * 請求・回収実績 AM5:AM16（未納率）を本部27行の各月列へ数値転記。
+ * 値が空の月は触らない。
+ */
+function gessho3PushHqUnpaidRates_(hqSh) {
+  var ss = SpreadsheetApp.openById('1deuG2zYdIMegMnCCT7lVl4AD7J75K8KisEsH2NVH10Q');
+  var bill = ss.getSheetByName('請求・回収実績');
+  if (!bill) return 0;
+  var labels = bill.getRange(5, 1, 12, 1).getDisplayValues();
+  var rates = bill.getRange(5, 39, 12, 1).getValues(); // AM列
+  var wrote = 0;
+  for (var i = 0; i < 12; i++) {
+    var label = String(labels[i][0] || '');
+    var mm = label.match(/(\d{1,2})月/);
+    if (!mm) continue;
+    var month = Number(mm[1]);
+    var rate = rates[i][0];
+    if (rate === '' || rate == null || (typeof rate === 'number' && isNaN(rate))) continue;
+    var col = ((month + 8) % 12) + 3;
+    if (Number(hqSh.getRange(1, col).getValue()) !== month) continue;
+    gessho3HqSetValue_(hqSh.getRange(27, col), rate, '0.00%');
+    wrote++;
+  }
+  return wrote;
 }
 
 /** 空、または以前入れた関数セルなら上書き可 */
@@ -801,15 +838,16 @@ function gessho3EnsureHqAutoSheet_(year, month) {
     '),0)';
   var unitPrice =
     '=IFERROR(INDEX(\'請求・回収実績\'!D21:D32,MATCH("' + billLabel + '",\'請求・回収実績\'!A21:A32,0)),"")';
+  // 未納率は表本体の AM 列（行5〜16）
   var unpaid =
-    '=IFERROR(INDEX(\'請求・回収実績\'!H21:H32,MATCH("' + billLabel + '",\'請求・回収実績\'!A21:A32,0)),"")';
+    '=IFERROR(INDEX(\'請求・回収実績\'!AM5:AM16,MATCH("' + billLabel + '",\'請求・回収実績\'!A5:A16,0)),"")';
 
   var rows = [
-    ['客単価', unitPrice, '請求・回収実績 → 本部16行（空のときだけ）'],
+    ['客単価', unitPrice, '請求・回収実績 分析D → 本部16行（空のときだけ）'],
     ['休会', '=IFERROR(VALUE(\'' + nip + '\'!C18),)', '日報 C18 → 本部20行'],
     ['復会', '=IFERROR(VALUE(\'' + nip + '\'!F14),)', '日報 F14 → 本部25行'],
     ['移籍', '=IFERROR(VALUE(\'' + nip + '\'!D14),)', '日報 D14 → 本部26行'],
-    ['未納率', unpaid, '請求・回収実績 → 本部27行（空のときだけ）'],
+    ['未納率', unpaid, '請求・回収実績 AM → 本部27行（全月まとめて転記）'],
     ['紹介', '=IFERROR(VALUE(\'' + nip + '\'!H14),)', '日報 H14 → 本部28行'],
     ['見学・体験母数', kengaku, '見学体験申請 → 本部29行']
   ];
