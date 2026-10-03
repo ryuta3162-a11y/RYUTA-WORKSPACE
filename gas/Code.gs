@@ -3223,7 +3223,7 @@ function ensureEnjoyPointLink_(ss) {
 }
 
 /** トップの作り（版を上げると次の自動実行で作り直す） */
-var TOP_LAYOUT_VERSION_ = 'simple-v6';
+var TOP_LAYOUT_VERSION_ = 'simple-v7';
 var TOP_SRC_RECEPTION_ = 'https://docs.google.com/spreadsheets/d/14hxiLBzvGTuIpfZcoVjiHpz8b419OzUrtQAr5788h3w/edit';
 var TOP_SRC_UNPAID_ = 'https://docs.google.com/spreadsheets/d/10vpQRDfTdwx_Wb7JaSm3lZCkTk8msLyf8ggAHhI1shI/edit';
 var TOP_SRC_TRIAL_ = 'https://docs.google.com/spreadsheets/d/1RPUw0slNCit9ZwJgINGfv89oc2Hxw8zzAZyMt6g_QuY/edit';
@@ -3238,8 +3238,11 @@ function topSections_() {
     { label: '数字', items: [
       { name: '経堂マスタ', sub: TOP_SRC_RECEPTION_ },
       { name: '日報', sub: TOP_SRC_RECEPTION_ },
-      { name: '会員分析', sub: { text: '累計データから自動集計' } },
-      { name: '【経堂】会員動向', sub: TOP_SRC_RECEPTION_ },
+      { name: '【経堂】会員動向', sub: TOP_SRC_RECEPTION_ }
+    ] },
+    { label: '分析', items: [
+      { name: '会員分析', sub: { text: '今月の数字（累計データから自動）' } },
+      { name: '入会・退会分析', sub: { text: '推移・退会の内訳・継続率（会議用）' } },
       { name: '有料オプション検討', sub: { text: '目標と月初・入会特典の比較' } }
     ] },
     { label: '未納', items: [
@@ -3984,6 +3987,7 @@ function billingPullTriggered() {
   mark('hqOptHistory', function () { fixHqOptionHistory_(); });
   mark('hqOptNotes', function () { clearHqOptionNotes_(); });
   mark('optPlan', function () { ensureOptionPlanSheet_(ss); });
+  mark('joinLeave', function () { return ensureJoinLeaveAnalysis_(ss); });
   mark('top', function () { ensureTopSimple_(ss); });
   writeTrace();
 }
@@ -5010,6 +5014,248 @@ function reviewTodoOnEdit_(e) {
     reviewLogPut_(log, key, enjoy, date, r[8], r[1]);
   });
   return true;
+}
+
+/**
+ * 入会・退会分析（会議用）：累計入会データ・累計退会データから数式で集計。B2 の基準月で全部切り替わる。
+ * 退会の月＝その月末で辞めた人（CASIOの退会年月が翌月）。会員動向の「解除」と同じ数え方。
+ */
+var JL_SHEET_ = '入会・退会分析';
+var JL_V_ = 'v3';
+
+function ensureJoinLeaveAnalysis_(ss) {
+  var props = PropertiesService.getDocumentProperties();
+  if (props.getProperty('JL_V') === JL_V_ && ss.getSheetByName(JL_SHEET_)) return { ok: true, skipped: true };
+  var join = ss.getSheetByName('累計入会データ');
+  var leave = ss.getSheetByName('累計退会データ');
+  if (!join || !leave) return { ok: false };
+  join.getRange('Y1').setValue('プラン（自動）');
+  join.getRange('Y2').setFormula('=SCAN("",C2:C8000,LAMBDA(a,c,IF(c="",a,c)))');
+  join.getRange('Z1').setValue('在籍月数（自動）');
+  join.getRange('Z2').setFormula('=ARRAYFORMULA(IF(V2:V8000=0,"",IF(W2:W8000="",999,(YEAR(W2:W8000)*12+MONTH(W2:W8000))-(YEAR(V2:V8000)*12+MONTH(V2:V8000)))))');
+  leave.getRange('V1').setValue('プラン（自動）');
+  leave.getRange('V2').setFormula('=SCAN("",C2:C8000,LAMBDA(a,c,IF(c="",a,c)))');
+
+  var INK = '#111111', MUTE = '#7A7A7A', LINE = '#D9D9D9', HEAD = '#F3F3F3', RED = '#B91C1C';
+  var sh = ss.getSheetByName(JL_SHEET_) || ss.insertSheet(JL_SHEET_);
+  sh.getCharts().forEach(function (c) { sh.removeChart(c); });
+  sh.clear();
+  sh.setConditionalFormatRules([]);
+  if (sh.getMaxColumns() < 16) sh.insertColumnsAfter(sh.getMaxColumns(), 16 - sh.getMaxColumns());
+  if (sh.getMaxRows() < 90) sh.insertRowsAfter(sh.getMaxRows(), 90 - sh.getMaxRows());
+
+  var J = "'累計入会データ'!", L = "'累計退会データ'!";
+  var jV = J + '$V$2:$V$8000', jW = J + '$W$2:$W$8000', jX = J + '$X$2:$X$8000', jI = J + '$I$2:$I$8000', jY = J + '$Y$2:$Y$8000';
+  var lU = L + '$U$2:$U$8000', lP = L + '$P$2:$P$8000', lJ = L + '$J$2:$J$8000', lI = L + '$I$2:$I$8000', lV = L + '$V$2:$V$8000';
+
+  var section = function (row, text) {
+    sh.getRange(row, 1).setValue(text).setFontSize(13).setFontWeight('bold').setFontColor(INK);
+  };
+  var header = function (row, labels) {
+    sh.getRange(row, 1, 1, labels.length).setValues([labels]).setBackground(INK).setFontColor('#FFFFFF')
+      .setFontWeight('bold').setHorizontalAlignment('center').setWrap(true);
+  };
+  var box = function (row, n, cols) {
+    sh.getRange(row, 1, n, cols).setBorder(true, true, true, true, true, true, LINE, SpreadsheetApp.BorderStyle.SOLID);
+  };
+
+  sh.getRange('A1').setValue('入会・退会分析').setFontSize(18).setFontWeight('bold').setFontColor(INK);
+  sh.getRange('A2').setValue('基準月').setFontColor(MUTE).setHorizontalAlignment('right');
+  sh.getRange('B2').setFormula('=DATE(YEAR(TODAY()),MONTH(TODAY()),1)').setNumberFormat('yyyy"年"m"月"')
+    .setFontWeight('bold').setFontSize(12).setBackground('#FFF7E6').setHorizontalAlignment('center');
+  sh.getRange('C2').setValue('← 例「2026/9/1」と入れるとその月で全部切り替わります（空にすると今月に戻ります）').setFontColor(MUTE).setFontSize(9);
+  sh.getRange('B2').setDataValidation(SpreadsheetApp.newDataValidation().requireDate().setAllowInvalid(true).build());
+  sh.getRange('P1').setFormula('=IF(ISNUMBER($B$2),DATE(YEAR($B$2),MONTH($B$2),1),DATE(YEAR(TODAY()),MONTH(TODAY()),1))');
+  var BM = '$P$1';
+
+  // ① 12ヶ月の推移
+  section(4, '① 12ヶ月の推移');
+  sh.getRange('C4').setValue('退会＝その月末で辞めた人（会員動向の「解除」と同じ）。月初会員は累計データからの計算').setFontColor(MUTE).setFontSize(9);
+  header(5, ['月', '月初会員', '入会', '退会', '純増', '退会率', '規約退会（参考）']);
+  var t = [];
+  for (var i = 0; i < 12; i++) {
+    var r = 6 + i;
+    t.push([
+      '=EDATE(' + BM + ',' + (i - 11) + ')',
+      '=COUNTIFS(' + jV + ',">0",' + jV + ',"<"&A' + r + ')-COUNTIFS(' + lU + ',"<="&A' + r + ')',
+      '=COUNTIF(' + jV + ',A' + r + ')',
+      '=COUNTIF(' + lU + ',EDATE(A' + r + ',1))',
+      '=C' + r + '-D' + r,
+      '=IFERROR(D' + r + '/B' + r + ',"")',
+      '=COUNTIF(\'規約退会リスト\'!$K$4:$K$500,EDATE(A' + r + ',1))'
+    ]);
+  }
+  sh.getRange(6, 1, 12, 7).setFormulas(t);
+  sh.getRange(18, 1, 1, 7).setFormulas([['="12ヶ月 計"', '=AVERAGE(B6:B17)', '=SUM(C6:C17)', '=SUM(D6:D17)', '=C18-D18', '=IFERROR(AVERAGE(F6:F17),"")', '=SUM(G6:G17)']])
+    .setFontWeight('bold').setBackground(HEAD);
+  sh.getRange('A6:A17').setNumberFormat('yyyy/m');
+  sh.getRange('B6:E18').setNumberFormat('#,##0;[Red]-#,##0');
+  sh.getRange('B18').setNumberFormat('#,##0" (平均)"');
+  sh.getRange('F6:F18').setNumberFormat('0.0%');
+  sh.getRange('F18').setNumberFormat('0.0%" (平均)"');
+  sh.getRange('G6:G18').setNumberFormat('0');
+  sh.getRange('A17:G17').setFontWeight('bold');
+  box(5, 14, 7);
+
+  // ② 退会した人の内訳
+  section(21, '② 退会した人の内訳');
+  sh.getRange('C21').setValue('直近12ヶ月（①の期間）と基準月だけの人数').setFontColor(MUTE).setFontSize(9);
+  header(22, ['区分', '項目', '直近12ヶ月', '割合', '基準月']);
+  var isD = 'ISNUMBER(' + lU + ')';
+  var win12 = '(' + isD + '*(IFERROR(' + lU + '*1,0)>=EDATE($A$6,1))*(IFERROR(' + lU + '*1,0)<=EDATE($A$17,1)))';
+  var winM = '(' + isD + '*(IFERROR(' + lU + '*1,0)=EDATE($A$17,1)))';
+  var P = 'IFERROR(VALUE(' + lP + '),-1)', A = 'IFERROR(VALUE(' + lJ + '),-1)';
+  var leaveRows = [
+    ['在籍期間', '3ヶ月以内', '(' + P + '>=0)*(' + P + '<=3)'],
+    ['', '4〜6ヶ月', '(' + P + '>=4)*(' + P + '<=6)'],
+    ['', '7〜12ヶ月', '(' + P + '>=7)*(' + P + '<=12)'],
+    ['', '1〜2年', '(' + P + '>=13)*(' + P + '<=24)'],
+    ['', '2年超', '(' + P + '>=25)'],
+    ['年代', '10代', '(' + A + '>=0)*(' + A + '<20)'],
+    ['', '20代', '(' + A + '>=20)*(' + A + '<30)'],
+    ['', '30代', '(' + A + '>=30)*(' + A + '<40)'],
+    ['', '40代', '(' + A + '>=40)*(' + A + '<50)'],
+    ['', '50代', '(' + A + '>=50)*(' + A + '<60)'],
+    ['', '60代以上', '(' + A + '>=60)'],
+    ['男女', '男', '(' + lI + '="男")'],
+    ['', '女', '(' + lI + '="女")'],
+    ['プラン', 'ナショナル会員U', '(' + lV + '="ナショナル会員U")'],
+    ['', '法人個人月払B', '(' + lV + '="法人個人月払B")'],
+    ['', '法人個人月払A', '(' + lV + '="法人個人月払A")'],
+    ['', '閉店移籍会員3', '(' + lV + '="閉店移籍会員3")']
+  ];
+  var lr = leaveRows.map(function (x, k) {
+    var r = 23 + k;
+    return [x[0], x[1], '=SUMPRODUCT(' + win12 + '*' + x[2] + ')', '=IFERROR(C' + r + '/$D$18,"")', '=SUMPRODUCT(' + winM + '*' + x[2] + ')'];
+  });
+  var otherRow = 23 + lr.length;
+  lr.push(['', 'その他', '=$D$18-SUM(C' + (otherRow - 4) + ':C' + (otherRow - 1) + ')', '=IFERROR(C' + otherRow + '/$D$18,"")', '=$D$17-SUM(E' + (otherRow - 4) + ':E' + (otherRow - 1) + ')']);
+  sh.getRange(23, 3, lr.length, 3).setFormulas(lr.map(function (x) { return [x[2], x[3], x[4]]; }));
+  sh.getRange(23, 1, lr.length, 2).setValues(lr.map(function (x) { return [x[0], x[1]]; }));
+  sh.getRange(23, 1, lr.length, 1).setFontWeight('bold').setFontColor(INK);
+  sh.getRange(23, 4, lr.length, 1).setNumberFormat('0%');
+  box(22, lr.length + 1, 5);
+  [27, 33, 35].forEach(function (r) { sh.getRange(r, 1, 1, 5).setBorder(null, null, true, null, null, null, INK, SpreadsheetApp.BorderStyle.SOLID); });
+  var leaveEnd = 22 + lr.length;
+
+  // ③ 入会した月ごとの継続率
+  var c0 = leaveEnd + 3;
+  section(c0, '③ 入会した月ごとの継続率');
+  sh.getRange(c0, 3).setValue('入会した人のうち、何ヶ月後もまだ在籍しているか（まだその月が来ていないところは空欄）').setFontColor(MUTE).setFontSize(9);
+  header(c0 + 1, ['入会月', '入会数', '1ヶ月後', '3ヶ月後', '6ヶ月後', '12ヶ月後']);
+  var ks = [1, 3, 6, 12];
+  var co = [];
+  for (var m = 0; m < 12; m++) {
+    var r2 = c0 + 2 + m;
+    var row = ['=EDATE(' + BM + ',' + (m - 12) + ')', '=COUNTIF(' + jV + ',A' + r2 + ')'];
+    ks.forEach(function (k) {
+      row.push('=IF(OR(B' + r2 + '=0,EDATE(A' + r2 + ',' + k + ')>' + BM + '),"",(COUNTIFS(' + jV + ',A' + r2 + ',' + jW + ',"")+COUNTIFS(' + jV + ',A' + r2 + ',' + jW + ',">"&EDATE(A' + r2 + ',' + k + ')))/B' + r2 + ')');
+    });
+    co.push(row);
+  }
+  sh.getRange(c0 + 2, 1, 12, 6).setFormulas(co);
+  var avgRow = c0 + 14;
+  var avg = ['="平均"', '=SUM(B' + (c0 + 2) + ':B' + (c0 + 13) + ')'];
+  ['C', 'D', 'E', 'F'].forEach(function (col) {
+    avg.push('=IFERROR(SUMPRODUCT(N(' + col + (c0 + 2) + ':' + col + (c0 + 13) + '),$B' + (c0 + 2) + ':$B' + (c0 + 13) + ')/SUMPRODUCT((' + col + (c0 + 2) + ':' + col + (c0 + 13) + '<>"")*$B' + (c0 + 2) + ':$B' + (c0 + 13) + '),"")');
+  });
+  sh.getRange(avgRow, 1, 1, 6).setFormulas([avg]).setFontWeight('bold').setBackground(HEAD);
+  sh.getRange(c0 + 2, 1, 12, 1).setNumberFormat('yyyy/m');
+  sh.getRange(c0 + 2, 3, 13, 4).setNumberFormat('0.0%');
+  box(c0 + 1, 14, 6);
+  var coRange = sh.getRange(c0 + 2, 3, 12, 4);
+
+  // ④ 続きやすさの違い（6ヶ月継続率）
+  var d0 = avgRow + 3;
+  section(d0, '④ 続きやすさの違い（6ヶ月後も在籍している割合）');
+  sh.getRange(d0, 3).setValue('6ヶ月たった入会者（基準月の18〜7ヶ月前に入会した人）で比べています').setFontColor(MUTE).setFontSize(9);
+  header(d0 + 1, ['区分', '項目', '入会数', '6ヶ月後も在籍', '6ヶ月継続率']);
+  var win = '(' + jV + '>=EDATE(' + BM + ',-18))*(' + jV + '<=EDATE(' + BM + ',-7))';
+  var stay = '(' + J + '$Z$2:$Z$8000>6)';
+  var segs = [
+    ['全体', '全員', '1'],
+    ['年代', '10代', '(' + jX + '<20)'],
+    ['', '20代', '(' + jX + '>=20)*(' + jX + '<30)'],
+    ['', '30代', '(' + jX + '>=30)*(' + jX + '<40)'],
+    ['', '40代', '(' + jX + '>=40)*(' + jX + '<50)'],
+    ['', '50代', '(' + jX + '>=50)*(' + jX + '<60)'],
+    ['', '60代以上', '(' + jX + '>=60)'],
+    ['男女', '男', '(' + jI + '="男")'],
+    ['', '女', '(' + jI + '="女")'],
+    ['プラン', 'ナショナル会員U', '(' + jY + '="ナショナル会員U")'],
+    ['', '法人個人月払B', '(' + jY + '="法人個人月払B")'],
+    ['', '法人個人月払A', '(' + jY + '="法人個人月払A")'],
+    ['', '閉店移籍会員3', '(' + jY + '="閉店移籍会員3")']
+  ];
+  var sg = segs.map(function (x, k) {
+    var r3 = d0 + 2 + k;
+    return [x[0], x[1], '=SUMPRODUCT(' + win + '*' + x[2] + ')', '=SUMPRODUCT(' + win + '*' + x[2] + '*' + stay + ')', '=IFERROR(D' + r3 + '/C' + r3 + ',"")'];
+  });
+  sh.getRange(d0 + 2, 3, sg.length, 3).setFormulas(sg.map(function (x) { return [x[2], x[3], x[4]]; }));
+  sh.getRange(d0 + 2, 1, sg.length, 2).setValues(sg.map(function (x) { return [x[0], x[1]]; }));
+  sh.getRange(d0 + 2, 1, sg.length, 1).setFontWeight('bold');
+  sh.getRange(d0 + 2, 1, 1, 5).setBackground(HEAD).setFontWeight('bold');
+  sh.getRange(d0 + 2, 5, sg.length, 1).setNumberFormat('0.0%').setFontWeight('bold');
+  box(d0 + 1, sg.length + 1, 5);
+  var segRange = sh.getRange(d0 + 3, 5, sg.length - 1, 1);
+
+  sh.setConditionalFormatRules([
+    SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=AND(ISNUMBER(C' + (c0 + 2) + '),C' + (c0 + 2) + '<C$' + avgRow + '-0.03)')
+      .setFontColor(RED).setBold(true).setRanges([coRange]).build(),
+    SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=AND(ISNUMBER(E' + (d0 + 3) + '),E' + (d0 + 3) + '<$E$' + (d0 + 2) + '-0.03)')
+      .setFontColor(RED).setBold(true).setRanges([segRange]).build(),
+    SpreadsheetApp.newConditionalFormatRule().whenNumberGreaterThan(0).setFontColor(RED).setRanges([sh.getRange('G6:G18')]).build()
+  ]);
+
+  var notes = d0 + 2 + sg.length + 1;
+  sh.getRange(notes, 1, 3, 1).setValues([
+    ['赤字＝平均より3ポイント以上低いところ（③は各列の平均、④は全体と比べて）'],
+    ['規約退会（参考）＝規約退会リストの人数。CASIOの退会データにまだ載っていない場合があるので「退会」とは別に表示'],
+    ['プランは累計データの契約名称から判定。データは「累計入会データ」「累計退会データ」から自動で集計されます']
+  ]).setFontColor(MUTE).setFontSize(9);
+
+  sh.getRange(1, 1, notes + 3, 7).setFontFamily('Arial');
+  sh.getRange(5, 2, notes, 6).setHorizontalAlignment('right');
+  sh.getRange(22, 2, lr.length + 1, 1).setHorizontalAlignment('left');
+  sh.getRange(d0 + 1, 2, sg.length + 1, 1).setHorizontalAlignment('left');
+  sh.getRange('A5:G5').setHorizontalAlignment('center');
+  sh.setColumnWidth(1, 110);
+  sh.setColumnWidth(2, 130);
+  for (var cw = 3; cw <= 7; cw++) sh.setColumnWidth(cw, 100);
+  sh.setColumnWidth(8, 24);
+  sh.hideColumns(16);
+  sh.setHiddenGridlines(true);
+  sh.setFrozenRows(2);
+
+  var ch1 = sh.newChart().asComboChart()
+    .addRange(sh.getRange('A5:A17')).addRange(sh.getRange('C5:D17')).addRange(sh.getRange('F5:F17'))
+    .setOption('title', '入会・退会と退会率（12ヶ月）')
+    .setOption('useFirstColumnAsDomain', true)
+    .setOption('series', { 0: { type: 'bars', color: '#111111' }, 1: { type: 'bars', color: '#B0B0B0' }, 2: { type: 'line', color: '#B91C1C', targetAxisIndex: 1 } })
+    .setOption('vAxes', { 0: { title: '人数' }, 1: { title: '退会率', format: 'percent' } })
+    .setOption('legend', { position: 'bottom' })
+    .setOption('width', 620).setOption('height', 300)
+    .setPosition(4, 9, 0, 0).build();
+  sh.insertChart(ch1);
+  var ch2 = sh.newChart().asBarChart()
+    .addRange(sh.getRange('B23:C27'))
+    .setOption('title', '退会した人の在籍期間（直近12ヶ月）')
+    .setOption('colors', ['#111111']).setOption('legend', { position: 'none' })
+    .setOption('width', 620).setOption('height', 260)
+    .setPosition(21, 9, 0, 0).build();
+  sh.insertChart(ch2);
+  var ch3 = sh.newChart().asLineChart()
+    .addRange(sh.getRange(c0 + 1, 1, 13, 1)).addRange(sh.getRange(c0 + 1, 4, 13, 2))
+    .setOption('title', '入会月ごとの3ヶ月・6ヶ月継続率')
+    .setOption('useFirstColumnAsDomain', true)
+    .setOption('colors', ['#111111', '#B91C1C']).setOption('vAxis', { format: 'percent' })
+    .setOption('legend', { position: 'bottom' })
+    .setOption('width', 620).setOption('height', 300)
+    .setPosition(c0, 9, 0, 0).build();
+  sh.insertChart(ch3);
+
+  props.setProperty('JL_V', JL_V_);
+  return { ok: true };
 }
 
 function clearHqOptionNotes_() {
