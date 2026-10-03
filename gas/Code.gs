@@ -3892,6 +3892,10 @@ function billingOnEdit(e) {
     syncUnpaidMirror_(sh.getParent(), true);
     return;
   }
+  if (sh.getName() === REVIEW_TODO_SHEET_) {
+    reviewTodoOnEdit_(e);
+    return;
+  }
   if (sh.getName() !== BILL_SHEET_) return;
   var months = billMonths_();
   var r0 = e.range.getRow();
@@ -3975,6 +3979,7 @@ function billingPullTriggered() {
   mark('hqOptHistory', function () { fixHqOptionHistory_(); });
   mark('hqOptNotes', function () { clearHqOptionNotes_(); });
   mark('optPlan', function () { ensureOptionPlanSheet_(ss); });
+  mark('reviewTodo', function () { syncReviewTodo_(ss); });
   try { ensureTopSimple_(ss); } catch (e0) { console.error(e0); }
 }
 
@@ -4840,6 +4845,145 @@ function ensureOptionPlanSheet_(ss) {
   sh.setHiddenGridlines(true);
   props.setProperty('OPT_PLAN_V', OPT_PLAN_V_);
   return { ok: true };
+}
+
+/**
+ * 口コミ管理：未対応の口コミを一覧にして、ここでエンジョイ付与をチェックする。
+ * ① EAST付与は口コミ_経堂の「ポイント付与済」（付与アプリが書く）をそのまま表示。
+ * ② エンジョイ付与・メモはこのシートで入力し、隠しシート「口コミ付与記録」に残す。両方済で一覧から消える。
+ * 10/3 より前に EAST付与済みの口コミは完了扱い。
+ */
+var REVIEW_TODO_SHEET_ = '口コミ管理';
+var REVIEW_LOG_SHEET_ = '口コミ付与記録';
+var REVIEW_TODO_ROW_ = 16;
+var REVIEW_ENJOY_SINCE_ = new Date(2026, 9, 3);
+
+function reviewKey_(row) {
+  if (row[15]) return String(row[15]);
+  var t = row[0] instanceof Date ? Utilities.formatDate(row[0], 'Asia/Tokyo', 'yyyyMMddHHmm') : String(row[0]);
+  return t + '_' + String(row[5]);
+}
+
+function reviewTruthy_(v) {
+  return v === true || /^(true|☑|済)$/i.test(String(v).trim());
+}
+
+function reviewLog_(ss) {
+  var log = ss.getSheetByName(REVIEW_LOG_SHEET_);
+  if (!log) {
+    log = ss.insertSheet(REVIEW_LOG_SHEET_);
+    log.getRange(1, 1, 1, 5).setValues([['key', 'エンジョイ付与', '付与日', 'メモ', '氏名']]);
+    log.hideSheet();
+  }
+  var map = {};
+  if (log.getLastRow() > 1) {
+    log.getRange(2, 1, log.getLastRow() - 1, 5).getValues().forEach(function (r, i) {
+      if (r[0]) map[String(r[0])] = { row: i + 2, enjoy: r[1] === true, date: r[2], memo: r[3], name: r[4] };
+    });
+  }
+  return { sheet: log, map: map };
+}
+
+function reviewLogPut_(log, key, enjoy, date, memo, name) {
+  var cur = log.map[key];
+  var vals = [[key, enjoy === true, date || '', memo || '', name || '']];
+  if (cur) log.sheet.getRange(cur.row, 1, 1, 5).setValues(vals);
+  else {
+    log.sheet.appendRow(vals[0]);
+    log.map[key] = { row: log.sheet.getLastRow() };
+  }
+  log.map[key].enjoy = enjoy === true;
+  log.map[key].date = date;
+  log.map[key].memo = memo;
+}
+
+function syncReviewTodo_(ss) {
+  var sh = ss.getSheetByName(REVIEW_TODO_SHEET_);
+  var src = ss.getSheetByName('口コミ_経堂');
+  if (!sh || !src) return { ok: false };
+  var INK = '#111111', MUTE = '#7A7A7A', LINE = '#D9D9D9', RED = '#B91C1C', HEAD = '#111111';
+  var log = reviewLog_(ss);
+
+  var maxR = Math.max(sh.getMaxRows(), REVIEW_TODO_ROW_);
+  if (maxR >= REVIEW_TODO_ROW_) {
+    var cur = sh.getRange(REVIEW_TODO_ROW_, 1, maxR - REVIEW_TODO_ROW_ + 1, 12).getValues();
+    cur.forEach(function (r) {
+      var key = String(r[11] || '');
+      if (!key) return;
+      var old = log.map[key] || {};
+      if (old.enjoy !== (r[6] === true) || String(old.memo || '') !== String(r[8] || '')) {
+        reviewLogPut_(log, key, r[6] === true, r[6] === true ? (r[7] || new Date()) : '', r[8], r[1]);
+      }
+    });
+  }
+
+  var last = src.getLastRow();
+  var rows = last >= 3 ? src.getRange(3, 1, last - 2, 23).getValues() : [];
+  var todo = [];
+  rows.forEach(function (r) {
+    if (!r[4]) return;
+    var key = reviewKey_(r);
+    var east = reviewTruthy_(r[21]);
+    var eastAt = r[22] instanceof Date ? r[22] : null;
+    var lg = log.map[key] || {};
+    if (east && eastAt && eastAt < REVIEW_ENJOY_SINCE_) return;
+    if (east && lg.enjoy) return;
+    todo.push([r[0], r[4], String(r[5] || ''), r[3], r[9], east ? '✓ 済' : '未', lg.enjoy === true, lg.date || '', lg.memo || '', '', '', key]);
+  });
+  todo.sort(function (a, b) { return (b[0] instanceof Date ? b[0].getTime() : 0) - (a[0] instanceof Date ? a[0].getTime() : 0); });
+
+  var area = sh.getRange(13, 1, Math.max(sh.getMaxRows() - 12, 1), 12);
+  area.clearContent();
+  area.clearFormat();
+  area.clearDataValidations();
+  sh.getRange('A13').setValue('流れ：① 口コミ付与アプリでEAST付与（済になると自動で ✓）→ ② エンジョイ付与をしたら G にチェック → 両方済で一覧から消えます').setFontColor(MUTE).setFontSize(9);
+  sh.getRange('A14').setValue('未対応の口コミ（' + todo.length + '件）').setFontWeight('bold').setFontSize(12).setFontColor(INK);
+  var head = ['口コミ日', '氏名', '会員番号', '評価', '来店日', '① EAST付与', '② エンジョイ付与', '付与日', 'メモ'];
+  sh.getRange(15, 1, 1, head.length).setValues([head]).setBackground(HEAD).setFontColor('#FFFFFF').setFontWeight('bold').setHorizontalAlignment('center');
+  if (todo.length) {
+    var need = REVIEW_TODO_ROW_ + todo.length - 1;
+    if (sh.getMaxRows() < need) sh.insertRowsAfter(sh.getMaxRows(), need - sh.getMaxRows());
+    var rg = sh.getRange(REVIEW_TODO_ROW_, 1, todo.length, 12);
+    rg.setValues(todo);
+    sh.getRange(REVIEW_TODO_ROW_, 1, todo.length, 1).setNumberFormat('M/d');
+    sh.getRange(REVIEW_TODO_ROW_, 5, todo.length, 1).setNumberFormat('M/d');
+    sh.getRange(REVIEW_TODO_ROW_, 8, todo.length, 1).setNumberFormat('M/d');
+    sh.getRange(REVIEW_TODO_ROW_, 3, todo.length, 1).setNumberFormat('@');
+    sh.getRange(REVIEW_TODO_ROW_, 7, todo.length, 1).insertCheckboxes();
+    sh.getRange(REVIEW_TODO_ROW_, 1, todo.length, 8).setHorizontalAlignment('center');
+    sh.getRange(REVIEW_TODO_ROW_, 2, todo.length, 1).setHorizontalAlignment('left').setFontWeight('bold');
+    sh.getRange(REVIEW_TODO_ROW_, 1, todo.length, head.length).setBorder(true, true, true, true, true, true, LINE, SpreadsheetApp.BorderStyle.SOLID).setFontColor(INK);
+    todo.forEach(function (t, i) {
+      if (t[5] === '未') sh.getRange(REVIEW_TODO_ROW_ + i, 6).setFontColor(RED).setFontWeight('bold');
+    });
+    sh.getRange(REVIEW_TODO_ROW_, 12, todo.length, 1).setFontColor('#FFFFFF').setFontSize(6);
+  } else {
+    sh.getRange(REVIEW_TODO_ROW_, 1).setValue('未対応はありません').setFontColor(MUTE);
+  }
+  return { ok: true, todo: todo.length };
+}
+
+function reviewTodoOnEdit_(e) {
+  var sh = e.range.getSheet();
+  var r0 = e.range.getRow(), c0 = e.range.getColumn();
+  if (r0 < REVIEW_TODO_ROW_ || (c0 !== 7 && c0 !== 9)) return false;
+  var ss = sh.getParent();
+  var log = reviewLog_(ss);
+  var n = e.range.getNumRows();
+  var vals = sh.getRange(r0, 1, n, 12).getValues();
+  var finished = false;
+  vals.forEach(function (r, i) {
+    var key = String(r[11] || '');
+    if (!key) return;
+    var enjoy = r[6] === true;
+    var date = enjoy ? (r[7] || new Date()) : '';
+    if (enjoy && !r[7]) sh.getRange(r0 + i, 8).setValue(date).setNumberFormat('M/d');
+    if (!enjoy && r[7]) sh.getRange(r0 + i, 8).clearContent();
+    reviewLogPut_(log, key, enjoy, date, r[8], r[1]);
+    if (enjoy && String(r[5]).indexOf('済') >= 0) finished = true;
+  });
+  if (finished) syncReviewTodo_(ss);
+  return true;
 }
 
 function clearHqOptionNotes_() {
