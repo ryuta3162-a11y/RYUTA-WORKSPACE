@@ -3223,7 +3223,7 @@ function ensureEnjoyPointLink_(ss) {
 }
 
 /** トップの作り（版を上げると次の自動実行で作り直す） */
-var TOP_LAYOUT_VERSION_ = 'simple-v3';
+var TOP_LAYOUT_VERSION_ = 'simple-v4';
 var TOP_SRC_RECEPTION_ = 'https://docs.google.com/spreadsheets/d/14hxiLBzvGTuIpfZcoVjiHpz8b419OzUrtQAr5788h3w/edit';
 var TOP_SRC_UNPAID_ = 'https://docs.google.com/spreadsheets/d/10vpQRDfTdwx_Wb7JaSm3lZCkTk8msLyf8ggAHhI1shI/edit';
 var TOP_SRC_TRIAL_ = 'https://docs.google.com/spreadsheets/d/1RPUw0slNCit9ZwJgINGfv89oc2Hxw8zzAZyMt6g_QuY/edit';
@@ -3239,7 +3239,8 @@ function topSections_() {
       { name: '経堂マスタ', sub: TOP_SRC_RECEPTION_ },
       { name: '日報', sub: TOP_SRC_RECEPTION_ },
       { name: '会員分析', sub: { text: '累計データから自動集計' } },
-      { name: '【経堂】会員動向', sub: TOP_SRC_RECEPTION_ }
+      { name: '【経堂】会員動向', sub: TOP_SRC_RECEPTION_ },
+      { name: '有料オプション検討', sub: { text: '目標と月初・入会特典の比較' } }
     ] },
     { label: '未納', items: [
       { name: '未納管理', sub: TOP_SRC_UNPAID_ },
@@ -3973,6 +3974,7 @@ function billingPullTriggered() {
   try { fixNippoOctKiyaku_(); } catch (e15) { console.error(e15); }
   mark('hqOptHistory', function () { fixHqOptionHistory_(); });
   mark('hqOptNotes', function () { clearHqOptionNotes_(); });
+  mark('optPlan', function () { ensureOptionPlanSheet_(ss); });
   try { ensureTopSimple_(ss); } catch (e0) { console.error(e0); }
 }
 
@@ -4723,6 +4725,121 @@ function fixHqOptionHistory_() {
   });
   props.setProperty('HQ_OPT_HISTORY_FIX', 'v2');
   return { ok: true, changed: changed };
+}
+
+/**
+ * 有料オプション検討：会員動向の「有料ＯＰ計画」（72〜88行）と月初実績（31〜46行）を並べ、
+ * 各月OP表の「当月契約開始」（入会時に付く特典）と「翌月1日解約」を横に置く。
+ */
+var OPT_PLAN_SHEET_ = '有料オプション検討';
+var OPT_DATA_SHEET_ = 'OP表データ';
+var OPT_PLAN_V_ = 'v1';
+var OPT_PLAN_ITEMS_ = [
+  ['安心サポート', 73, 31, '単独'], ['安心サポートVIP', 74, 32, '入会パック'], ['水素水', 75, 44, '単独'],
+  ['オンラインレッスン', 76, 33, '入会パック'], ['グループリフォーマー', 77, 46, '単独'], ['セルフエステ', 78, 34, '入会パック'],
+  ['タンニング', 79, 35, '入会パック'], ['プロテイン12杯', 80, 36, '単独'], ['プロテイン飲み放題', 81, 37, '単独'],
+  ['ホットスタジオ', 82, 38, '入会パック'], ['ボディプランナー', 83, 39, '入会パック'], ['マットレンタル', 84, 40, '入会パック'],
+  ['ヨガマット契約ロッカー', 85, 41, '単独'], ['レンタルタオル', 86, 42, '入会パック'], ['契約ロッカー', 87, 43, '単独'],
+  ['水素水+プロテイン(6)', 88, 45, '入会パック']
+];
+var OPT_FLOW_ = {
+  4: [[0, 127, 9, 126, 4, 39, 89, 0, 0, 128, 127, 127, 0, 127, 6, 162], [0, 98, 10, 102, 1, 29, 73, 0, 0, 105, 97, 103, 0, 99, 9, 96]],
+  5: [[0, 73, 4, 70, 0, 24, 52, 0, 0, 73, 73, 71, 0, 70, 2, 70], [0, 78, 6, 78, 2, 24, 49, 0, 0, 85, 75, 82, 0, 81, 1, 78]],
+  6: [[0, 58, 5, 58, 1, 22, 36, 0, 0, 58, 96, 57, 0, 58, 2, 59], [1, 63, 3, 64, 1, 22, 45, 0, 0, 61, 72, 60, 2, 63, 1, 100]],
+  7: [[0, 68, 16, 65, 2, 21, 49, 0, 0, 65, 67, 65, 1, 65, 1, 65], [0, 74, 5, 69, 2, 23, 50, 0, 0, 73, 87, 69, 2, 68, 3, 71]],
+  8: [[0, 92, 6, 91, 4, 38, 58, 0, 0, 95, 97, 92, 0, 92, 2, 93], [0, 89, 5, 91, 3, 38, 56, 0, 0, 89, 94, 90, 1, 93, 3, 88]],
+  9: [[0, 87, 11, 86, 3, 25, 63, 0, 0, 87, 90, 87, 1, 86, 2, 89], [0, 72, 4, 69, 1, 22, 53, 0, 0, 72, 75, 70, 1, 69, 0, 73]],
+  10: [[0, 15, 1, 14, 5, 4, 10, 0, 0, 15, 14, 14, 0, 14, 1, 15], null]
+};
+
+function ensureOptionPlanSheet_(ss) {
+  var props = PropertiesService.getDocumentProperties();
+  if (props.getProperty('OPT_PLAN_V') === OPT_PLAN_V_ && ss.getSheetByName(OPT_PLAN_SHEET_)) return { ok: true, skipped: true };
+  var INK = '#111111', MUTE = '#7A7A7A', LINE = '#D9D9D9', RED = '#B91C1C', HEAD = '#F3F3F3';
+
+  var data = ss.getSheetByName(OPT_DATA_SHEET_) || ss.insertSheet(OPT_DATA_SHEET_);
+  data.clear();
+  var rows = [['月', '項目', '当月契約開始', '翌月1日解約']];
+  Object.keys(OPT_FLOW_).forEach(function (m) {
+    OPT_PLAN_ITEMS_.forEach(function (it, i) {
+      var f = OPT_FLOW_[m];
+      rows.push([Number(m), it[0], f[0][i], f[1] ? f[1][i] : '']);
+    });
+  });
+  data.getRange(1, 1, rows.length, 4).setValues(rows);
+  data.hideSheet();
+
+  var sh = ss.getSheetByName(OPT_PLAN_SHEET_) || ss.insertSheet(OPT_PLAN_SHEET_);
+  sh.clear();
+  sh.setConditionalFormatRules([]);
+  var hq = "'【経堂】会員動向'!";
+  sh.getRange('A1').setValue('有料オプション検討').setFontSize(16).setFontWeight('bold').setFontColor(INK);
+  sh.getRange('A2').setValue('月').setFontColor(MUTE);
+  sh.getRange('B2').setNumberFormat('@').setValue('10').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center')
+    .setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(['4', '5', '6', '7', '8', '9', '10', '11', '12', '1', '2', '3'], true).build());
+  sh.getRange('C2').setValue('← 月を選ぶと切り替わります（目標・月初は会員動向、新規開始・解約は各月のOP表）').setFontColor(MUTE).setFontSize(9);
+
+  var head = ['項目', '区分', '目標（有料OP計画）', '月初実績', '差', '達成率', '当月 新規開始', '翌月1日 解約', '解約 ÷ 新規開始'];
+  sh.getRange(4, 1, 1, head.length).setValues([head]).setFontWeight('bold').setBackground(HEAD).setFontColor(INK)
+    .setHorizontalAlignment('center').setWrap(true);
+  var mcol = 'MATCH(VALUE($B$2),' + hq + '$C$1:$N$1,0)';
+  var body = OPT_PLAN_ITEMS_.map(function (it, i) {
+    var r = 5 + i;
+    return [
+      it[0], it[3],
+      '=IFERROR(VALUE(TRIM(INDEX(' + hq + '$C$' + it[1] + ':$N$' + it[1] + ',1,' + mcol + '))),"")',
+      '=IFERROR(INDEX(' + hq + '$C$' + it[2] + ':$N$' + it[2] + ',1,' + mcol + '),"")',
+      '=IF(OR(C' + r + '="",D' + r + '=""),"",D' + r + '-C' + r + ')',
+      '=IFERROR(D' + r + '/C' + r + ',"")',
+      '=IFERROR(INDEX(FILTER(\'' + OPT_DATA_SHEET_ + '\'!C:C,\'' + OPT_DATA_SHEET_ + '\'!A:A=VALUE($B$2),\'' + OPT_DATA_SHEET_ + '\'!B:B=A' + r + '),1),"")',
+      '=IFERROR(INDEX(FILTER(\'' + OPT_DATA_SHEET_ + '\'!D:D,\'' + OPT_DATA_SHEET_ + '\'!A:A=VALUE($B$2),\'' + OPT_DATA_SHEET_ + '\'!B:B=A' + r + '),1),"")',
+      '=IFERROR(IF(OR(G' + r + '="",H' + r + '="",G' + r + '=0),"",H' + r + '/G' + r + '),"")'
+    ];
+  });
+  var last = 4 + body.length;
+  sh.getRange(5, 1, body.length, head.length).setFormulas(body.map(function (r) { return r.map(String); }));
+  sh.getRange(5, 1, body.length, 2).setValues(OPT_PLAN_ITEMS_.map(function (it) { return [it[0], it[3]]; }));
+  sh.getRange(5, 2, body.length, 1).setFontColor(MUTE).setHorizontalAlignment('center');
+  sh.getRange(5, 3, body.length, 3).setNumberFormat('#,##0;[Red]-#,##0').setHorizontalAlignment('right');
+  sh.getRange(5, 4, body.length, 1).setFontWeight('bold');
+  sh.getRange(5, 6, body.length, 1).setNumberFormat('0%').setHorizontalAlignment('right');
+  sh.getRange(5, 7, body.length, 2).setNumberFormat('#,##0').setHorizontalAlignment('right');
+  sh.getRange(5, 9, body.length, 1).setNumberFormat('0%').setHorizontalAlignment('right');
+  var tr = last + 1;
+  sh.getRange(tr, 1, 1, head.length).setValues([['合計', '', '=SUM(C5:C' + last + ')', '=SUM(D5:D' + last + ')', '=D' + tr + '-C' + tr, '=IFERROR(D' + tr + '/C' + tr + ',"")', '=SUM(G5:G' + last + ')', '=SUM(H5:H' + last + ')', '=IFERROR(H' + tr + '/G' + tr + ',"")']])
+    .setFontWeight('bold').setBackground(HEAD);
+  sh.getRange(tr, 3, 1, 3).setNumberFormat('#,##0;[Red]-#,##0');
+  sh.getRange(tr, 6).setNumberFormat('0%');
+  sh.getRange(tr, 9).setNumberFormat('0%');
+  sh.getRange(4, 1, tr - 3, head.length).setBorder(true, true, true, true, true, true, LINE, SpreadsheetApp.BorderStyle.SOLID).setFontFamily('Arial');
+  sh.setConditionalFormatRules([
+    SpreadsheetApp.newConditionalFormatRule().whenNumberLessThan(0).setFontColor(RED).setRanges([sh.getRange(5, 5, body.length + 1, 1)]).build(),
+    SpreadsheetApp.newConditionalFormatRule().whenNumberGreaterThanOrEqualTo(0.8).setFontColor(RED).setRanges([sh.getRange(5, 9, body.length + 1, 1)]).build()
+  ]);
+
+  var notes = [
+    ['見かた'],
+    ['・月初実績＝前月末の契約数 − 当月1日の解約数（その月に入会した人の特典分は入っていない）'],
+    ['・当月 新規開始＝その月に始まった契約。「入会パック」の項目は入会者ほぼ全員に付いていて、入会特典（無料）とみられる'],
+    ['・翌月1日 解約＝その月の翌月1日に解約になった数。新規開始とほぼ同じ数なら、特典のまま外れている'],
+    [''],
+    ['一緒に決めたいこと'],
+    ['① 入会特典の無料期間は「入会月だけ」か「翌月まで」か（翌月までなら、月初実績にもまだ無料の人が混ざる）'],
+    ['② 有料OP計画の数字は「月初実績」と比べてよいか（＝月初時点で有料の契約数として作られた目標か）'],
+    ['③ 1人ずつ有料／無料を分けたい場合、CASIOで出せる明細（契約開始日・金額つきのオプション契約一覧）があるか']
+  ];
+  sh.getRange(tr + 2, 1, notes.length, 1).setValues(notes).setFontColor(MUTE).setFontSize(9);
+  sh.getRange(tr + 2, 1).setFontColor(INK).setFontWeight('bold').setFontSize(10);
+  sh.getRange(tr + 7, 1).setFontColor(INK).setFontWeight('bold').setFontSize(10);
+
+  sh.setColumnWidth(1, 170);
+  sh.setColumnWidth(2, 90);
+  for (var c = 3; c <= head.length; c++) sh.setColumnWidth(c, 105);
+  sh.setRowHeight(4, 36);
+  sh.setFrozenRows(4);
+  sh.setHiddenGridlines(true);
+  props.setProperty('OPT_PLAN_V', OPT_PLAN_V_);
+  return { ok: true };
 }
 
 function clearHqOptionNotes_() {
