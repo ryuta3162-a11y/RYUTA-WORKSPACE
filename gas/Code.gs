@@ -3223,7 +3223,7 @@ function ensureEnjoyPointLink_(ss) {
 }
 
 /** トップの作り（版を上げると次の自動実行で作り直す） */
-var TOP_LAYOUT_VERSION_ = 'simple-v5';
+var TOP_LAYOUT_VERSION_ = 'simple-v6';
 var TOP_SRC_RECEPTION_ = 'https://docs.google.com/spreadsheets/d/14hxiLBzvGTuIpfZcoVjiHpz8b419OzUrtQAr5788h3w/edit';
 var TOP_SRC_UNPAID_ = 'https://docs.google.com/spreadsheets/d/10vpQRDfTdwx_Wb7JaSm3lZCkTk8msLyf8ggAHhI1shI/edit';
 var TOP_SRC_TRIAL_ = 'https://docs.google.com/spreadsheets/d/1RPUw0slNCit9ZwJgINGfv89oc2Hxw8zzAZyMt6g_QuY/edit';
@@ -3279,7 +3279,8 @@ function topExternalLinks_() {
     ['20分マシンレクチャー・自動送信メール', TOP_SRC_LECTURE_],
     ['JOYFIT24経堂追加販促', TOP_SRC_PROMO_],
     ['口コミ付与アプリ', 'https://script.google.com/a/macros/okamoto-group.co.jp/s/AKfycbwu1eUxJzePa494p-343axfwgUcnHATf-db7FKw806rXZQsHn_ea0uHc6415yw-RZ80/exec'],
-    [ENJOY_POINT_TITLE_, ENJOY_POINT_URL_]
+    [ENJOY_POINT_TITLE_, ENJOY_POINT_URL_],
+    ['Google口コミに返信', 'https://business.google.com/reviews']
   ];
 }
 
@@ -4859,7 +4860,8 @@ function ensureOptionPlanSheet_(ss) {
  */
 var REVIEW_TODO_SHEET_ = '口コミ管理';
 var REVIEW_LOG_SHEET_ = '口コミ付与記録';
-var REVIEW_TODO_ROW_ = 16;
+var REVIEW_TODO_ROW_ = 17;
+var REVIEW_GBP_URL_ = 'https://business.google.com/reviews';
 var REVIEW_ENJOY_SINCE_ = new Date(2026, 9, 3);
 
 function reviewKey_(row) {
@@ -4936,8 +4938,8 @@ function syncReviewTodo_(ss) {
   list.sort(function (a, b) { return b[0].getTime() - a[0].getTime(); });
 
   var props = PropertiesService.getDocumentProperties();
-  var sig = ym + '|' + list.map(function (t) { return t[11]; }).join(',');
-  if (props.getProperty('REVIEW_TODO_SIG') === sig && String(sh.getRange(15, 1).getValue()) === '口コミ日') return { ok: true, skipped: true };
+  var sig = 'v2|' + ym + '|' + list.map(function (t) { return t[11]; }).join(',');
+  if (props.getProperty('REVIEW_TODO_SIG') === sig && String(sh.getRange(16, 1).getValue()) === '口コミ日') return { ok: true, skipped: true };
 
   try { src.hideSheet(); } catch (eH) {}
   var b9 = sh.getRange('B9');
@@ -4949,12 +4951,15 @@ function syncReviewTodo_(ss) {
   area.clearDataValidations();
   sh.setConditionalFormatRules([]);
   var month = Number(ym.slice(4));
-  sh.getRange('A13').setValue('流れ：① 口コミ付与アプリでEAST付与（元の回答シートでチェックされると自動で ✓ 済）→ ② エンジョイ付与をしたら G にチェック → 両方済で灰色になります').setFontColor(MUTE).setFontSize(9);
+  sh.getRange('A12:C12').copyTo(sh.getRange('A13:C13'), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+  sh.getRange('A13:C13').setValues([['5. Googleの口コミに返信', '', 'Googleビジネスプロフィールで口コミに返信する']]);
+  sh.getRange('B13').setFormula('=HYPERLINK("' + REVIEW_GBP_URL_ + '","Google口コミに返信 ↗")');
+  sh.getRange('A14').setValue('流れ：① 口コミ付与アプリでEAST付与（元の回答シートでチェックされると自動で ✓ 済）→ ② エンジョイ付与をしたら G にチェック → 両方済で灰色になります').setFontColor(MUTE).setFontSize(9);
   var first = REVIEW_TODO_ROW_, lastRow = REVIEW_TODO_ROW_ + Math.max(list.length, 1) - 1;
-  sh.getRange('A14').setFormula('="今月の口コミ（' + month + '月）　' + list.length + '件　未対応 "&SUMPRODUCT((L' + first + ':L' + lastRow + '<>"")*(((F' + first + ':F' + lastRow + '<>"✓ 済")+(G' + first + ':G' + lastRow + '<>TRUE))>0))&"件"')
+  sh.getRange('A15').setFormula('="今月の口コミ（' + month + '月）　' + list.length + '件　未対応 "&SUMPRODUCT((L' + first + ':L' + lastRow + '<>"")*(((F' + first + ':F' + lastRow + '<>"✓ 済")+(G' + first + ':G' + lastRow + '<>TRUE))>0))&"件"')
     .setFontWeight('bold').setFontSize(12).setFontColor(INK);
   var head = ['口コミ日', '氏名', '会員番号', '評価', '来店日', '① EAST付与', '② エンジョイ付与', '付与日', 'メモ'];
-  sh.getRange(15, 1, 1, head.length).setValues([head]).setBackground(HEAD).setFontColor('#FFFFFF').setFontWeight('bold').setHorizontalAlignment('center');
+  sh.getRange(16, 1, 1, head.length).setValues([head]).setBackground(HEAD).setFontColor('#FFFFFF').setFontWeight('bold').setHorizontalAlignment('center');
   if (list.length) {
     var need = REVIEW_TODO_ROW_ + list.length - 1;
     if (sh.getMaxRows() < need) sh.insertRowsAfter(sh.getMaxRows(), need - sh.getMaxRows());
