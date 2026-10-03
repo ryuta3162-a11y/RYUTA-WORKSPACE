@@ -3972,6 +3972,7 @@ function billingPullTriggered() {
   try { fixHqSeptLeave_(); } catch (e14) { console.error(e14); }
   try { fixNippoOctKiyaku_(); } catch (e15) { console.error(e15); }
   mark('hqOptHistory', function () { fixHqOptionHistory_(); });
+  mark('hqOptNotes', function () { clearHqOptionNotes_(); });
   try { ensureTopSimple_(ss); } catch (e0) { console.error(e0); }
 }
 
@@ -4722,6 +4723,25 @@ function fixHqOptionHistory_() {
   });
   props.setProperty('HQ_OPT_HISTORY_FIX', 'v2');
   return { ok: true, changed: changed };
+}
+
+function clearHqOptionNotes_() {
+  var props = PropertiesService.getDocumentProperties();
+  if (props.getProperty('HQ_OPT_NOTES_CLEAR') === 'v1') return { ok: true, skipped: true };
+  var sh = SpreadsheetApp.openById(HQ_TREND_ID_).getSheetByName('経堂');
+  if (!sh) return { ok: false };
+  var rg = sh.getRange(31, 3, 16, 7);
+  var notes = rg.getNotes().map(function (row) {
+    return row.map(function (n) {
+      return String(n || '').split('\n').filter(function (line) { return !/OP表で修正/.test(line); }).join('\n');
+    });
+  });
+  rg.setNotes(notes);
+  var left = 0;
+  rg.getNotes().forEach(function (row) { row.forEach(function (n) { if (/OP表で修正/.test(n)) left++; }); });
+  try { openWorkspaceSpreadsheet_().getSheetByName('WorkspaceSync').getRange('H3').setValue('HQメモ残り ' + left + ' ' + new Date()); } catch (eL) {}
+  props.setProperty('HQ_OPT_NOTES_CLEAR', 'v1');
+  return { ok: true };
 }
 
 /** 日報 10月の月初：落合 悠野（10/1 規約退会・男）を外す 1516→1515 / 男 1075→1074。1回だけ */
