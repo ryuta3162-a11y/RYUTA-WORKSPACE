@@ -3223,7 +3223,7 @@ function ensureEnjoyPointLink_(ss) {
 }
 
 /** トップの作り（版を上げると次の自動実行で作り直す） */
-var TOP_LAYOUT_VERSION_ = 'simple-v4';
+var TOP_LAYOUT_VERSION_ = 'simple-v5';
 var TOP_SRC_RECEPTION_ = 'https://docs.google.com/spreadsheets/d/14hxiLBzvGTuIpfZcoVjiHpz8b419OzUrtQAr5788h3w/edit';
 var TOP_SRC_UNPAID_ = 'https://docs.google.com/spreadsheets/d/10vpQRDfTdwx_Wb7JaSm3lZCkTk8msLyf8ggAHhI1shI/edit';
 var TOP_SRC_TRIAL_ = 'https://docs.google.com/spreadsheets/d/1RPUw0slNCit9ZwJgINGfv89oc2Hxw8zzAZyMt6g_QuY/edit';
@@ -3251,7 +3251,7 @@ function topSections_() {
     { label: '現場', items: [
       { name: '見学体験申請', sub: TOP_SRC_TRIAL_ },
       { name: '学割', sub: TOP_SRC_SCHOOL_ },
-      { name: '口コミ_経堂', sub: TOP_SRC_REVIEW_ },
+      { name: '口コミ管理', sub: TOP_SRC_REVIEW_ },
       { name: 'マシンレクチャー申込', sub: TOP_SRC_LECTURE_ },
       { name: '入会者一覧＋自動メール管理', sub: TOP_SRC_LECTURE_ }
     ] },
@@ -3953,14 +3953,18 @@ function billingPullTriggered() {
   var trace = [];
   var mark = function (name, fn) {
     var s = Date.now();
-    try { fn(); trace.push(name + ' ' + Math.round((Date.now() - s) / 1000) + 's'); }
+    try { var res = fn(); trace.push(name + ' ' + Math.round((Date.now() - s) / 1000) + 's' + (res ? ' ' + JSON.stringify(res).slice(0, 60) : '')); }
     catch (err) { trace.push(name + ' ERR ' + String(err && err.message || err).slice(0, 80)); }
   };
+  var writeTrace = function () {
+    try {
+      var log = ss.getSheetByName('WorkspaceSync');
+      if (log) log.getRange('H1:H2').setValues([[Utilities.formatDate(new Date(), 'Asia/Tokyo', 'M/d HH:mm:ss')], [trace.join(' / ') + ' / total ' + Math.round((Date.now() - t0) / 1000) + 's']]);
+    } catch (eLog) {}
+  };
+  mark('reviewTodo', function () { return syncReviewTodo_(ss); });
   mark('unpaidMirror', function () { syncUnpaidMirror_(ss, false); });
-  try {
-    var log = ss.getSheetByName('WorkspaceSync');
-    if (log) log.getRange('H1:H2').setValues([[new Date()], [trace.join(' / ') + ' / total ' + Math.round((Date.now() - t0) / 1000) + 's']]);
-  } catch (eLog) {}
+  writeTrace();
   try { memberAnalysisIfChanged_(ss); } catch (e2) { console.error(e2); }
   try { billPull_(ss); } catch (e) { console.error(e); }
   try { ensureEnjoyPointLink_(ss); } catch (e3) { console.error(e3); }
@@ -3979,8 +3983,8 @@ function billingPullTriggered() {
   mark('hqOptHistory', function () { fixHqOptionHistory_(); });
   mark('hqOptNotes', function () { clearHqOptionNotes_(); });
   mark('optPlan', function () { ensureOptionPlanSheet_(ss); });
-  mark('reviewTodo', function () { syncReviewTodo_(ss); });
-  try { ensureTopSimple_(ss); } catch (e0) { console.error(e0); }
+  mark('top', function () { ensureTopSimple_(ss); });
+  writeTrace();
 }
 
 /**
@@ -4919,48 +4923,68 @@ function syncReviewTodo_(ss) {
 
   var last = src.getLastRow();
   var rows = last >= 3 ? src.getRange(3, 1, last - 2, 23).getValues() : [];
-  var todo = [];
+  var now = new Date();
+  var ym = Utilities.formatDate(now, 'Asia/Tokyo', 'yyyyMM');
+  var list = [];
   rows.forEach(function (r) {
-    if (!r[4]) return;
+    if (!r[4] || !(r[0] instanceof Date)) return;
+    if (Utilities.formatDate(r[0], 'Asia/Tokyo', 'yyyyMM') !== ym) return;
     var key = reviewKey_(r);
-    var east = reviewTruthy_(r[21]);
-    var eastAt = r[22] instanceof Date ? r[22] : null;
     var lg = log.map[key] || {};
-    if (east && eastAt && eastAt < REVIEW_ENJOY_SINCE_) return;
-    if (east && lg.enjoy) return;
-    todo.push([r[0], r[4], String(r[5] || ''), r[3], r[9], east ? '✓ 済' : '未', lg.enjoy === true, lg.date || '', lg.memo || '', '', '', key]);
+    list.push([r[0], r[4], String(r[5] || ''), r[3], r[9], '', lg.enjoy === true, lg.date || '', lg.memo || '', '', '', key]);
   });
-  todo.sort(function (a, b) { return (b[0] instanceof Date ? b[0].getTime() : 0) - (a[0] instanceof Date ? a[0].getTime() : 0); });
+  list.sort(function (a, b) { return b[0].getTime() - a[0].getTime(); });
+
+  var props = PropertiesService.getDocumentProperties();
+  var sig = ym + '|' + list.map(function (t) { return t[11]; }).join(',');
+  if (props.getProperty('REVIEW_TODO_SIG') === sig && String(sh.getRange(15, 1).getValue()) === '口コミ日') return { ok: true, skipped: true };
+
+  try { src.hideSheet(); } catch (eH) {}
+  var b9 = sh.getRange('B9');
+  if (/#gid=/.test(String(b9.getFormula() || ''))) b9.setValue('下の一覧 ↓');
 
   var area = sh.getRange(13, 1, Math.max(sh.getMaxRows() - 12, 1), 12);
   area.clearContent();
   area.clearFormat();
   area.clearDataValidations();
-  sh.getRange('A13').setValue('流れ：① 口コミ付与アプリでEAST付与（済になると自動で ✓）→ ② エンジョイ付与をしたら G にチェック → 両方済で一覧から消えます').setFontColor(MUTE).setFontSize(9);
-  sh.getRange('A14').setValue('未対応の口コミ（' + todo.length + '件）').setFontWeight('bold').setFontSize(12).setFontColor(INK);
+  sh.setConditionalFormatRules([]);
+  var month = Number(ym.slice(4));
+  sh.getRange('A13').setValue('流れ：① 口コミ付与アプリでEAST付与（元の回答シートでチェックされると自動で ✓ 済）→ ② エンジョイ付与をしたら G にチェック → 両方済で灰色になります').setFontColor(MUTE).setFontSize(9);
+  var first = REVIEW_TODO_ROW_, lastRow = REVIEW_TODO_ROW_ + Math.max(list.length, 1) - 1;
+  sh.getRange('A14').setFormula('="今月の口コミ（' + month + '月）　' + list.length + '件　未対応 "&SUMPRODUCT((L' + first + ':L' + lastRow + '<>"")*(((F' + first + ':F' + lastRow + '<>"✓ 済")+(G' + first + ':G' + lastRow + '<>TRUE))>0))&"件"')
+    .setFontWeight('bold').setFontSize(12).setFontColor(INK);
   var head = ['口コミ日', '氏名', '会員番号', '評価', '来店日', '① EAST付与', '② エンジョイ付与', '付与日', 'メモ'];
   sh.getRange(15, 1, 1, head.length).setValues([head]).setBackground(HEAD).setFontColor('#FFFFFF').setFontWeight('bold').setHorizontalAlignment('center');
-  if (todo.length) {
-    var need = REVIEW_TODO_ROW_ + todo.length - 1;
+  if (list.length) {
+    var need = REVIEW_TODO_ROW_ + list.length - 1;
     if (sh.getMaxRows() < need) sh.insertRowsAfter(sh.getMaxRows(), need - sh.getMaxRows());
-    var rg = sh.getRange(REVIEW_TODO_ROW_, 1, todo.length, 12);
-    rg.setValues(todo);
-    sh.getRange(REVIEW_TODO_ROW_, 1, todo.length, 1).setNumberFormat('M/d');
-    sh.getRange(REVIEW_TODO_ROW_, 5, todo.length, 1).setNumberFormat('M/d');
-    sh.getRange(REVIEW_TODO_ROW_, 8, todo.length, 1).setNumberFormat('M/d');
-    sh.getRange(REVIEW_TODO_ROW_, 3, todo.length, 1).setNumberFormat('@');
-    sh.getRange(REVIEW_TODO_ROW_, 7, todo.length, 1).insertCheckboxes();
-    sh.getRange(REVIEW_TODO_ROW_, 1, todo.length, 8).setHorizontalAlignment('center');
-    sh.getRange(REVIEW_TODO_ROW_, 2, todo.length, 1).setHorizontalAlignment('left').setFontWeight('bold');
-    sh.getRange(REVIEW_TODO_ROW_, 1, todo.length, head.length).setBorder(true, true, true, true, true, true, LINE, SpreadsheetApp.BorderStyle.SOLID).setFontColor(INK);
-    todo.forEach(function (t, i) {
-      if (t[5] === '未') sh.getRange(REVIEW_TODO_ROW_ + i, 6).setFontColor(RED).setFontWeight('bold');
-    });
-    sh.getRange(REVIEW_TODO_ROW_, 12, todo.length, 1).setFontColor('#FFFFFF').setFontSize(6);
+    sh.getRange(REVIEW_TODO_ROW_, 1, list.length, 12).setValues(list);
+    sh.getRange(REVIEW_TODO_ROW_, 6, list.length, 1).setFormulas(list.map(function (t, i) {
+      var r = REVIEW_TODO_ROW_ + i;
+      return ['=IF(SUMPRODUCT((\'口コミ_経堂\'!$P$3:$P="' + t[11] + '")*((\'口コミ_経堂\'!$V$3:$V=TRUE)+(\'口コミ_経堂\'!$V$3:$V="TRUE")))+IFERROR(COUNTIFS(\'口コミ_経堂\'!$A$3:$A,A' + r + ',\'口コミ_経堂\'!$F$3:$F,C' + r + ',\'口コミ_経堂\'!$V$3:$V,TRUE),0)>0,"✓ 済","未")'];
+    }));
+    sh.getRange(REVIEW_TODO_ROW_, 1, list.length, 1).setNumberFormat('M/d');
+    sh.getRange(REVIEW_TODO_ROW_, 5, list.length, 1).setNumberFormat('M/d');
+    sh.getRange(REVIEW_TODO_ROW_, 8, list.length, 1).setNumberFormat('M/d');
+    sh.getRange(REVIEW_TODO_ROW_, 3, list.length, 1).setNumberFormat('@');
+    sh.getRange(REVIEW_TODO_ROW_, 7, list.length, 1).insertCheckboxes();
+    sh.getRange(REVIEW_TODO_ROW_, 1, list.length, 8).setHorizontalAlignment('center');
+    sh.getRange(REVIEW_TODO_ROW_, 2, list.length, 1).setHorizontalAlignment('left').setFontWeight('bold');
+    sh.getRange(REVIEW_TODO_ROW_, 1, list.length, head.length).setBorder(true, true, true, true, true, true, LINE, SpreadsheetApp.BorderStyle.SOLID).setFontColor(INK);
+    sh.getRange(REVIEW_TODO_ROW_, 12, list.length, 1).setFontColor('#FFFFFF').setFontSize(6);
+    var rowsRg = sh.getRange(REVIEW_TODO_ROW_, 1, list.length, head.length);
+    var fRg = sh.getRange(REVIEW_TODO_ROW_, 6, list.length, 1);
+    sh.setConditionalFormatRules([
+      SpreadsheetApp.newConditionalFormatRule()
+        .whenFormulaSatisfied('=AND($F' + REVIEW_TODO_ROW_ + '="✓ 済",$G' + REVIEW_TODO_ROW_ + '=TRUE)')
+        .setFontColor('#B0B0B0').setStrikethrough(true).setBackground('#F5F5F5').setRanges([rowsRg]).build(),
+      SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo('未').setFontColor(RED).setBold(true).setRanges([fRg]).build()
+    ]);
   } else {
-    sh.getRange(REVIEW_TODO_ROW_, 1).setValue('未対応はありません').setFontColor(MUTE);
+    sh.getRange(REVIEW_TODO_ROW_, 1).setValue('今月の口コミはまだありません').setFontColor(MUTE);
   }
-  return { ok: true, todo: todo.length };
+  props.setProperty('REVIEW_TODO_SIG', sig);
+  return { ok: true, rows: list.length };
 }
 
 function reviewTodoOnEdit_(e) {
@@ -4971,7 +4995,6 @@ function reviewTodoOnEdit_(e) {
   var log = reviewLog_(ss);
   var n = e.range.getNumRows();
   var vals = sh.getRange(r0, 1, n, 12).getValues();
-  var finished = false;
   vals.forEach(function (r, i) {
     var key = String(r[11] || '');
     if (!key) return;
@@ -4980,9 +5003,7 @@ function reviewTodoOnEdit_(e) {
     if (enjoy && !r[7]) sh.getRange(r0 + i, 8).setValue(date).setNumberFormat('M/d');
     if (!enjoy && r[7]) sh.getRange(r0 + i, 8).clearContent();
     reviewLogPut_(log, key, enjoy, date, r[8], r[1]);
-    if (enjoy && String(r[5]).indexOf('済') >= 0) finished = true;
   });
-  if (finished) syncReviewTodo_(ss);
   return true;
 }
 
