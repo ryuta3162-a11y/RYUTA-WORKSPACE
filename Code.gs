@@ -4694,11 +4694,12 @@ var HQ_OPT_HISTORY_ = {
   6: [24, 204, 65, 26, 64, 2, 3, 218, 130, 62, 43, 103, 26, 111, 139, 18],
   7: [23, 199, 59, 26, 55, 2, 3, 215, 154, 59, 41, 98, 27, 113, 97, 18],
   8: [23, 193, 55, 24, 54, 2, 3, 207, 134, 55, 40, 95, 25, 124, 91, 18],
-  9: [23, 196, 55, 24, 56, 2, 3, 213, 137, 57, 39, 94, 24, 125, 96, 19]
+  9: [23, 196, 55, 24, 56, 2, 3, 213, 137, 57, 39, 94, 24, 125, 96, 19],
+  10: [23, 211, 72, 27, 66, 2, 3, 228, 153, 74, 39, 111, 26, 132, 112, 21]
 };
 function fixHqOptionHistory_() {
   var props = PropertiesService.getDocumentProperties();
-  if (props.getProperty('HQ_OPT_HISTORY_FIX') === 'v1') return { ok: true, skipped: true };
+  if (props.getProperty('HQ_OPT_HISTORY_FIX') === 'v2') return { ok: true, skipped: true };
   var sh = SpreadsheetApp.openById(HQ_TREND_ID_).getSheetByName('経堂');
   if (!sh) return { ok: false };
   var changed = 0;
@@ -4712,14 +4713,14 @@ function fixHqOptionHistory_() {
     var next = HQ_OPT_HISTORY_[k];
     for (var i = 0; i < 16; i++) {
       if (Number(cur[i][0]) === next[i]) continue;
-      notes[i][0] = (notes[i][0] ? notes[i][0] + '\n' : '') + '10/3 ' + month + '月OP表で修正（前月末−当月1日解約）。修正前 ' + cur[i][0];
+      notes[i][0] = (notes[i][0] ? notes[i][0] + '\n' : '') + '10/3 ' + (month === 10 ? '9月OP表で修正（当月末−次月解約）' : month + '月OP表で修正（前月末−当月1日解約）') + '。修正前 ' + cur[i][0];
       cur[i][0] = next[i];
       changed++;
     }
     rg.setValues(cur);
     rg.setNotes(notes);
   });
-  props.setProperty('HQ_OPT_HISTORY_FIX', 'v1');
+  props.setProperty('HQ_OPT_HISTORY_FIX', 'v2');
   return { ok: true, changed: changed };
 }
 
