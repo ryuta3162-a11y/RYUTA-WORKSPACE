@@ -5025,7 +5025,7 @@ var JL_V_ = 'v4';
 
 function ensureJoinLeaveAnalysis_(ss) {
   var props = PropertiesService.getDocumentProperties();
-  if (props.getProperty('JL_V') === JL_V_ && ss.getSheetByName(JL_SHEET_)) return { ok: true, skipped: true };
+  if (ss.getSheetByName(JL_SHEET_) && props.getProperty('JL_V')) return migrateJoinLeaveSheet_(ss);
   var join = ss.getSheetByName('累計入会データ');
   var leave = ss.getSheetByName('累計退会データ');
   if (!join || !leave) return { ok: false };
@@ -5257,7 +5257,50 @@ function ensureJoinLeaveAnalysis_(ss) {
   sh.insertChart(ch3);
 
   props.setProperty('JL_V', JL_V_);
-  return { ok: true };
+  props.deleteProperty('JL_MIG');
+  return migrateJoinLeaveSheet_(ss);
+}
+
+/**
+ * 入会・退会分析の手直し（1回だけ）。グラフ・ユーザーが編集したところには触らない。
+ * 灰色の説明文を消す、基準月をプルダウン（「今月（自動）」＋データのある月）に、文字をメイリオに。
+ */
+function migrateJoinLeaveSheet_(ss) {
+  var props = PropertiesService.getDocumentProperties();
+  if (props.getProperty('JL_MIG') === 'v1') return { ok: true, skipped: true };
+  var sh = ss.getSheetByName(JL_SHEET_);
+  if (!sh) return { ok: false };
+  var rows = Math.min(sh.getMaxRows(), 120);
+  var rg = sh.getRange(1, 1, rows, 8);
+  var vals = rg.getValues();
+  var colors = rg.getFontColors();
+  var cleared = 0;
+  for (var r = 0; r < rows; r++) {
+    for (var c = 0; c < 8; c++) {
+      if (vals[r][c] === '' || String(colors[r][c]).toLowerCase() !== '#7a7a7a') continue;
+      if (r === 1 && c === 0) continue;
+      sh.getRange(r + 1, c + 1).clearContent().setFontColor(null).setFontSize(10);
+      cleared++;
+    }
+  }
+
+  var AUTO = '今月（自動）';
+  var J = "'累計入会データ'!$V$2:$V$8000";
+  sh.getRange('Q1').setValue(AUTO);
+  sh.getRange('Q2').setFormula('=ARRAYFORMULA(TEXT(EDATE(DATE(YEAR(TODAY()),MONTH(TODAY()),1),1-SEQUENCE(DATEDIF(MINIFS(' + J + ',' + J + ',">0"),DATE(YEAR(TODAY()),MONTH(TODAY()),1),"M")+1)),"yyyy年m月"))');
+  sh.hideColumns(17);
+  var b2 = sh.getRange('B2');
+  b2.clearDataValidations();
+  b2.setNumberFormat('@').setValue(AUTO);
+  b2.setDataValidation(SpreadsheetApp.newDataValidation().requireValueInRange(sh.getRange('Q1:Q200'), true).setAllowInvalid(false).build());
+  b2.setHorizontalAlignment('center').setFontWeight('bold').setFontSize(12).setBackground('#FFF7E6')
+    .setBorder(true, true, true, true, null, null, '#111111', SpreadsheetApp.BorderStyle.SOLID);
+  sh.getRange('P1').setFormula('=IF(OR(B2="",B2="' + AUTO + '"),DATE(YEAR(TODAY()),MONTH(TODAY()),1),IFERROR(DATE(VALUE(LEFT(B2,4)),VALUE(REGEXEXTRACT(B2,"年(\\d+)月")),1),DATE(YEAR(TODAY()),MONTH(TODAY()),1)))');
+  sh.getRange('A2').setValue('基準月 ▶').setFontWeight('bold').setFontColor('#111111').setHorizontalAlignment('right');
+
+  sh.getRange(1, 1, sh.getMaxRows(), sh.getMaxColumns()).setFontFamily('Meiryo');
+  props.setProperty('JL_MIG', 'v1');
+  return { ok: true, cleared: cleared };
 }
 
 function clearHqOptionNotes_() {
