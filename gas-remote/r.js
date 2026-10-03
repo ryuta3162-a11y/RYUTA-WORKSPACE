@@ -51,10 +51,6 @@ var RECEPTION_REFRESH_TOKEN_ = 'kyodo-ws-refresh-7f3c91';
 
 function onOpen() {
   var ui = SpreadsheetApp.getUi();
-  ui.createMenu('数値更新')
-  .addItem('受付状況表の数値を更新', 'refreshReceptionNumbersFromMenu')
-  .addItem('前回の更新時刻を確認', 'showReceptionRefreshStatus')
-  .addToUi();
   ui.createMenu('月初３ファイル')
   .addItem('3ファイルを取り込む', 'openGessho3Files')
   .addItem('日報の写しを出す', 'ensureNippoMirror')
