@@ -5021,7 +5021,7 @@ function reviewTodoOnEdit_(e) {
  * 退会の月＝その月末で辞めた人（CASIOの退会年月が翌月）。会員動向の「解除」と同じ数え方。
  */
 var JL_SHEET_ = '入会・退会分析';
-var JL_V_ = 'v3';
+var JL_V_ = 'v4';
 
 function ensureJoinLeaveAnalysis_(ss) {
   var props = PropertiesService.getDocumentProperties();
@@ -5070,7 +5070,7 @@ function ensureJoinLeaveAnalysis_(ss) {
 
   // ① 12ヶ月の推移
   section(4, '① 12ヶ月の推移');
-  sh.getRange('C4').setValue('退会＝その月末で辞めた人（会員動向の「解除」と同じ）。月初会員は累計データからの計算').setFontColor(MUTE).setFontSize(9);
+  sh.getRange('C4').setValue('退会＝その月末で辞めた人（会員動向の「解除」と同じ）。日報の月の入会・退会は日報（当月入会・当月末退会）、それ以外は累計データから').setFontColor(MUTE).setFontSize(9);
   header(5, ['月', '月初会員', '入会', '退会', '純増', '退会率', '規約退会（参考）']);
   var t = [];
   for (var i = 0; i < 12; i++) {
@@ -5078,8 +5078,8 @@ function ensureJoinLeaveAnalysis_(ss) {
     t.push([
       '=EDATE(' + BM + ',' + (i - 11) + ')',
       '=COUNTIFS(' + jV + ',">0",' + jV + ',"<"&A' + r + ')-COUNTIFS(' + lU + ',"<="&A' + r + ')',
-      '=COUNTIF(' + jV + ',A' + r + ')',
-      '=COUNTIF(' + lU + ',EDATE(A' + r + ',1))',
+      '=IF(TEXT(A' + r + ',"yymm")=TEXT(\'日報\'!$B$1,"0"),N(\'日報\'!$C$13),COUNTIF(' + jV + ',A' + r + '))',
+      '=IF(TEXT(A' + r + ',"yymm")=TEXT(\'日報\'!$B$1,"0"),N(\'日報\'!$C$15),COUNTIF(' + lU + ',EDATE(A' + r + ',1)))',
       '=C' + r + '-D' + r,
       '=IFERROR(D' + r + '/B' + r + ',"")',
       '=COUNTIF(\'規約退会リスト\'!$K$4:$K$500,EDATE(A' + r + ',1))'
@@ -5126,10 +5126,12 @@ function ensureJoinLeaveAnalysis_(ss) {
   ];
   var lr = leaveRows.map(function (x, k) {
     var r = 23 + k;
-    return [x[0], x[1], '=SUMPRODUCT(' + win12 + '*' + x[2] + ')', '=IFERROR(C' + r + '/$D$18,"")', '=SUMPRODUCT(' + winM + '*' + x[2] + ')'];
+    return [x[0], x[1], '=SUMPRODUCT(' + win12 + '*' + x[2] + ')', '=IFERROR(C' + r + '/$P$2,"")', '=SUMPRODUCT(' + winM + '*' + x[2] + ')'];
   });
+  sh.getRange('P2').setFormula('=SUMPRODUCT(' + win12 + ')');
+  sh.getRange('P3').setFormula('=SUMPRODUCT(' + winM + ')');
   var otherRow = 23 + lr.length;
-  lr.push(['', 'その他', '=$D$18-SUM(C' + (otherRow - 4) + ':C' + (otherRow - 1) + ')', '=IFERROR(C' + otherRow + '/$D$18,"")', '=$D$17-SUM(E' + (otherRow - 4) + ':E' + (otherRow - 1) + ')']);
+  lr.push(['', 'その他', '=$P$2-SUM(C' + (otherRow - 4) + ':C' + (otherRow - 1) + ')', '=IFERROR(C' + otherRow + '/$P$2,"")', '=$P$3-SUM(E' + (otherRow - 4) + ':E' + (otherRow - 1) + ')']);
   sh.getRange(23, 3, lr.length, 3).setFormulas(lr.map(function (x) { return [x[2], x[3], x[4]]; }));
   sh.getRange(23, 1, lr.length, 2).setValues(lr.map(function (x) { return [x[0], x[1]]; }));
   sh.getRange(23, 1, lr.length, 1).setFontWeight('bold').setFontColor(INK);
