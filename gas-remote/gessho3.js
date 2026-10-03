@@ -682,8 +682,8 @@ function gessho3WriteHq_(preview) {
   var wrote = 0;
   GESSHO3_HQ_ROWS_.forEach(function (pair, i) {
     var row = byKey[pair[1]];
-    if (!row || !row.end || cur[i][0] !== '') return;
-    sh.getRange(pair[0], col).setValue(row.end);
+    if (!row || cur[i][0] !== '') return;
+    sh.getRange(pair[0], col).setValue(row.next);
     wrote++;
   });
   return { ok: true, column: col, wrote: wrote };
@@ -718,7 +718,7 @@ function gessho3SaveMonth_(preview, written) {
     ['女', preview.gender.female, '年齢表（当月末）'],
     ['休会', preview.member.pause, written.genderWritten ? '男女は日報へ書いた' : '男女は月初と合計が違うため日報には未記入'],
     [],
-    ['オプション', '月初', '取込前の日報', '当月末（会員動向へ）']
+    ['オプション', '月初（日報・会員動向へ）', '取込前の日報', '当月末']
   ];
   preview.options.forEach(function (row) {
     rows.push([row.name, row.next, row.current, row.end]);

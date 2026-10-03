@@ -3971,6 +3971,7 @@ function billingPullTriggered() {
   try { syncKiyakuList_(ss, false); } catch (e13) { console.error(e13); }
   try { fixHqSeptLeave_(); } catch (e14) { console.error(e14); }
   try { fixNippoOctKiyaku_(); } catch (e15) { console.error(e15); }
+  mark('hqOptHistory', function () { fixHqOptionHistory_(); });
   try { ensureTopSimple_(ss); } catch (e0) { console.error(e0); }
 }
 
@@ -4681,6 +4682,45 @@ function fixHqSeptLeave_() {
   if (Number(cell.getValue()) === 49) cell.setValue(50);
   props.setProperty('HQ_SEPT_LEAVE_FIX', 'v1');
   return { ok: true, value: cell.getValue() };
+}
+
+/**
+ * 会員動向 31〜46行（オプション月初）4〜9月を各月OP表の「前月末 − 当月1日解約」に統一（10月の 211 と同じ数え方）。
+ * 6〜9月は当月開始の無料オプション込みの数字が入っていた。元の数字はセルのメモに残す。1回だけ
+ */
+var HQ_OPT_HISTORY_ = {
+  4: [24, 180, 49, 16, 45, 2, 3, 207, 102, 49, 43, 86, 28, 114, 80, 17],
+  5: [24, 209, 73, 26, 61, 2, 3, 230, 132, 73, 43, 114, 25, 113, 146, 20],
+  6: [24, 204, 65, 26, 64, 2, 3, 218, 130, 62, 43, 103, 26, 111, 139, 18],
+  7: [23, 199, 59, 26, 55, 2, 3, 215, 154, 59, 41, 98, 27, 113, 97, 18],
+  8: [23, 193, 55, 24, 54, 2, 3, 207, 134, 55, 40, 95, 25, 124, 91, 18],
+  9: [23, 196, 55, 24, 56, 2, 3, 213, 137, 57, 39, 94, 24, 125, 96, 19]
+};
+function fixHqOptionHistory_() {
+  var props = PropertiesService.getDocumentProperties();
+  if (props.getProperty('HQ_OPT_HISTORY_FIX') === 'v1') return { ok: true, skipped: true };
+  var sh = SpreadsheetApp.openById(HQ_TREND_ID_).getSheetByName('経堂');
+  if (!sh) return { ok: false };
+  var changed = 0;
+  Object.keys(HQ_OPT_HISTORY_).forEach(function (k) {
+    var month = Number(k);
+    var col = ((month + 8) % 12) + 3;
+    if (Number(sh.getRange(1, col).getValue()) !== month) return;
+    var rg = sh.getRange(31, col, 16, 1);
+    var cur = rg.getValues();
+    var notes = rg.getNotes();
+    var next = HQ_OPT_HISTORY_[k];
+    for (var i = 0; i < 16; i++) {
+      if (Number(cur[i][0]) === next[i]) continue;
+      notes[i][0] = (notes[i][0] ? notes[i][0] + '\n' : '') + '10/3 ' + month + '月OP表で修正（前月末−当月1日解約）。修正前 ' + cur[i][0];
+      cur[i][0] = next[i];
+      changed++;
+    }
+    rg.setValues(cur);
+    rg.setNotes(notes);
+  });
+  props.setProperty('HQ_OPT_HISTORY_FIX', 'v1');
+  return { ok: true, changed: changed };
 }
 
 /** 日報 10月の月初：落合 悠野（10/1 規約退会・男）を外す 1516→1515 / 男 1075→1074。1回だけ */
