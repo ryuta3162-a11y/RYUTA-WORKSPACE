@@ -6573,7 +6573,7 @@ function addKaigiSurvey_(ss) {
 var KAIGI_SLOTS_ = 12;
 function rebuildKaigiByMonth_(ss) {
   var props = PropertiesService.getDocumentProperties();
-  if (props.getProperty('KAIGI_V') !== KAIGI_V_ || props.getProperty('KAIGI_MON') !== 'v1' || props.getProperty('KAIGI_BYMON') === 'v2') return { ok: true, skipped: true };
+  if (props.getProperty('KAIGI_V') !== KAIGI_V_ || props.getProperty('KAIGI_MON') !== 'v1' || props.getProperty('KAIGI_BYMON') === 'v3') return { ok: true, skipped: true };
   var sh = ss.getSheetByName(KAIGI_SHEET_);
   if (!sh) return { ok: false };
   var INK = '#111111', MUTE = '#7A7A7A', LINE = '#E3E3E3', SOFT = '#F7F7F7', RED = '#B91C1C';
@@ -6605,10 +6605,18 @@ function rebuildKaigiByMonth_(ss) {
     sh.getRange(cd[0] + '9').setFormula('=' + G + 'B' + cd[1]).setNumberFormat(cd[2]);
     var diff = cd[1] === 24 ? 'TEXT(' + dr + '*100,"+0.0;-0.0;0.0")&"pt"' : 'TEXT(' + dr + ',"' + cd[3] + '")';
     var sub = sh.getRange(cd[0] + '10');
-    sub.setFormula('=IF(' + dr + '="","",' + C.cmp + '&" "&TEXT(' + G + 'C' + cd[1] + ',"' + cd[2] + '")&"（"&' + diff + '&"）")');
+    sub.setFormula('=IF(' + dr + '="","",IF(' + C.cmp + '="前年同期","前年","前期間")&" "&TEXT(' + G + 'C' + cd[1] + ',"' + cd[2] + '")&CHAR(10)&"差 "&' + diff + ')')
+      .setWrap(true).setFontSize(9).setVerticalAlignment('top');
     if (cd[4] === -1) rules.push(SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=N($' + dr.replace(/(\d+)/, '$$$1') + ')>0').setFontColor(RED).setBold(true).setRanges([sub]).build());
     if (cd[4] === 1) rules.push(SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=N($' + dr.replace(/(\d+)/, '$$$1') + ')<0').setFontColor(RED).setBold(true).setRanges([sub]).build());
   });
+  sh.setRowHeight(10, 36);
+  sh.getRange('L8').setValue('6ヶ月内の退会');
+  sh.getRange('B8:M8').setWrap(false).setFontSize(9);
+  ['B6', 'C6', 'H6', 'I6'].forEach(function (a) { sh.getRange(a).setNumberFormat('yy/m/d').setFontSize(9).setWrap(false); });
+  sh.getRange('B3:M3').setFontSize(8);
+  sh.getRange('K3').setValue('開始月（開始月〜対象月）');
+  sh.getRange('E3').setValue('対象月（最後の月）');
   sh.getRange('K4:L4').getMergedRanges().length || sh.getRange('K4:L4').merge();
   rules.push(SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=$B$4<>"開始月〜対象月"')
     .setFontColor('#BDBDBD').setBackground('#F3F3F3').setRanges([sh.getRange('K4:L4')]).build());
@@ -6784,7 +6792,7 @@ function rebuildKaigiByMonth_(ss) {
   sh.setConditionalFormatRules(rules);
   sh.hideColumns(34, sh.getMaxColumns() - 33);
   kaigiApplyPeriod_(sh);
-  props.setProperty('KAIGI_BYMON', 'v2');
+  props.setProperty('KAIGI_BYMON', 'v3');
   return { ok: true, rows: row };
 }
 
