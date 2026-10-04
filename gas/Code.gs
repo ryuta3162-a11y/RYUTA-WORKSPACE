@@ -1204,6 +1204,10 @@ function handleApiPost_(e) {
       body = JSON.parse(e.postData.contents);
     }
     var api = String((body && body.api) || '');
+    if (api === 'importLeaveSurvey') {
+      if (String(body.token || '') !== RECEPTION_REFRESH_TOKEN_) return unauthorized_();
+      return jsonOutput_(importLeaveSurvey_(body.rows || []));
+    }
     var needsAuth =
       api === 'saveTasks' ||
       api === 'createDailyDraft' ||
@@ -4031,6 +4035,14 @@ function billingPullTriggered() {
   });
   mark('kaigiMon', function () { return addKaigiMonthly_(ss); });
   mark('kaigiFrom', function () { return addKaigiFromMonth_(ss); });
+  mark('kaigiSurvey', function () { return addKaigiSurvey_(ss); });
+  mark('kaigiSurveyW', function () {
+    var props = PropertiesService.getDocumentProperties();
+    if (props.getProperty('KAIGI_SURVEY_W') === 'v1') return { ok: true, skipped: true };
+    ss.getSheetByName(KAIGI_SHEET_).setColumnWidth(15, 160);
+    props.setProperty('KAIGI_SURVEY_W', 'v1');
+    return { ok: true };
+  });
   mark('kaigiSumFix', function () {
     var props = PropertiesService.getDocumentProperties();
     if (props.getProperty('KAIGI_SUMFIX') === 'v1') return { ok: true, skipped: true };
@@ -6192,7 +6204,186 @@ function rebuildKaigiSheet_(ss) {
   protectInputsOnly_(sh, [KAIGI_CELLS_.mode, KAIGI_CELLS_.month, KAIGI_CELLS_.cmp, KAIGI_CELLS_.cur, KAIGI_CELLS_.prev]);
   props.deleteProperty('KAIGI_MON');
   props.deleteProperty('KAIGI_FROM');
+  props.deleteProperty('KAIGI_SURVEY');
   props.setProperty('KAIGI_V', KAIGI_V_);
+  return { ok: true };
+}
+
+/**
+ * 退会アンケート（管理画面のCSV）。1人1行に直して「退会アンケート」シートへ。会員番号で上書き、無い人は残す。
+ * rows: [会員番号, 氏名, 利用頻度(q7), 回数(q8), 時間帯(q11), 解除理由(q12)]
+ * 理由・頻度は表記ゆれや昔の選択肢をまとめた「まとめ」列も作る。退会月は累計退会データから（最終在籍月）。
+ */
+var LEAVE_SURVEY_SHEET_ = '退会アンケート';
+var LEAVE_REASONS_ = ['引越し・転勤', '仕事に専念・仕事多忙', '金銭的理由（会費が高い）', '一時的に来られなくなる', '体調不良・入院・ケガ・病気',
+  '飽きた', '学業専念', '他クラブ移籍', '交通不便', '看病・家事・育児', '妊娠', '設備に不満', '混雑（FWエリア）', 'スタッフが不満', 'キャンペーン終了', 'その他'];
+var LEAVE_FREQS_ = ['週0回', '週1回未満', '週1回', '週2回', '週3回', '週4回', '週5回以上', '不明'];
+
+function leaveReasonGroup_(a) {
+  var s = String(a || '').replace(/\s/g, '');
+  if (!s) return ['', ''];
+  var m = s.match(/^他クラブ移籍(?:[（(](.+)[)）])?$/);
+  if (m) return ['他クラブ移籍', m[1] || 'その他'];
+  var map = [[/引越|転勤/, 0], [/仕事/, 1], [/金銭|会費/, 2], [/一時的/, 3], [/体調|入院|ケガ|病気/, 4], [/飽き/, 5], [/学業/, 6],
+    [/交通/, 8], [/看病|家事|育児/, 9], [/妊娠/, 10], [/設備/, 11], [/混/, 12], [/スタッフ/, 13], [/キャンペーン/, 14]];
+  for (var i = 0; i < map.length; i++) if (map[i][0].test(s)) return [LEAVE_REASONS_[map[i][1]], ''];
+  return ['その他', ''];
+}
+
+function leaveFreqGroup_(q7, q8) {
+  var a = String(q7 || '').trim();
+  var m = a.match(/^週(\d)回/);
+  if (m) return 'w' + m[1] === 'w5' ? '週5回以上' : '週' + m[1] + '回';
+  if (/週5回以上/.test(a)) return '週5回以上';
+  var n = Number(String(q8 || '').replace(/[０-９]/g, function (d) { return String.fromCharCode(d.charCodeAt(0) - 0xFEE0); }).trim());
+  if (!isFinite(n) || String(q8 || '').trim() === '') return '不明';
+  if (a === '週') return n <= 0 ? '週0回' : n < 1 ? '週1回未満' : n >= 5 ? '週5回以上' : '週' + Math.floor(n) + '回';
+  if (a === '月') {
+    if (n <= 0) return '週0回';
+    if (n < 4) return '週1回未満';
+    var w = Math.floor(n / 4);
+    return w >= 5 ? '週5回以上' : '週' + w + '回';
+  }
+  return '不明';
+}
+
+function importLeaveSurvey_(rows) {
+  var ss = SpreadsheetApp.openById(WS_CONFIG.SPREADSHEET_ID);
+  var sh = ss.getSheetByName(LEAVE_SURVEY_SHEET_) || ss.insertSheet(LEAVE_SURVEY_SHEET_);
+  var head = ['会員番号', '氏名', '退会理由（まとめ）', '移籍先', '退会理由（回答そのまま）', '利用頻度（まとめ）', '利用頻度（回答そのまま）', '利用時間帯', '退会月（最終在籍月）'];
+  var keep = {};
+  var last = sh.getLastRow();
+  if (last >= 2) sh.getRange(2, 1, last - 1, 8).getValues().forEach(function (r) { if (r[0] !== '') keep[String(r[0])] = r; });
+  var added = 0, updated = 0;
+  rows.forEach(function (r) {
+    var id = String(r[0] || '').replace(/^0+/, '');
+    if (!id) return;
+    var g = leaveReasonGroup_(r[5]);
+    var q7 = String(r[2] || ''), q8 = String(r[3] || '');
+    var rawF = /^週\d|週5回以上/.test(q7) ? q7 : (q7 + (q8 ? ' ' + q8 : '')).trim();
+    if (keep[id]) updated++; else added++;
+    keep[id] = [id, String(r[1] || ''), g[0], g[1], String(r[5] || ''), leaveFreqGroup_(q7, q8), rawF, String(r[4] || '').split('\t').join('、')];
+  });
+  var out = Object.keys(keep).map(function (k) { return keep[k]; });
+  out.sort(function (a, b) { return String(a[0]) < String(b[0]) ? -1 : 1; });
+  sh.clear();
+  sh.getRange(1, 1, 1, head.length).setValues([head]).setBackground('#111111').setFontColor('#FFFFFF').setFontWeight('bold');
+  if (out.length) {
+    sh.getRange(2, 1, out.length, 1).setNumberFormat('@');
+    sh.getRange(2, 1, out.length, 8).setValues(out);
+  }
+  sh.getRange('I2').setFormula('=MAP(A2:A,LAMBDA(a,IF(a="","",LET(m,MAXIFS(\'累計退会データ\'!$U$2:$U$8000,\'累計退会データ\'!$T$2:$T$8000,a&""),IF(m=0,"",EDATE(m,-1))))))');
+  sh.getRange('I2:I').setNumberFormat('yyyy/m');
+  sh.getRange(1, 1, Math.max(out.length + 1, 2), head.length).setFontFamily('Meiryo');
+  sh.setFrozenRows(1);
+  [90, 110, 170, 110, 200, 110, 140, 200, 120].forEach(function (w, i) { sh.setColumnWidth(i + 1, w); });
+  PropertiesService.getDocumentProperties().setProperty('LEAVE_SURVEY_AT', Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm'));
+  return { ok: true, total: out.length, added: added, updated: updated };
+}
+
+/**
+ * 会議用の退会理由を退会アンケートの文字に置き換え、利用頻度と、月ごとの件数（O30〜）を足す。
+ * 退会月は最終在籍月（会議用の退会と同じ数え方）。
+ */
+function addKaigiSurvey_(ss) {
+  var props = PropertiesService.getDocumentProperties();
+  if (props.getProperty('KAIGI_V') !== KAIGI_V_ || props.getProperty('KAIGI_MON') !== 'v1' || props.getProperty('KAIGI_SURVEY') === 'v2') return { ok: true, skipped: true };
+  var sh = ss.getSheetByName(KAIGI_SHEET_);
+  if (!sh || !ss.getSheetByName(LEAVE_SURVEY_SHEET_)) return { ok: false, reason: 'no survey sheet' };
+  var INK = '#111111', MUTE = '#7A7A7A', LINE = '#E3E3E3', SOFT = '#F7F7F7';
+  var SOLID = SpreadsheetApp.BorderStyle.SOLID;
+  var S = "'" + LEAVE_SURVEY_SHEET_ + "'!";
+  var mon = S + '$I$2:$I', rea = S + '$C$2:$C', frq = S + '$F$2:$F';
+  var curS = 'DATE(YEAR($B$6),MONTH($B$6),1)', curE = '$C$6';
+  var cmpS = 'DATE(YEAR($H$6),MONTH($H$6),1)', cmpE = '$I$6';
+  var off = KAIGI_CELLS_.cmp + '="比較なし"';
+  var cnt = function (s, e, col, lab) { return 'COUNTIFS(' + mon + ',">="&' + s + ',' + mon + ',"<="&' + e + ',' + col + ',' + lab + ')'; };
+  var cntAll = function (s, e, col) { return 'COUNTIFS(' + mon + ',">="&' + s + ',' + mon + ',"<="&' + e + ',' + col + ',"<>")'; };
+  var head = function (rg) { return rg.setBackground(INK).setFontColor('#FFFFFF').setFontWeight('bold').setFontSize(9).setHorizontalAlignment('center'); };
+  var cmpHead = '=IF(' + off + ',"比較",' + KAIGI_CELLS_.cmp + ')';
+
+  var table = function (top, col, title, labels, colRef, withBar) {
+    var L = function (k) { return sh.getRange(1, col + k).getA1Notation().replace(/\d+/, ''); };
+    var w = withBar ? 6 : 4;
+    sh.getRange(top, col, labels.length + 4, w).clear();
+    sh.getRange(top, col).setValue(title).setFontSize(12).setFontWeight('bold');
+    var h = withBar ? ['区分', '今回', '比較', '差', '構成比', ''] : ['理由', '今回', '比較', '差'];
+    head(sh.getRange(top + 1, col, 1, w).setValues([h]));
+    sh.getRange(top + 1, col).setHorizontalAlignment('left');
+    sh.getRange(top + 1, col + 2).setFormula(cmpHead);
+    var tot = top + 2, first = top + 3, lastR = first + labels.length - 1;
+    sh.getRange(tot, col).setValue('合計（回答した人）');
+    sh.getRange(tot, col + 1).setFormula('=' + cntAll(curS, curE, colRef));
+    sh.getRange(tot, col + 2).setFormula('=IF(OR(' + off + ',$H$6=""),"",' + cntAll(cmpS, cmpE, colRef) + ')');
+    sh.getRange(tot, col + 3).setFormula('=IF(' + L(2) + tot + '="","",' + L(1) + tot + '-' + L(2) + tot + ')');
+    var f = labels.map(function (lab, i) {
+      var r = first + i;
+      var row = [lab, '=' + cnt(curS, curE, colRef, '$' + L(0) + r), '=IF(OR(' + off + ',$H$6=""),"",' + cnt(cmpS, cmpE, colRef, '$' + L(0) + r) + ')',
+        '=IF(' + L(2) + r + '="","",' + L(1) + r + '-' + L(2) + r + ')'];
+      if (withBar) row.push('=IFERROR(' + L(1) + r + '/' + L(1) + '$' + tot + ',"")', '=IF(N(' + L(4) + r + ')=0,"",SPARKLINE(' + L(4) + r + ',{"charttype","bar";"max",1;"color1","#111111"}))');
+      return row;
+    });
+    sh.getRange(first, col, labels.length, w).setFormulas(f);
+    sh.getRange(first, col, labels.length, 1).setValues(labels.map(function (x) { return [x]; }));
+    var all = sh.getRange(tot, col, labels.length + 1, w).setFontFamily('Meiryo').setFontSize(10).setVerticalAlignment('middle');
+    sh.getRange(tot, col + 1, labels.length + 1, 1).setNumberFormat('#,##0').setFontWeight('bold');
+    sh.getRange(tot, col + 2, labels.length + 1, 1).setNumberFormat('#,##0').setFontColor(MUTE);
+    sh.getRange(tot, col + 3, labels.length + 1, 1).setNumberFormat('+#,##0;-#,##0;0');
+    if (withBar) sh.getRange(tot, col + 4, labels.length + 1, 1).setNumberFormat('0%').setFontColor(MUTE);
+    sh.getRange(tot, col + 1, labels.length + 1, 4).setHorizontalAlignment('right');
+    sh.getRange(first, col, labels.length, w).setBorder(null, null, true, null, null, true, LINE, SOLID);
+    sh.getRange(tot, col, 1, w).setBackground(SOFT).setFontWeight('bold').setBorder(null, null, true, null, null, null, INK, SOLID);
+    return { first: first, last: lastR, w: w, tot: tot };
+  };
+  sh.getRange('B32:F52').clear();
+  var t1 = table(32, 2, '退会理由（退会アンケート）', LEAVE_REASONS_, rea, false);
+  sh.getRange('B' + (t1.last + 1)).setFormula('=IFERROR("回答 "&C' + t1.tot + '&"人／退会 "&C17&"人（回答率 "&TEXT(C' + t1.tot + '/C17,"0%")&"）","")')
+    .setFontSize(9).setFontColor(MUTE);
+  var t2 = table(37, 8, '辞めた人の利用頻度（退会アンケート）', LEAVE_FREQS_, frq, true);
+
+  var matrix = function (top, title, labels, colRef) {
+    sh.getRange(top, 15, labels.length + 3, 14).clear();
+    sh.getRange(top, 15).setValue(title).setFontSize(12).setFontWeight('bold');
+    var hr = top + 1, first = top + 2, tot = first + labels.length;
+    var hdr = ['=IF(TRUE,"' + (colRef === rea ? '理由' : '利用頻度') + '")'];
+    for (var i = 0; i < 12; i++) hdr.push('=IF($AJ$' + (2 + i) + '="","",$AJ$' + (2 + i) + ')');
+    hdr.push('="合計"');
+    sh.getRange(hr, 15, 1, 14).setFormulas([hdr]);
+    head(sh.getRange(hr, 15, 1, 14)).setNumberFormat('yyyy/m');
+    sh.getRange(hr, 15).setHorizontalAlignment('left');
+    var cols = 'PQRSTUVWXYZ'.split('').concat(['AA']);
+    var f = labels.map(function (lab, k) {
+      var r = first + k;
+      var row = [lab];
+      cols.forEach(function (c) { row.push('=IF(' + c + '$' + hr + '="","",COUNTIFS(' + mon + ',' + c + '$' + hr + ',' + colRef + ',$O' + r + '))'); });
+      row.push('=SUM(P' + r + ':AA' + r + ')');
+      return row;
+    });
+    sh.getRange(first, 15, labels.length, 14).setFormulas(f);
+    var tr = ['合計'];
+    cols.concat(['AB']).forEach(function (c) { tr.push('=IF(' + c + '$' + hr + '="","",SUM(' + c + first + ':' + c + (tot - 1) + '))'); });
+    sh.getRange(tot, 15, 1, 14).setFormulas([tr]);
+    sh.getRange(first, 15, labels.length, 1).setValues(labels.map(function (x) { return [x]; }));
+    sh.getRange(tot, 15).setValue('合計');
+    sh.getRange(first, 15, labels.length + 1, 14).setFontFamily('Meiryo').setFontSize(10).setVerticalAlignment('middle');
+    sh.getRange(first, 16, labels.length + 1, 13).setNumberFormat('0').setHorizontalAlignment('right');
+    sh.getRange(first, 28, labels.length + 1, 1).setFontWeight('bold').setBackground(SOFT);
+    sh.getRange(first, 15, labels.length, 14).setBorder(null, null, true, null, null, true, LINE, SOLID);
+    sh.getRange(tot, 15, 1, 14).setBackground(SOFT).setFontWeight('bold').setBorder(true, null, true, null, null, null, INK, SOLID);
+    return sh.getRange(first, 16, labels.length + 1, 13);
+  };
+  var m1 = matrix(30, '退会理由 月ごとの件数（退会アンケート・今回の期間）', LEAVE_REASONS_, rea);
+  var m2 = matrix(51, '利用頻度 月ごとの件数（退会アンケート・今回の期間）', LEAVE_FREQS_, frq);
+  sh.setColumnWidth(28, 64);
+  sh.setColumnWidth(15, 160);
+
+  var rules = sh.getConditionalFormatRules();
+  rules.push(SpreadsheetApp.newConditionalFormatRule().whenNumberEqualTo(0).setFontColor('#C8C8C8').setRanges([m1, m2,
+    sh.getRange(t1.first, 3, LEAVE_REASONS_.length, 2), sh.getRange(t2.first, 9, LEAVE_FREQS_.length, 2)]).build());
+  sh.setConditionalFormatRules(rules);
+  var at = props.getProperty('LEAVE_SURVEY_AT') || '';
+  sh.getRange('O63').setValue('退会アンケートの取り込み：' + at + '（管理画面のCSV。回答した人だけの数字です）').setFontSize(9).setFontColor(MUTE);
+  props.setProperty('KAIGI_SURVEY', 'v2');
   return { ok: true };
 }
 
