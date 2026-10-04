@@ -51,6 +51,10 @@ var RECEPTION_REFRESH_TOKEN_ = 'kyodo-ws-refresh-7f3c91';
 
 function onOpen() {
   var ui = SpreadsheetApp.getUi();
+  ui.createMenu('ファイルUP')
+  .addItem('月初作業ファイルUP（会員数・オプション・年齢男女のExcel）', 'openGessho3Files')
+  .addItem('数値更新ファイルUP（退会アンケートのCSV）', 'openNumbersUpload')
+  .addToUi();
   ui.createMenu('月初３ファイル')
   .addItem('3ファイルを取り込む', 'openGessho3Files')
   .addItem('日報の写しを出す', 'ensureNippoMirror')
@@ -6215,17 +6219,22 @@ function rebuildKaigiSheet_(ss) {
  * 理由・頻度は表記ゆれや昔の選択肢をまとめた「まとめ」列も作る。退会月は累計退会データから（最終在籍月）。
  */
 var LEAVE_SURVEY_SHEET_ = '退会アンケート';
+var LEAVE_CLUBS_ = ['エニタイム', 'ルネサンス', 'ファストジム', 'アーバンクラシック', 'パーソナルジム', 'ピラティスミラー', 'LAVA', 'その他'];
 var LEAVE_REASONS_ = ['引越し・転勤', '仕事に専念・仕事多忙', '金銭的理由（会費が高い）', '一時的に来られなくなる', '体調不良・入院・ケガ・病気',
-  '飽きた', '学業専念', '他クラブ移籍', '交通不便', '看病・家事・育児', '妊娠', '設備に不満', '混雑（FWエリア）', 'スタッフが不満', 'キャンペーン終了', 'その他'];
+  '飽きた', '学業専念', '交通不便', '看病・家事・育児', '妊娠', '設備に不満', '混雑（FWエリア）', 'スタッフが不満', 'キャンペーン終了']
+  .concat(LEAVE_CLUBS_.map(function (c) { return '移籍：' + c; }));
 var LEAVE_FREQS_ = ['週0回', '週1回未満', '週1回', '週2回', '週3回', '週4回', '週5回以上', '不明'];
 
 function leaveReasonGroup_(a) {
   var s = String(a || '').replace(/\s/g, '');
   if (!s) return ['', ''];
   var m = s.match(/^他クラブ移籍(?:[（(](.+)[)）])?$/);
-  if (m) return ['他クラブ移籍', m[1] || 'その他'];
+  if (m) {
+    var club = LEAVE_CLUBS_.filter(function (c) { return m[1] && m[1].toUpperCase().indexOf(c.toUpperCase()) >= 0; })[0] || 'その他';
+    return ['移籍：' + club, m[1] || 'その他'];
+  }
   var map = [[/引越|転勤/, 0], [/仕事/, 1], [/金銭|会費/, 2], [/一時的/, 3], [/体調|入院|ケガ|病気/, 4], [/飽き/, 5], [/学業/, 6],
-    [/交通/, 8], [/看病|家事|育児/, 9], [/妊娠/, 10], [/設備/, 11], [/混/, 12], [/スタッフ/, 13], [/キャンペーン/, 14]];
+    [/交通/, 7], [/看病|家事|育児/, 8], [/妊娠/, 9], [/設備/, 10], [/混/, 11], [/スタッフ/, 12], [/キャンペーン/, 13]];
   for (var i = 0; i < map.length; i++) if (map[i][0].test(s)) return [LEAVE_REASONS_[map[i][1]], ''];
   return ['その他', ''];
 }
@@ -6281,13 +6290,30 @@ function importLeaveSurvey_(rows) {
   return { ok: true, total: out.length, added: added, updated: updated };
 }
 
+/** メニュー「ファイルUP」→ 数値更新ファイル。ブラウザでCSVを読んで uploadNumbersFile に渡す */
+function openNumbersUpload() {
+  var html = HtmlService.createHtmlOutputFromFile('numbersui').setWidth(560).setHeight(420);
+  SpreadsheetApp.getUi().showModalDialog(html, '数値更新ファイルUP');
+}
+
+function uploadNumbersFile(payload) {
+  try {
+    if (!payload || payload.kind !== 'leaveSurvey') throw new Error('対応していないファイルです');
+    var res = importLeaveSurvey_(payload.rows || []);
+    try { syncTopRefreshStatus_(SpreadsheetApp.getActiveSpreadsheet()); } catch (e) {}
+    return res;
+  } catch (err) {
+    return { ok: false, message: String(err && err.message ? err.message : err) };
+  }
+}
+
 /**
  * 会議用の退会理由を退会アンケートの文字に置き換え、利用頻度と、月ごとの件数（O30〜）を足す。
  * 退会月は最終在籍月（会議用の退会と同じ数え方）。
  */
 function addKaigiSurvey_(ss) {
   var props = PropertiesService.getDocumentProperties();
-  if (props.getProperty('KAIGI_V') !== KAIGI_V_ || props.getProperty('KAIGI_MON') !== 'v1' || props.getProperty('KAIGI_SURVEY') === 'v2') return { ok: true, skipped: true };
+  if (props.getProperty('KAIGI_V') !== KAIGI_V_ || props.getProperty('KAIGI_MON') !== 'v1' || props.getProperty('KAIGI_SURVEY') === 'v3') return { ok: true, skipped: true };
   var sh = ss.getSheetByName(KAIGI_SHEET_);
   if (!sh || !ss.getSheetByName(LEAVE_SURVEY_SHEET_)) return { ok: false, reason: 'no survey sheet' };
   var INK = '#111111', MUTE = '#7A7A7A', LINE = '#E3E3E3', SOFT = '#F7F7F7';
@@ -6298,7 +6324,7 @@ function addKaigiSurvey_(ss) {
   var cmpS = 'DATE(YEAR($H$6),MONTH($H$6),1)', cmpE = '$I$6';
   var off = KAIGI_CELLS_.cmp + '="比較なし"';
   var cnt = function (s, e, col, lab) { return 'COUNTIFS(' + mon + ',">="&' + s + ',' + mon + ',"<="&' + e + ',' + col + ',' + lab + ')'; };
-  var cntAll = function (s, e, col) { return 'COUNTIFS(' + mon + ',">="&' + s + ',' + mon + ',"<="&' + e + ',' + col + ',"<>")'; };
+  var cntAll = function (s, e, col) { return 'COUNTIFS(' + mon + ',">="&' + s + ',' + mon + ',"<="&' + e + ',' + col + ',"<>",' + col + ',"<>その他")'; };
   var head = function (rg) { return rg.setBackground(INK).setFontColor('#FFFFFF').setFontWeight('bold').setFontSize(9).setHorizontalAlignment('center'); };
   var cmpHead = '=IF(' + off + ',"比較",' + KAIGI_CELLS_.cmp + ')';
 
@@ -6335,7 +6361,8 @@ function addKaigiSurvey_(ss) {
     sh.getRange(tot, col, 1, w).setBackground(SOFT).setFontWeight('bold').setBorder(null, null, true, null, null, null, INK, SOLID);
     return { first: first, last: lastR, w: w, tot: tot };
   };
-  sh.getRange('B32:F52').clear();
+  sh.getRange('B32:F60').clear();
+  sh.getRange('O30:AB75').clear();
   var t1 = table(32, 2, '退会理由（退会アンケート）', LEAVE_REASONS_, rea, false);
   sh.getRange('B' + (t1.last + 1)).setFormula('=IFERROR("回答 "&C' + t1.tot + '&"人／退会 "&C17&"人（回答率 "&TEXT(C' + t1.tot + '/C17,"0%")&"）","")')
     .setFontSize(9).setFontColor(MUTE);
@@ -6373,17 +6400,21 @@ function addKaigiSurvey_(ss) {
     return sh.getRange(first, 16, labels.length + 1, 13);
   };
   var m1 = matrix(30, '退会理由 月ごとの件数（退会アンケート・今回の期間）', LEAVE_REASONS_, rea);
-  var m2 = matrix(51, '利用頻度 月ごとの件数（退会アンケート・今回の期間）', LEAVE_FREQS_, frq);
+  var m2Top = 30 + LEAVE_REASONS_.length + 5;
+  var m2 = matrix(m2Top, '利用頻度 月ごとの件数（退会アンケート・今回の期間）', LEAVE_FREQS_, frq);
   sh.setColumnWidth(28, 64);
   sh.setColumnWidth(15, 160);
 
-  var rules = sh.getConditionalFormatRules();
+  var rules = sh.getConditionalFormatRules().filter(function (ru) {
+    var bc = ru.getBooleanCondition();
+    return !(bc && bc.getCriteriaType() === SpreadsheetApp.BooleanCriteria.NUMBER_EQUAL_TO);
+  });
   rules.push(SpreadsheetApp.newConditionalFormatRule().whenNumberEqualTo(0).setFontColor('#C8C8C8').setRanges([m1, m2,
     sh.getRange(t1.first, 3, LEAVE_REASONS_.length, 2), sh.getRange(t2.first, 9, LEAVE_FREQS_.length, 2)]).build());
   sh.setConditionalFormatRules(rules);
   var at = props.getProperty('LEAVE_SURVEY_AT') || '';
-  sh.getRange('O63').setValue('退会アンケートの取り込み：' + at + '（管理画面のCSV。回答した人だけの数字です）').setFontSize(9).setFontColor(MUTE);
-  props.setProperty('KAIGI_SURVEY', 'v2');
+  sh.getRange(m2Top + LEAVE_FREQS_.length + 4, 15).setValue('回答した人だけの数字です。「その他」は分析に向かないので数えていません').setFontSize(9).setFontColor(MUTE);
+  props.setProperty('KAIGI_SURVEY', 'v3');
   return { ok: true };
 }
 
@@ -6595,10 +6626,19 @@ function syncTopRefreshStatus_(ss) {
   else if (!checked || Date.now() - checked.getTime() > 10 * 60 * 1000) status = '⚠ 数字の自動更新が止まっています' + (checked ? '（最終チェック ' + fmt(checked) + '）' : '');
   else if (h.lastError) status = '⚠ 前回の自動更新でエラー：' + String(h.lastError).slice(0, 40);
   else {
-    status = '● 日報の数字は自動更新中　最終更新 ' + (last ? fmt(last) : '—') + '（入会・退会・オプションのメールが届くと数分で反映）';
+    status = '● 最終更新　日報 ' + (last ? fmt(last) : '—');
     bad = false;
   }
-  var guide = '　｜　シート名を押すと、そのシートへ移動します';
+  var gessho = '—';
+  try {
+    var idx = ss.getSheetByName('月初３ファイル');
+    if (idx && idx.getLastRow() > 1) {
+      var ts = idx.getRange(2, 2, idx.getLastRow() - 1, 1).getValues().map(function (r) { return r[0]; }).filter(function (d) { return d instanceof Date; });
+      if (ts.length) gessho = Utilities.formatDate(new Date(Math.max.apply(null, ts)), 'Asia/Tokyo', 'M/d');
+    }
+  } catch (eG) {}
+  var survey = String(PropertiesService.getDocumentProperties().getProperty('LEAVE_SURVEY_AT') || '').replace(/^\d{4}\//, '').replace(/^0/, '').replace(/\/0/, '/').replace(/ .*/, '');
+  var guide = '　｜　月初ファイル ' + gessho + '　｜　退会アンケート ' + (survey || '—');
   var cell = sh.getRange('A2');
   if (String(cell.getDisplayValue()) !== status + guide) {
     var rich = SpreadsheetApp.newRichTextValue().setText(status + guide)

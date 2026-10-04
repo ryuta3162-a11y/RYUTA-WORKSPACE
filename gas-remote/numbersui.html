@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <style>
+    body { font-family: Meiryo, "Hiragino Sans", sans-serif; margin: 16px; color: #111; font-size: 13px; }
+    h1 { font-size: 16px; margin: 0 0 8px; }
+    p { margin: 0 0 10px; line-height: 1.5; }
+    .drop { border: 2px dashed #111; background: #f7f7f7; padding: 28px 12px; text-align: center; margin: 8px 0 12px; cursor: pointer; }
+    .drop.over { background: #fff; }
+    .ok { color: #111; background: #f4f4f4; padding: 8px 10px; }
+    .warn { color: #C21632; background: #fdf1f1; padding: 8px 10px; }
+    #files { display: none; }
+  </style>
+</head>
+<body>
+  <h1>数値更新ファイルUP</h1>
+  <p>退会アンケートのCSV（管理画面からダウンロードしたもの）をドロップしてください。会員番号で上書きするので、全期間のCSVをそのまま入れて大丈夫です。</p>
+  <div id="drop" class="drop">ここにCSVをドロップ<br>またはクリックして選ぶ</div>
+  <input id="files" type="file" accept=".csv,text/csv" />
+  <div id="msg"></div>
+  <script>
+    var drop = document.getElementById('drop');
+    var input = document.getElementById('files');
+    var msg = document.getElementById('msg');
+    drop.onclick = function () { input.click(); };
+    input.onchange = function () { if (input.files && input.files[0]) read(input.files[0]); };
+    drop.ondragover = function (e) { e.preventDefault(); drop.className = 'drop over'; };
+    drop.ondragleave = function () { drop.className = 'drop'; };
+    drop.ondrop = function (e) { e.preventDefault(); drop.className = 'drop'; if (e.dataTransfer.files[0]) read(e.dataTransfer.files[0]); };
+
+    function show(text, bad) { msg.className = bad ? 'warn' : 'ok'; msg.textContent = text; }
+
+    function decode(buf) {
+      var u8 = new Uint8Array(buf);
+      if (u8[0] === 0xEF && u8[1] === 0xBB && u8[2] === 0xBF) return new TextDecoder('utf-8').decode(u8.subarray(3));
+      try { return new TextDecoder('utf-8', { fatal: true }).decode(u8); } catch (e) { return new TextDecoder('shift_jis').decode(u8); }
+    }
+
+    function parseCsv(text) {
+      var rows = [], row = [], cell = '', q = false;
+      for (var i = 0; i < text.length; i++) {
+        var ch = text[i];
+        if (q) {
+          if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; }
+          else cell += ch;
+        } else if (ch === '"') q = true;
+        else if (ch === ',') { row.push(cell); cell = ''; }
+        else if (ch === '\n' || ch === '\r') {
+          if (ch === '\r' && text[i + 1] === '\n') i++;
+          row.push(cell); rows.push(row); row = []; cell = '';
+        } else cell += ch;
+      }
+      if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+      return rows;
+    }
+
+    function read(file) {
+      show('読み込み中…');
+      var fr = new FileReader();
+      fr.onload = function () {
+        var rows = parseCsv(decode(fr.result));
+        var head = (rows[0] || []).map(function (s) { return String(s).trim(); });
+        var iu = head.indexOf('uid'), iname = head.indexOf('name'), iq = head.indexOf('q_id'), ia = head.indexOf('answer');
+        if (iu < 0 || iq < 0 || ia < 0) { show('退会アンケートのCSVではないようです（uid・q_id・answer の列がありません）: ' + file.name, true); return; }
+        var people = {}, order = [];
+        for (var r = 1; r < rows.length; r++) {
+          var x = rows[r];
+          if (!x || !x[iu]) continue;
+          if (!people[x[iu]]) { people[x[iu]] = { name: x[iname] || '' }; order.push(x[iu]); }
+          people[x[iu]][x[iq]] = x[ia];
+        }
+        var out = order.map(function (u) { var d = people[u]; return [u, d.name, d['7'] || '', d['8'] || '', d['11'] || '', d['12'] || '']; })
+          .filter(function (r) { return r[5] || r[2]; });
+        if (!out.length) { show('回答が1件もありませんでした', true); return; }
+        show(out.length + '人分を取り込んでいます…');
+        google.script.run.withSuccessHandler(function (res) {
+          if (!res || !res.ok) { show('取り込めませんでした: ' + (res && res.message || ''), true); return; }
+          show('取り込みました：' + res.total + '人（新しく ' + res.added + '人、更新 ' + res.updated + '人）。会議用の退会理由・利用頻度に反映されます。');
+        }).withFailureHandler(function (e) { show('取り込めませんでした: ' + e.message, true); })
+          .uploadNumbersFile({ kind: 'leaveSurvey', rows: out });
+      };
+      fr.readAsArrayBuffer(file);
+    }
+  </script>
+</body>
+</html>
