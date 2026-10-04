@@ -6313,7 +6313,7 @@ function uploadNumbersFile(payload) {
  */
 function addKaigiSurvey_(ss) {
   var props = PropertiesService.getDocumentProperties();
-  if (props.getProperty('KAIGI_V') !== KAIGI_V_ || props.getProperty('KAIGI_MON') !== 'v1' || props.getProperty('KAIGI_SURVEY') === 'v3') return { ok: true, skipped: true };
+  if (props.getProperty('KAIGI_V') !== KAIGI_V_ || props.getProperty('KAIGI_MON') !== 'v1' || props.getProperty('KAIGI_SURVEY') === 'v4') return { ok: true, skipped: true };
   var sh = ss.getSheetByName(KAIGI_SHEET_);
   if (!sh || !ss.getSheetByName(LEAVE_SURVEY_SHEET_)) return { ok: false, reason: 'no survey sheet' };
   var INK = '#111111', MUTE = '#7A7A7A', LINE = '#E3E3E3', SOFT = '#F7F7F7';
@@ -6361,11 +6361,67 @@ function addKaigiSurvey_(ss) {
     sh.getRange(tot, col, 1, w).setBackground(SOFT).setFontWeight('bold').setBorder(null, null, true, null, null, null, INK, SOLID);
     return { first: first, last: lastR, w: w, tot: tot };
   };
-  sh.getRange('B32:F60').clear();
+
+  // 退会理由：回答率が期間で違うので、件数より「割合」で比べる。割合の差が大きい理由を下に要約
+  var reasonTable = function (top) {
+    var labels = LEAVE_REASONS_, n = labels.length;
+    sh.getRange(top, 2).setValue('退会理由の比較（退会アンケート）').setFontSize(12).setFontWeight('bold');
+    head(sh.getRange(top + 1, 2, 1, 6).setValues([['理由', '今回', '割合', '比較', '割合', '割合の差']]));
+    sh.getRange(top + 1, 2).setHorizontalAlignment('left');
+    sh.getRange(top + 1, 5).setFormula(cmpHead);
+    var tot = top + 2, first = top + 3, last = first + n - 1;
+    var cmpOn = 'OR(' + off + ',$H$6="")';
+    sh.getRange(tot, 2, 1, 6).setFormulas([[
+      '="合計（回答した人）"', '=' + cntAll(curS, curE, rea), '=IF(C' + tot + '=0,"",1)',
+      '=IF(' + cmpOn + ',"",' + cntAll(cmpS, cmpE, rea) + ')', '=IF(N(E' + tot + ')=0,"",1)', '=""'
+    ]]);
+    var f = labels.map(function (lab, i) {
+      var r = first + i;
+      return [lab, '=' + cnt(curS, curE, rea, '$B' + r), '=IFERROR(C' + r + '/C$' + tot + ',"")',
+        '=IF(' + cmpOn + ',"",' + cnt(cmpS, cmpE, rea, '$B' + r) + ')', '=IFERROR(E' + r + '/E$' + tot + ',"")',
+        '=IF(OR(D' + r + '="",F' + r + '=""),"",D' + r + '-F' + r + ')'];
+    });
+    sh.getRange(first, 2, n, 6).setFormulas(f);
+    sh.getRange(first, 2, n, 1).setValues(labels.map(function (x) { return [x]; }));
+    sh.getRange(tot, 2, 1, 1).setValue('合計（回答した人）');
+    var all = sh.getRange(tot, 2, n + 1, 6).setFontFamily('Meiryo').setFontSize(10).setVerticalAlignment('middle');
+    sh.getRange(tot, 3, n + 1, 1).setNumberFormat('#,##0').setFontWeight('bold');
+    sh.getRange(tot, 4, n + 1, 1).setNumberFormat('0%').setFontWeight('bold');
+    sh.getRange(tot, 5, n + 1, 1).setNumberFormat('#,##0').setFontColor(MUTE);
+    sh.getRange(tot, 6, n + 1, 1).setNumberFormat('0%').setFontColor(MUTE);
+    sh.getRange(tot, 7, n + 1, 1).setNumberFormat('+0.0%;-0.0%;0.0%').setBackground(SOFT);
+    sh.getRange(tot, 3, n + 1, 5).setHorizontalAlignment('right');
+    sh.getRange(first, 2, n, 6).setBorder(null, null, true, null, null, true, LINE, SOLID);
+    sh.getRange(tot, 2, 1, 6).setBackground(SOFT).setFontWeight('bold').setBorder(null, null, true, null, null, null, INK, SOLID);
+    [first + 13].forEach(function (r) { sh.getRange(r, 2, 1, 6).setBorder(null, null, true, null, null, null, '#BDBDBD', SOLID); });
+
+    var note = last + 1;
+    sh.getRange('B' + note).setFormula('=IFERROR("回答 "&C' + tot + '&"人／退会 "&C17&"人（回答率 "&TEXT(C' + tot + '/C17,"0%")&"）"&IF(N(E' + tot + ')>0,"　比較 "&E' + tot + '&"人／"&D17&"人（"&TEXT(E' + tot + '/D17,"0%")&"）",""),"")')
+      .setFontSize(9).setFontColor(MUTE);
+    var G = 'G' + first + ':G' + last, B = 'B' + first + ':B' + last;
+    var top3 = function (asc, cond) {
+      var k = '(' + G + '<>"")*(' + G + cond + ')';
+      return 'IFERROR(TEXTJOIN("、",TRUE,MAP(SORTN(FILTER(' + B + ',' + k + '),3,0,FILTER(' + G + ',' + k + '),' + asc + '),' +
+        'LAMBDA(x,x&" "&TEXT(XLOOKUP(x,' + B + ',' + G + ')*100,"+0.0;-0.0")&"pt"))),"特になし")';
+    };
+    sh.getRange('B' + (note + 1)).setValue('増えた理由').setFontWeight('bold').setFontColor('#B91C1C').setFontSize(10);
+    sh.getRange('C' + (note + 1)).setFormula('=IF(N(E' + tot + ')=0,"比較なし",' + top3('FALSE', '>=0.02') + ')').setFontSize(10);
+    sh.getRange('B' + (note + 2)).setValue('減った理由').setFontWeight('bold').setFontSize(10);
+    sh.getRange('C' + (note + 2)).setFormula('=IF(N(E' + tot + ')=0,"比較なし",' + top3('TRUE', '<=-0.02') + ')').setFontSize(10);
+    sh.getRange('B' + (note + 1) + ':B' + (note + 2)).setFontFamily('Meiryo');
+    sh.getRange('C' + (note + 1) + ':C' + (note + 2)).setFontFamily('Meiryo');
+    var rr = sh.getConditionalFormatRules().filter(function (ru) {
+      var g0 = ru.getRanges()[0];
+      return !(g0 && g0.getRow() >= top && g0.getColumn() >= 2 && g0.getColumn() <= 7);
+    });
+    rr.push(SpreadsheetApp.newConditionalFormatRule().whenNumberGreaterThanOrEqualTo(0.02).setFontColor('#B91C1C').setBold(true).setRanges([sh.getRange(G)]).build());
+    rr.push(SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=AND(ISNUMBER($D' + first + '),$D' + first + '>=0.15)').setBackground('#FDF1F1').setRanges([sh.getRange('B' + first + ':D' + last)]).build());
+    sh.setConditionalFormatRules(rr);
+    return { first: first, last: last, tot: tot };
+  };
+  sh.getRange('B32:G64').clear();
   sh.getRange('O30:AB75').clear();
-  var t1 = table(32, 2, '退会理由（退会アンケート）', LEAVE_REASONS_, rea, false);
-  sh.getRange('B' + (t1.last + 1)).setFormula('=IFERROR("回答 "&C' + t1.tot + '&"人／退会 "&C17&"人（回答率 "&TEXT(C' + t1.tot + '/C17,"0%")&"）","")')
-    .setFontSize(9).setFontColor(MUTE);
+  var t1 = reasonTable(32);
   var t2 = table(37, 8, '辞めた人の利用頻度（退会アンケート）', LEAVE_FREQS_, frq, true);
 
   var matrix = function (top, title, labels, colRef) {
@@ -6414,7 +6470,7 @@ function addKaigiSurvey_(ss) {
   sh.setConditionalFormatRules(rules);
   var at = props.getProperty('LEAVE_SURVEY_AT') || '';
   sh.getRange(m2Top + LEAVE_FREQS_.length + 4, 15).setValue('回答した人だけの数字です。「その他」は分析に向かないので数えていません').setFontSize(9).setFontColor(MUTE);
-  props.setProperty('KAIGI_SURVEY', 'v3');
+  props.setProperty('KAIGI_SURVEY', 'v4');
   return { ok: true };
 }
 
