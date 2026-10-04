@@ -4074,6 +4074,21 @@ function billingPullTriggered() {
     props.setProperty('KAIGI_SUMFIX', 'v1');
     return { ok: true, fixed: n };
   });
+  mark('kaigiLabels', function () {
+    var props = PropertiesService.getDocumentProperties();
+    if (props.getProperty('KAIGI_LABELS') === 'v1') return { ok: true, skipped: true };
+    var sh = ss.getSheetByName(KAIGI_SHEET_);
+    sh.getRange('J8').setFormula('=IF(ISNUMBER(\'分析用_期間集計\'!B6),"月初の会員（"&TEXT(\'分析用_期間集計\'!B6,"m月")&"）","月初の会員")');
+    sh.getRange('L8').setValue('入会6ヶ月以内の退会');
+    var n = 0, am = sh.getRange(12, 39, 189, 1), fs = am.getFormulas();
+    fs.forEach(function (r, i) {
+      if (r[0].indexOf('期間の最初→最後') < 0) return;
+      sh.getRange(12 + i, 39).setFormula(r[0].split('期間の最初→最後').join('最初の月と最後の月'));
+      n++;
+    });
+    props.setProperty('KAIGI_LABELS', 'v1');
+    return { ok: true, heads: n };
+  });
   mark('top', function () { ensureTopSimple_(ss); });
   writeTrace();
 }
@@ -6130,8 +6145,8 @@ function rebuildKaigiSheet_(ss) {
     ['D', 'E', '退会', '退会'],
     ['F', 'G', '純増', '純増'],
     ['H', 'I', '退会率', '退会率'],
-    ['J', 'K', '期間開始時の会員', '期間開始時の会員'],
-    ['L', 'M', '短期退会（6ヶ月以内）', '短期退会（6ヶ月以内）']
+    ['J', 'K', '月初の会員', '期間開始時の会員'],
+    ['L', 'M', '入会6ヶ月以内の退会', '短期退会（6ヶ月以内）']
   ];
   sh.setRowHeight(8, 22);
   sh.setRowHeight(9, 48);
@@ -6660,7 +6675,7 @@ function rebuildKaigiByMonth_(ss) {
     sh.getRange(row + 1, 3, 1, LAST_COL - 2).setFormulas([sub]);
     for (var k2 = 0; k2 < KAIGI_SLOTS_; k2++) sh.getRange(row, ca(k2), 1, W).merge();
     sh.getRange(row, 2, 2, 1).merge().setValue(label).setHorizontalAlignment('left').setVerticalAlignment('middle');
-    sh.getRange(row, SUM_COL, 1, 3).merge().setFormula('=IF(' + MOM + ',"期間の最初→最後","期間の合計")');
+    sh.getRange(row, SUM_COL, 1, 3).merge().setFormula('=IF(' + MOM + ',"最初の月と最後の月","期間の合計")');
     sh.getRange(row + 1, SUM_COL, 1, 3).setFormulas([['=IF(' + MOM + ',"最後の月","今回")', '=IF(' + MOM + ',"最初の月",IF(' + off + ',"","前年"))', '=IF(' + off + ',"","増減")']]);
     sh.getRange(row, SUM_COL, 2, 1).setBorder(null, true, null, null, null, null, '#FFFFFF', SpreadsheetApp.BorderStyle.SOLID_THICK);
     sh.getRange(row, 2, 2, END_COL - 1).setBackground(INK).setFontColor('#FFFFFF').setFontWeight('bold').setFontSize(9).setHorizontalAlignment('center').setVerticalAlignment('middle');
