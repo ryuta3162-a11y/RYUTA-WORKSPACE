@@ -6205,6 +6205,7 @@ function rebuildKaigiSheet_(ss) {
   props.deleteProperty('KAIGI_FROM');
   props.deleteProperty('KAIGI_SURVEY');
   props.deleteProperty('KAIGI_BYMON');
+  props.deleteProperty('KAIGI_SHIFT');
   props.setProperty('KAIGI_V', KAIGI_V_);
   return { ok: true };
 }
@@ -6567,210 +6568,192 @@ function addKaigiSurvey_(ss) {
 
 /**
  * 会議用の12行目から下を「月ごとに横へ並べる」形に作り直す。期間の合計は上のカードだけ。
- * どの表も 1ヶ月＝2列（今回｜比較の同じ順番の月）。表は縦に積む。上のプルダウンと列を共有するので、使わない月の列は隠さず空欄。
- * 月は AJ2:AJ13（今回）・AN2:AN13（比較）、月初・入会・退会は AK:AM／AO:AQ（addKaigiMonthly_ の非表示列）。
+ * どの表も 1ヶ月＝3列（今回｜比較｜増減）。表は縦に積む。上のプルダウンと列を共有するので、使わない月の列は隠さず空欄。
+ * 月・月初・入会・退会は addKaigiMonthly_ の非表示列（AJ:AQ を12列右へずらした AV:BC）。
  */
 var KAIGI_SLOTS_ = 12;
 function rebuildKaigiByMonth_(ss) {
   var props = PropertiesService.getDocumentProperties();
-  if (props.getProperty('KAIGI_V') !== KAIGI_V_ || props.getProperty('KAIGI_MON') !== 'v1' || props.getProperty('KAIGI_BYMON') === 'v4') return { ok: true, skipped: true };
+  if (props.getProperty('KAIGI_V') !== KAIGI_V_ || props.getProperty('KAIGI_MON') !== 'v1' || props.getProperty('KAIGI_BYMON') === 'v5') return { ok: true, skipped: true };
   var sh = ss.getSheetByName(KAIGI_SHEET_);
   if (!sh) return { ok: false };
+  // 1ヶ月3列×12ヶ月で AH より右まで使うので、非表示の補助列（AH・AJ:AQ・AS）を12列右へずらす（参照は自動で付いてくる）
+  if (props.getProperty('KAIGI_SHIFT') !== 'v1') {
+    sh.insertColumnsBefore(34, 12);
+    props.setProperty('KAIGI_SHIFT', 'v1');
+  }
+  var X = { cur: 'AV', join: 'AW', leave: 'AX', start: 'AY', cmp: 'AZ', cjoin: 'BA', cleave: 'BB', cstart: 'BC', diff: 'BE' };
   var INK = '#111111', MUTE = '#7A7A7A', LINE = '#E3E3E3', SOFT = '#F7F7F7', RED = '#B91C1C';
   var SOLID = SpreadsheetApp.BorderStyle.SOLID;
   var C = KAIGI_CELLS_, G = "'分析用_期間集計'!";
   var off = C.cmp + '="比較なし"';
-  var LAST_COL = 2 + KAIGI_SLOTS_ * 2;
+  var MOM = C.cmp + '="月ごとの増減"';
+  var W = 3, LAST_COL = 2 + KAIGI_SLOTS_ * W, SUM_COL = LAST_COL + 1;
   var colL = function (c) { return sh.getRange(1, c).getA1Notation().replace(/\d+/, ''); };
+  var ca = function (k) { return 3 + k * W; };
 
   var maxR = sh.getMaxRows();
-  if (maxR < 220) sh.insertRowsAfter(maxR, 220 - maxR);
-  var body = sh.getRange(12, 1, sh.getMaxRows() - 11, 33);
+  if (maxR < 200) sh.insertRowsAfter(maxR, 200 - maxR);
+  var body = sh.getRange(12, 1, sh.getMaxRows() - 11, 45);
   try { body.breakApart(); } catch (eB) {}
   body.clearDataValidations();
   body.clear();
-  sh.showColumns(3, 31);
-  sh.setColumnWidth(2, 180);
-  for (var c = 3; c <= LAST_COL; c++) sh.setColumnWidth(c, 58);
-  for (var c2 = LAST_COL + 1; c2 <= 33; c2++) sh.setColumnWidth(c2, 18);
-  for (var r0 = 12; r0 <= 220; r0++) sh.setRowHeight(r0, 22);
+  sh.showColumns(3, 43);
+  sh.setColumnWidth(2, 170);
+  for (var k0 = 0; k0 < KAIGI_SLOTS_; k0++) {
+    sh.setColumnWidth(ca(k0), 54);
+    sh.setColumnWidth(ca(k0) + 1, 50);
+    sh.setColumnWidth(ca(k0) + 2, 50);
+  }
+  sh.setColumnWidth(SUM_COL, 76);
+  for (var r0 = 12; r0 <= 200; r0++) sh.setRowHeight(r0, 22);
 
-  // カード：期間の合計だけ（分析用_期間集計を直接読む）。差は AS 列（非表示）に置いて色分けに使う
+  // カード：期間の合計だけ（分析用_期間集計を直接読む）。差は非表示列に置いて色分けに使う
   var cards = [['B', 20, '#,##0', '+#,##0;-#,##0;0', 1], ['D', 21, '#,##0', '+#,##0;-#,##0;0', -1], ['F', 23, '+#,##0;-#,##0;0', '+#,##0;-#,##0;0', 1],
     ['H', 24, '0.0%', '', -1], ['J', 18, '#,##0', '+#,##0;-#,##0;0', 0], ['L', 29, '#,##0', '+#,##0;-#,##0;0', -1]];
   var rules = [];
   cards.forEach(function (cd, i) {
-    var dr = 'AS' + (2 + i);
+    var dr = X.diff + (2 + i);
     sh.getRange(dr).setFormula('=IF(OR(' + off + ',' + G + 'C' + cd[1] + '="",' + G + 'B' + cd[1] + '=""),"",' + G + 'B' + cd[1] + '-' + G + 'C' + cd[1] + ')');
     sh.getRange(cd[0] + '9').setFormula('=' + G + 'B' + cd[1]).setNumberFormat(cd[2]);
     var diff = cd[1] === 24 ? 'TEXT(' + dr + '*100,"+0.0;-0.0;0.0")&"pt"' : 'TEXT(' + dr + ',"' + cd[3] + '")';
     var sub = sh.getRange(cd[0] + '10');
     sub.setFormula('=IF(' + dr + '="","",IF(' + C.cmp + '="前年同期","前年","前期間")&" "&TEXT(' + G + 'C' + cd[1] + ',"' + cd[2] + '")&CHAR(10)&"差 "&' + diff + ')')
       .setWrap(true).setFontSize(9).setVerticalAlignment('top');
-    if (cd[4] === -1) rules.push(SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=N($' + dr.replace(/(\d+)/, '$$$1') + ')>0').setFontColor(RED).setBold(true).setRanges([sub]).build());
-    if (cd[4] === 1) rules.push(SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=N($' + dr.replace(/(\d+)/, '$$$1') + ')<0').setFontColor(RED).setBold(true).setRanges([sub]).build());
+    var abs = '$' + X.diff + '$' + (2 + i);
+    if (cd[4] === -1) rules.push(SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=N(' + abs + ')>0').setFontColor(RED).setBold(true).setRanges([sub]).build());
+    if (cd[4] === 1) rules.push(SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=N(' + abs + ')<0').setFontColor(RED).setBold(true).setRanges([sub]).build());
   });
   sh.setRowHeight(10, 36);
-  sh.getRange('L8').setValue('6ヶ月内の退会');
-  sh.getRange('B8:M8').setWrap(false).setFontSize(9);
-  ['B6', 'C6', 'H6', 'I6'].forEach(function (a) { sh.getRange(a).setNumberFormat('yy/m/d').setFontSize(9).setWrap(false); });
-  sh.getRange('B3:M3').setFontSize(8);
-  sh.getRange('K3').setValue('開始月（開始月〜対象月）');
-  sh.getRange('E3').setValue('対象月（最後の月）');
   sh.getRange('K4:L4').getMergedRanges().length || sh.getRange('K4:L4').merge();
   sh.getRange(C.cmp).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(KAIGI_CMP_, true).setAllowInvalid(false).build());
   sh.getRange('H1').setFormula('=IF(' + C.mode + '="開始月〜対象月",' + C.from + '&"〜"&' + C.month + ',' + C.month + '&IF(' + C.mode + '="月を選ぶ","",IF(' + C.mode + '="手入力","（手入力）","　"&' + C.mode + ')))&"　｜　"&IF(' + C.cmp + '="比較なし","比較なし",IF(' + C.cmp + '="月ごとの増減","前の月からの増減",' + C.cmp + '&"と比較"))');
-  var MOM = C.cmp + '="月ごとの増減"';
-  var momRows = [];
   rules.push(SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=$B$4<>"開始月〜対象月"')
     .setFontColor('#BDBDBD').setBackground('#F3F3F3').setRanges([sh.getRange('K4:L4')]).build());
 
-  var curM = function (k) { return '$AJ$' + (2 + k); };
-  var cmpM = function (k) { return '$AN$' + (2 + k); };
-  var slotHead = function (row) {
+  var curM = function (k) { return '$' + X.cur + '$' + (2 + k); };
+  var cmpM = function (k) { return '$' + X.cmp + '$' + (2 + k); };
+  var slotHead = function (row, label) {
     var top = [], sub = [];
     for (var k = 0; k < KAIGI_SLOTS_; k++) {
-      top.push('=IF(' + curM(k) + '="","",TEXT(' + curM(k) + ',"yyyy年m月"))', '');
-      sub.push('=IF(' + curM(k) + '="","","今回")', '=IF(' + curM(k) + '="","",IF(' + MOM + ',' + (k ? '"前月比"' : '""') + ',IF(' + cmpM(k) + '="","",TEXT(' + cmpM(k) + ',"yy年m月"))))');
+      var cmpLabel = 'IF(' + MOM + ',' + (k ? 'TEXT(' + curM(k - 1) + ',"yy年m月")' : '""') + ',IF(OR(' + off + ',' + cmpM(k) + '=""),"",TEXT(' + cmpM(k) + ',"yy年m月")))';
+      top.push('=IF(' + curM(k) + '="","",TEXT(' + curM(k) + ',"yyyy年m月"))', '', '');
+      sub.push('=IF(' + curM(k) + '="","","今回")', '=IF(' + curM(k) + '="","",' + cmpLabel + ')', '=IF(' + curM(k) + '="","",IF(' + cmpLabel + '="","","増減"))');
     }
-    sh.getRange(row, LAST_COL + 1, 2, 1).merge().setValue('最初→最後').setBackground(INK).setFontColor('#FFFFFF')
-      .setFontWeight('bold').setFontSize(9).setHorizontalAlignment('center').setVerticalAlignment('middle');
     sh.getRange(row, 3, 1, LAST_COL - 2).setFormulas([top]);
     sh.getRange(row + 1, 3, 1, LAST_COL - 2).setFormulas([sub]);
-    for (var k2 = 0; k2 < KAIGI_SLOTS_; k2++) sh.getRange(row, 3 + k2 * 2, 1, 2).merge();
-    sh.getRange(row, 2, 2, LAST_COL - 1).setBackground(INK).setFontColor('#FFFFFF').setFontWeight('bold').setFontSize(9).setHorizontalAlignment('center');
-    sh.getRange(row + 1, 4, 1, LAST_COL - 3).setFontColor('#BDBDBD');
-    for (var k3 = 1; k3 < KAIGI_SLOTS_; k3++) sh.getRange(row, 3 + k3 * 2, 2, 1).setBorder(null, true, null, null, null, null, '#FFFFFF', SOLID);
+    for (var k2 = 0; k2 < KAIGI_SLOTS_; k2++) sh.getRange(row, ca(k2), 1, W).merge();
+    sh.getRange(row, 2, 2, 1).merge().setValue(label).setHorizontalAlignment('left').setVerticalAlignment('middle');
+    sh.getRange(row, SUM_COL, 2, 1).merge().setValue('最初→最後');
+    sh.getRange(row, 2, 2, SUM_COL - 1).setBackground(INK).setFontColor('#FFFFFF').setFontWeight('bold').setFontSize(9).setHorizontalAlignment('center').setVerticalAlignment('middle');
+    sh.getRange(row, 2).setHorizontalAlignment('left');
+    for (var k3 = 0; k3 < KAIGI_SLOTS_; k3++) {
+      sh.getRange(row + 1, ca(k3) + 1, 1, 2).setFontColor('#BDBDBD');
+      if (k3) sh.getRange(row, ca(k3), 2, 1).setBorder(null, true, null, null, null, null, '#FFFFFF', SOLID);
+    }
     rules.push(SpreadsheetApp.newConditionalFormatRule()
-      .whenFormulaSatisfied('=INDEX($C$' + row + ':$' + colL(LAST_COL) + '$' + row + ',1,FLOOR((COLUMN()-3)/2)*2+1)=""')
+      .whenFormulaSatisfied('=INDEX($C$' + row + ':$' + colL(LAST_COL) + '$' + row + ',1,FLOOR((COLUMN()-3)/3)*3+1)=""')
       .setBackground('#FFFFFF').setFontColor('#FFFFFF').setRanges([sh.getRange(row, 3, 2, LAST_COL - 2)]).build());
-  };
-  var slotBorders = function (r1, n) {
-    for (var k = 1; k < KAIGI_SLOTS_; k++) sh.getRange(r1, 3 + k * 2, n, 1).setBorder(null, true, null, null, null, null, '#BDBDBD', SOLID);
   };
   var title = function (row, text, note) {
     sh.getRange(row, 2).setValue(text).setFontSize(12).setFontWeight('bold');
     if (note) sh.getRange(row, 7).setValue(note).setFontSize(9).setFontColor(MUTE);
   };
+  var chg = function (kind, a, p) {
+    if (kind === 'pt') return 'TEXT((' + a + '-' + p + ')*100,"+0.0;-0.0;0.0")&"pt"';
+    if (kind === 'diff') return 'TEXT(' + a + '-' + p + ',"+#,##0;-#,##0;0")';
+    return 'IF(' + p + '=0,"",TEXT(' + a + '/' + p + '-1,"+0%;-0%;0%"))';
+  };
+  var firstCols = [];
+  for (var o = 0; o < KAIGI_SLOTS_; o++) firstCols.push(1 + o * W);
   var zeroRanges = [];
+
+  /**
+   * 表の1行。cur(k) は今回の月 k の式、cmp(k) は比較の月 k の式（どちらも "=" なし）。
+   * 比較の列：前年同期・前の期間なら比較の月、月ごとの増減なら前の月の今回。増減の列は今回÷比較。
+   */
+  var writeRow = function (r, label, cur, cmp, fmt, kind, dir) {
+    var out = [label];
+    for (var k = 0; k < KAIGI_SLOTS_; k++) {
+      var a = colL(ca(k)) + r, b = colL(ca(k) + 1) + r;
+      var prevA = k ? colL(ca(k - 1)) + r : '""';
+      out.push('=IF(' + curM(k) + '="","",' + cur(k) + ')',
+        '=IF(' + curM(k) + '="","",IF(' + MOM + ',' + (k ? 'IF(ISNUMBER(' + prevA + '),' + prevA + ',"")' : '""') + ',IF(OR(' + off + ',' + cmpM(k) + '=""),"",' + cmp(k) + ')))',
+        '=IF(OR(NOT(ISNUMBER(' + a + ')),NOT(ISNUMBER(' + b + '))),"",' + chg(kind, a, b) + ')');
+      if (dir) rules.push(SpreadsheetApp.newConditionalFormatRule()
+        .whenFormulaSatisfied('=AND(ISNUMBER(' + a + '),ISNUMBER(' + b + '),' + a + (dir === 1 ? '<' : '>') + b + ')')
+        .setFontColor(RED).setBold(true).setRanges([sh.getRange(a), sh.getRange(colL(ca(k) + 2) + r)]).build());
+    }
+    sh.getRange(r, 2, 1, LAST_COL - 1).setFormulas([out]);
+    sh.getRange(r, 2).setValue(label);
+    sh.getRange(r, 3, 1, LAST_COL - 2).setNumberFormat(fmt);
+    var rowR = 'C' + r + ':' + colL(LAST_COL) + r;
+    sh.getRange(r, SUM_COL).setFormula('=IFERROR(LET(v,CHOOSECOLS(' + rowR + ',' + firstCols.join(',') + '),n,FILTER(v,ISNUMBER(v)),c,COLUMNS(n),' +
+      'IF(c<2,"",' + chg(kind, 'INDEX(n,1,c)', 'INDEX(n,1,1)') + ')),"")');
+    if (dir) rules.push(SpreadsheetApp.newConditionalFormatRule()
+      .whenFormulaSatisfied('=REGEXMATCH(' + colL(SUM_COL) + r + '&"","^' + (dir === 1 ? '-' : '\\+') + '")')
+      .setFontColor(RED).setBold(true).setRanges([sh.getRange(r, SUM_COL)]).build());
+  };
+  var styleBlock = function (r1, n) {
+    sh.getRange(r1, 3, n, SUM_COL - 2).setHorizontalAlignment('right');
+    for (var k = 0; k < KAIGI_SLOTS_; k++) {
+      sh.getRange(r1, ca(k), n, 1).setFontWeight('bold');
+      sh.getRange(r1, ca(k) + 1, n, 1).setFontColor(MUTE);
+      sh.getRange(r1, ca(k) + 2, n, 1).setFontSize(9).setBackground(SOFT);
+      if (k) sh.getRange(r1, ca(k), n, 1).setBorder(null, true, null, null, null, null, '#BDBDBD', SOLID);
+    }
+    sh.getRange(r1, SUM_COL, n, 1).setFontWeight('bold').setBackground(SOFT);
+    sh.getRange(r1, 2, n, SUM_COL - 1).setBorder(null, null, true, null, null, true, LINE, SOLID);
+  };
 
   var row = 12;
   // 主要指標
-  title(row, '主要指標（月ごと）', '右の列＝比較の月（「月ごとの増減」なら前の月からの増減）。右端＝期間の最初の月→最後の月。赤＝悪くなった月');
-  slotHead(row + 1);
-  sh.getRange(row + 1, 2, 2, 1).merge().setValue('指標').setHorizontalAlignment('left').setVerticalAlignment('middle');
-  var mets = [['月初の会員', 'AM', 'AQ', '#,##0', 0], ['入会', 'AK', 'AO', '#,##0', 1], ['退会', 'AL', 'AP', '#,##0', -1],
-    ['純増', 'AK-AL', 'AO-AP', '+#,##0;-#,##0;0', 1], ['退会率', 'AL/AM', 'AP/AQ', '0.0%', -1]];
+  title(row, '主要指標（月ごと）', '比較＝「比較」で選んだ期間の同じ順番の月（「月ごとの増減」なら前の月）。増減＝今回÷比較。右端＝期間の最初の月→最後の月。赤＝悪くなった');
+  slotHead(row + 1, '指標');
+  var h = function (col) { return function (k) { return col + (2 + k); }; };
+  var hx = function (expr) { return function (k) { return 'IFERROR(' + expr.replace(/\{(\w+)\}/g, function (_, n) { return X[n] + (2 + k); }) + ',"")'; }; };
   var first = row + 3;
-  var mf = mets.map(function (m, i) {
-    var out = [m[0]];
-    for (var k = 0; k < KAIGI_SLOTS_; k++) {
-      var h = 2 + k;
-      var ex = function (e) { return e.replace(/A[A-Q]/g, function (x) { return x + h; }); };
-      out.push('=IF(' + curM(k) + '="","",IFERROR(' + ex(m[1]) + ',""))', '=IF(OR(' + curM(k) + '="",' + cmpM(k) + '=""),"",IFERROR(' + ex(m[2]) + ',""))');
-    }
-    return out;
-  });
-  sh.getRange(first, 2, mets.length, LAST_COL - 1).setFormulas(mf);
-  sh.getRange(first, 2, mets.length, 1).setValues(mets.map(function (m) { return [m[0]]; }));
-  mets.forEach(function (m, i) {
-    var r = first + i;
-    momRows.push({ r: r, kind: i === 4 ? 'pt' : i === 3 ? 'diff' : 'pct', dir: m[4] });
-    sh.getRange(r, 3, 1, LAST_COL - 2).setNumberFormat(m[3]);
-    if (m[4] !== 0) {
-      for (var k = 0; k < KAIGI_SLOTS_; k++) {
-        var a = colL(3 + k * 2) + r, b = colL(4 + k * 2) + r;
-        rules.push(SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=AND(ISNUMBER(' + a + '),ISNUMBER(' + b + '),' + a + (m[4] === 1 ? '<' : '>') + b + ')')
-          .setFontColor(RED).setRanges([sh.getRange(a)]).build());
-      }
-    }
-  });
-  sh.getRange(first, 3, mets.length, LAST_COL - 2).setHorizontalAlignment('right');
-  for (var k4 = 0; k4 < KAIGI_SLOTS_; k4++) {
-    sh.getRange(first, 3 + k4 * 2, mets.length, 1).setFontWeight('bold');
-    sh.getRange(first, 4 + k4 * 2, mets.length, 1).setFontColor(MUTE);
-  }
-  sh.getRange(first, 2, mets.length, LAST_COL - 1).setBorder(null, null, true, null, null, true, LINE, SOLID);
-  slotBorders(first, mets.length);
-  row = first + mets.length + 2;
+  writeRow(first, '月初の会員', h(X.start), h(X.cstart), '#,##0', 'pct', 0);
+  writeRow(first + 1, '入会', h(X.join), h(X.cjoin), '#,##0', 'pct', 1);
+  writeRow(first + 2, '退会', h(X.leave), h(X.cleave), '#,##0', 'pct', -1);
+  writeRow(first + 3, '純増', hx('{join}-{leave}'), hx('{cjoin}-{cleave}'), '+#,##0;-#,##0;0', 'diff', 1);
+  writeRow(first + 4, '退会率', hx('{leave}/{start}'), hx('{cleave}/{cstart}'), '0.0%', 'pt', -1);
+  styleBlock(first, 5);
+  row = first + 7;
 
-  // 内訳：件数の段と割合の段を縦に並べる
   var J = "'累計入会データ'!", S = "'" + LEAVE_SURVEY_SHEET_ + "'!";
   var breakdown = function (text, note, labels, countF, opt) {
     opt = opt || {};
     title(row, text, note);
-    slotHead(row + 1);
-    sh.getRange(row + 1, 2, 2, 1).merge().setValue('区分').setHorizontalAlignment('left').setVerticalAlignment('middle');
+    slotHead(row + 1, '区分');
     var tot = row + 3, f1 = tot + 1, n = labels.length;
+    var sumOf = function (base) {
+      return function (k) {
+        var col = colL(ca(k) + base);
+        return 'SUM(' + col + f1 + ':' + col + (f1 + n - 1) + ')';
+      };
+    };
+    writeRow(tot, opt.totalLabel || '合計', sumOf(0), sumOf(1), '#,##0', 'pct', 0);
+    labels.forEach(function (lab, i) {
+      var r = f1 + i;
+      writeRow(r, lab, function (k) { return countF(curM(k), '$B' + r, i); }, function (k) { return countF(cmpM(k), '$B' + r, i); }, '#,##0', 'pct', 0);
+    });
     var extra = opt.extra || [];
-    var lab0 = row + 3 + 1 + n + extra.length;
-    var f2 = lab0 + 1;
-    var lines = [];
-    var totRow = [opt.totalLabel || '合計'];
-    for (var k = 0; k < KAIGI_SLOTS_; k++) {
-      var a = colL(3 + k * 2), b = colL(4 + k * 2);
-      totRow.push('=IF(' + curM(k) + '="","",SUM(' + a + f1 + ':' + a + (f1 + n - 1) + '))', '=IF(OR(' + curM(k) + '="",' + cmpM(k) + '="",' + off + '),"",SUM(' + b + f1 + ':' + b + (f1 + n - 1) + '))');
-    }
-    lines.push(totRow);
-    labels.forEach(function (lab, i) {
-      var r = f1 + i, out = [lab];
-      for (var k = 0; k < KAIGI_SLOTS_; k++) {
-        out.push('=IF(' + curM(k) + '="","",' + countF(curM(k), '$B' + r, i) + ')', '=IF(OR(' + curM(k) + '="",' + cmpM(k) + '="",' + off + '),"",' + countF(cmpM(k), '$B' + r, i) + ')');
-      }
-      lines.push(out);
+    extra.forEach(function (ex, j) {
+      var r = f1 + n + j;
+      writeRow(r, ex[0], function (k) { return ex[1](k, false, tot); }, function (k) { return ex[1](k, true, tot); }, ex[2], ex[2] === '0%' ? 'pt' : 'pct', 0);
     });
-    extra.forEach(function (ex) {
-      var out = [ex[0]];
-      for (var k = 0; k < KAIGI_SLOTS_; k++) {
-        var a = colL(3 + k * 2), b = colL(4 + k * 2);
-        out.push('=IF(' + curM(k) + '="","",' + ex[1](2 + k, 'AJ', a, tot) + ')', '=IF(OR(' + curM(k) + '="",' + cmpM(k) + '="",' + off + '),"",' + ex[1](2 + k, 'AN', b, tot) + ')');
-      }
-      lines.push(out);
-    });
-    var bandRow = ['割合（その月の合計に対して）'];
-    for (var k5 = 0; k5 < KAIGI_SLOTS_ * 2; k5++) bandRow.push('=""');
-    lines.push(bandRow);
-    labels.forEach(function (lab, i) {
-      var src = f1 + i, out = [lab];
-      for (var k = 0; k < KAIGI_SLOTS_; k++) {
-        var a = colL(3 + k * 2), b = colL(4 + k * 2);
-        out.push('=IF(N(' + a + '$' + tot + ')=0,"",' + a + src + '/' + a + '$' + tot + ')', '=IF(N(' + b + '$' + tot + ')=0,"",' + b + src + '/' + b + '$' + tot + ')');
-      }
-      lines.push(out);
-    });
-    var height = lines.length;
-    momRows.push({ r: tot, kind: 'pct', dir: 0 });
-    for (var m1 = 0; m1 < n; m1++) { momRows.push({ r: f1 + m1, kind: 'pct', dir: 0 }); momRows.push({ r: f2 + m1, kind: 'pt', dir: 0 }); }
-    extra.forEach(function (ex, j) { momRows.push({ r: f1 + n + j, kind: ex[2] === '0%' ? 'pt' : 'pct', dir: 0 }); });
-    sh.getRange(tot, 2, height, LAST_COL - 1).setFormulas(lines);
-    sh.getRange(tot, 2, height, 1).setValues(lines.map(function (l) { return [l[0]]; }));
-    var cntBlock = sh.getRange(tot, 3, 1 + n, LAST_COL - 2).setNumberFormat('#,##0');
-    sh.getRange(f2, 3, n, LAST_COL - 2).setNumberFormat('0%');
-    extra.forEach(function (ex, j) { sh.getRange(f1 + n + j, 3, 1, LAST_COL - 2).setNumberFormat(ex[2]); });
-    sh.getRange(tot, 3, height, LAST_COL - 2).setHorizontalAlignment('right');
-    for (var k6 = 0; k6 < KAIGI_SLOTS_; k6++) {
-      sh.getRange(tot, 3 + k6 * 2, height, 1).setFontWeight('bold');
-      sh.getRange(tot, 4 + k6 * 2, height, 1).setFontColor(MUTE);
-    }
-    sh.getRange(tot, 2, height, LAST_COL - 1).setBorder(null, null, true, null, null, true, LINE, SOLID);
-    sh.getRange(tot, 2, 1, LAST_COL - 1).setBackground(SOFT).setFontWeight('bold').setBorder(null, null, true, null, null, null, INK, SOLID);
-    if (extra.length) sh.getRange(f1 + n, 2, extra.length, LAST_COL - 1).setFontColor(MUTE).setFontSize(9);
-    sh.getRange(lab0, 2, 1, LAST_COL - 1).setBackground(SOFT).setFontWeight('bold').setFontSize(9).setFontColor(MUTE)
-      .setBorder(true, null, true, null, null, null, INK, SOLID);
-    slotBorders(tot, height);
-    zeroRanges.push(sh.getRange(f1, 3, n, LAST_COL - 2), sh.getRange(f2, 3, n, LAST_COL - 2));
-    if (opt.redUp) {
-      for (var k7 = 0; k7 < KAIGI_SLOTS_; k7++) {
-        var a7 = colL(3 + k7 * 2), b7 = colL(4 + k7 * 2);
-        rules.push(SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=AND(ISNUMBER(' + a7 + f2 + '),ISNUMBER(' + b7 + f2 + '),' + a7 + f2 + '-' + b7 + f2 + '>=' + opt.redUp + ')')
-          .setFontColor(RED).setBackground('#FDF1F1').setRanges([sh.getRange(a7 + f2 + ':' + a7 + (f2 + n - 1))]).build());
-      }
-    }
+    var height = 1 + n + extra.length;
+    styleBlock(tot, height);
+    sh.getRange(tot, 2, 1, SUM_COL - 1).setFontWeight('bold').setBorder(null, null, true, null, null, null, INK, SOLID);
+    sh.getRange(tot, 2, 1, 1).setBackground(SOFT);
+    if (extra.length) sh.getRange(f1 + n, 2, extra.length, SUM_COL - 1).setFontColor(MUTE).setFontSize(9)
+      .setBorder(true, null, null, null, null, null, INK, SOLID);
+    zeroRanges.push(sh.getRange(f1, 3, n, LAST_COL - 2));
     if (opt.sep) opt.sep.forEach(function (i) {
-      sh.getRange(f1 + i - 1, 2, 1, LAST_COL - 1).setBorder(null, null, true, null, null, null, '#BDBDBD', SOLID);
-      sh.getRange(f2 + i - 1, 2, 1, LAST_COL - 1).setBorder(null, null, true, null, null, null, '#BDBDBD', SOLID);
+      sh.getRange(f1 + i - 1, 2, 1, SUM_COL - 1).setBorder(null, null, true, null, null, null, '#BDBDBD', SOLID);
     });
-    row = f2 + n + 2;
+    row = tot + height + 2;
   };
 
   var ages = [['10代', 1, 19], ['20代', 20, 29], ['30代', 30, 39], ['40代', 40, 49], ['50代', 50, 59], ['60代', 60, 69], ['70代以上', 70, 200]];
@@ -6784,56 +6767,28 @@ function rebuildKaigiByMonth_(ss) {
   breakdown('辞めた人の在籍期間（月ごと）', '辞めた月＝最終在籍月。累計入会データから', ten.map(function (a) { return a[0]; }), function (m, lab, i) {
     return 'COUNTIFS(' + J + '$W$2:$W$8000,EDATE(' + m + ',1),' + J + '$Z$2:$Z$8000,">=' + ten[i][1] + '",' + J + '$Z$2:$Z$8000,"<=' + ten[i][2] + '")';
   });
-  breakdown('退会理由（月ごと・退会アンケート）', '回答した人だけ。「その他」は数えていません。赤＝比較より2pt以上増えた理由', LEAVE_REASONS_, function (m, lab) {
+  breakdown('退会理由（月ごと・退会アンケート）', '回答した人だけ。「その他」は数えていません', LEAVE_REASONS_, function (m, lab) {
     return 'COUNTIFS(' + S + '$I$2:$I,' + m + ',' + S + '$C$2:$C,' + lab + ')';
   }, {
-    totalLabel: '合計（回答した人）', redUp: 0.02, sep: [14],
+    totalLabel: '合計（回答した人）', sep: [14],
     extra: [
-      ['退会した人（会員動向）', function (h, base) { return (base === 'AJ' ? 'AL' : 'AP') + h; }, '#,##0'],
-      ['回答率', function (h, base, col, tot) { return 'IFERROR(' + col + tot + '/' + (base === 'AJ' ? 'AL' : 'AP') + h + ',"")'; }, '0%']
+      ['退会した人（会員動向）', function (k, isCmp) { return (isCmp ? X.cleave : X.leave) + (2 + k); }, '#,##0'],
+      ['回答率', function (k, isCmp, tot) {
+        var col = colL(ca(k) + (isCmp ? 1 : 0));
+        return 'IFERROR(' + col + tot + '/' + (isCmp ? X.cleave : X.leave) + (2 + k) + ',"")';
+      }, '0%']
     ]
   });
   breakdown('辞めた人の利用頻度（月ごと・退会アンケート）', '回答した人だけ', LEAVE_FREQS_, function (m, lab) {
     return 'COUNTIFS(' + S + '$I$2:$I,' + m + ',' + S + '$F$2:$F,' + lab + ')';
   }, { totalLabel: '合計（回答した人）' });
 
-  // 「月ごとの増減」：右の列を前の月からの増減に。右端（AA）は期間の最初の月→最後の月
-  var odd = [];
-  for (var o = 0; o < KAIGI_SLOTS_; o++) odd.push(1 + o * 2);
-  var chg = function (kind, a, p) {
-    if (kind === 'pt') return 'TEXT((' + a + '-' + p + ')*100,"+0.0;-0.0;0.0")&"pt"';
-    if (kind === 'diff') return 'TEXT(' + a + '-' + p + ',"+#,##0;-#,##0;0")';
-    return 'IF(' + p + '=0,"",TEXT(' + a + '/' + p + '-1,"+0%;-0%;0%"))';
-  };
-  momRows.forEach(function (m) {
-    var rg = sh.getRange(m.r, 3, 1, LAST_COL - 2);
-    var fs = rg.getFormulas()[0];
-    for (var k = 1; k < KAIGI_SLOTS_; k++) {
-      var a = colL(3 + k * 2) + m.r, p = colL(1 + k * 2) + m.r;
-      var ex = 'IF(OR(NOT(ISNUMBER(' + a + ')),NOT(ISNUMBER(' + p + '))),"",' + chg(m.kind, a, p) + ')';
-      fs[k * 2 + 1] = '=IF(' + MOM + ',' + ex + ',' + String(fs[k * 2 + 1]).replace(/^=/, '') + ')';
-      if (m.dir) rules.push(SpreadsheetApp.newConditionalFormatRule()
-        .whenFormulaSatisfied('=AND(' + MOM.replace(/([A-Z]+)(\d+)/, '$$$1$$$2') + ',ISNUMBER(' + a + '),ISNUMBER(' + p + '),' + a + (m.dir === 1 ? '<' : '>') + p + ')')
-        .setFontColor(RED).setBold(true).setRanges([sh.getRange(colL(4 + k * 2) + m.r)]).build());
-    }
-    fs[1] = '=IF(' + MOM + ',"",' + String(fs[1]).replace(/^=/, '') + ')';
-    rg.setFormulas([fs]);
-    var rowR = 'C' + m.r + ':' + colL(LAST_COL) + m.r;
-    sh.getRange(m.r, LAST_COL + 1).setBackground(SOFT).setHorizontalAlignment('right').setFontWeight('bold').setFontFamily('Meiryo')
-      .setBorder(null, null, true, null, null, null, LINE, SOLID).setFormula('=IFERROR(LET(v,CHOOSECOLS(' + rowR + ',' + odd.join(',') + '),n,FILTER(v,ISNUMBER(v)),c,COLUMNS(n),' +
-      'IF(c<2,"",' + chg(m.kind, 'INDEX(n,1,c)', 'INDEX(n,1,1)') + ')),"")');
-    if (m.dir) rules.push(SpreadsheetApp.newConditionalFormatRule()
-      .whenFormulaSatisfied('=REGEXMATCH(' + colL(LAST_COL + 1) + m.r + '&"","^' + (m.dir === 1 ? '-' : '\\+') + '")')
-      .setFontColor(RED).setBold(true).setRanges([sh.getRange(m.r, LAST_COL + 1)]).build());
-  });
-  sh.setColumnWidth(LAST_COL + 1, 76);
-
-  sh.getRange(12, 2, row - 12, LAST_COL - 1).setFontFamily('Meiryo').setVerticalAlignment('middle');
+  sh.getRange(12, 2, row - 12, SUM_COL - 1).setFontFamily('Meiryo').setVerticalAlignment('middle');
   rules.push(SpreadsheetApp.newConditionalFormatRule().whenNumberEqualTo(0).setFontColor('#C8C8C8').setRanges(zeroRanges).build());
   sh.setConditionalFormatRules(rules);
-  sh.hideColumns(34, sh.getMaxColumns() - 33);
+  sh.hideColumns(SUM_COL + 1, sh.getMaxColumns() - SUM_COL);
   kaigiApplyPeriod_(sh);
-  props.setProperty('KAIGI_BYMON', 'v4');
+  props.setProperty('KAIGI_BYMON', 'v5');
   return { ok: true, rows: row };
 }
 
