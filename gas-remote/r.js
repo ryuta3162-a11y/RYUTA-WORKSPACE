@@ -4029,6 +4029,22 @@ function billingPullTriggered() {
     props.setProperty('JL_3Y_INK', 'v1');
     return { ok: true };
   });
+  mark('kaigiMon', function () { return addKaigiMonthly_(ss); });
+  mark('kaigiSumFix', function () {
+    var props = PropertiesService.getDocumentProperties();
+    if (props.getProperty('KAIGI_SUMFIX') === 'v1') return { ok: true, skipped: true };
+    var agg = ss.getSheetByName('分析用_期間集計');
+    var from = 'LET(ms,EDATE(s,SEQUENCE(DATEDIF(s,e+1,"M"),1,0)),', to = 'LET(ms,ARRAYFORMULA(EDATE(s,SEQUENCE(DATEDIF(s,e+1,"M"),1,0))),';
+    var n = 0;
+    ['B', 'C', 'D', 'E'].forEach(function (X) {
+      [20, 21].forEach(function (r) {
+        var cell = agg.getRange(X + r), f = cell.getFormula();
+        if (f.indexOf(from) >= 0) { cell.setFormula(f.split(from).join(to)); n++; }
+      });
+    });
+    props.setProperty('KAIGI_SUMFIX', 'v1');
+    return { ok: true, fixed: n };
+  });
   mark('top', function () { ensureTopSimple_(ss); });
   writeTrace();
 }
@@ -5921,7 +5937,7 @@ function migrateKaigiHq_(ss) {
   var thisMonth = 'DATE(YEAR(TODAY()),MONTH(TODAY()),1)';
   var sumExpr = function (X, rowCur, rowPrev, key, nippoCell) {
     return 'LET(s,' + X + '$6,e,' + X + '$7,IF(NOT(IFERROR(AND(ISNUMBER(s),ISNUMBER(e),DAY(s)=1,e=EOMONTH(e,0),e>=s),FALSE)),"",' +
-      'LET(ms,EDATE(s,SEQUENCE(DATEDIF(s,e+1,"M"),1,0)),' +
+      'LET(ms,ARRAYFORMULA(EDATE(s,SEQUENCE(DATEDIF(s,e+1,"M"),1,0))),' +
       'vs,MAP(ms,LAMBDA(mm,IF(mm=' + thisMonth + ',N(\'日報\'!' + nippoCell + '),IF(mm>' + thisMonth + ',0,' + jlHqExpr_('mm', rowCur, rowPrev, key) + ')))),' +
       'IF(COUNTIF(vs,">0")=ROWS(vs),SUM(vs),""))))';
   };
@@ -6173,8 +6189,121 @@ function rebuildKaigiSheet_(ss) {
   ]);
   kaigiApplyPeriod_(sh);
   protectInputsOnly_(sh, [KAIGI_CELLS_.mode, KAIGI_CELLS_.month, KAIGI_CELLS_.cmp, KAIGI_CELLS_.cur, KAIGI_CELLS_.prev]);
+  props.deleteProperty('KAIGI_MON');
   props.setProperty('KAIGI_V', KAIGI_V_);
   return { ok: true };
+}
+
+/** 月の 月初会員・入会・退会（本部の会員動向を優先、今月の入会・退会は日報、無い月は累計データ）。A は月初日のセル */
+function jlMonthF_(A) {
+  var jV = "'累計入会データ'!$V$2:$V$8000", lU = "'累計退会データ'!$U$2:$U$8000";
+  var thisMonth = 'DATE(YEAR(TODAY()),MONTH(TODAY()),1)';
+  var isNow = 'TEXT(' + A + ',"yymm")=TEXT(\'日報\'!$B$1,"0")';
+  var calcB = 'COUNTIFS(' + jV + ',">0",' + jV + ',"<"&' + A + ')-COUNTIFS(' + lU + ',"<="&' + A + ')';
+  return {
+    start: 'LET(h,' + jlHqExpr_(A, 3, 4, '月初') + ',IF(h>0,h,' + calcB + '))',
+    join: 'IF(' + isNow + ',N(\'日報\'!$C$13),LET(h,' + jlHqExpr_(A, 6, 7, '入') + ',IF(AND(h>0,' + A + '<' + thisMonth + '),h,COUNTIF(' + jV + ',' + A + '))))',
+    leave: 'IF(' + isNow + ',N(\'日報\'!$C$15),LET(h,' + jlHqExpr_(A, 9, 10, '解') + ',IF(AND(h>0,' + A + '<' + thisMonth + '),h,COUNTIF(' + lU + ',EDATE(' + A + ',1)))))'
+  };
+}
+
+/**
+ * 会議用の右側に「月ごとの比較」（O〜AA）。期間の各月と、比較期間の同じ順番の月を並べて比率を出す。
+ * 月の数字は AJ:AQ（非表示）で計算。
+ */
+function addKaigiMonthly_(ss) {
+  var props = PropertiesService.getDocumentProperties();
+  if (props.getProperty('KAIGI_V') !== KAIGI_V_ || props.getProperty('KAIGI_MON') === 'v1') return { ok: true, skipped: true };
+  var sh = ss.getSheetByName(KAIGI_SHEET_);
+  if (!sh) return { ok: false };
+  var INK = '#111111', MUTE = '#7A7A7A', LINE = '#E3E3E3', SOFT = '#F7F7F7', RED = '#B91C1C';
+  var SOLID = SpreadsheetApp.BorderStyle.SOLID;
+  if (sh.getMaxColumns() < 44) sh.insertColumnsAfter(sh.getMaxColumns(), 44 - sh.getMaxColumns());
+  sh.getRange('O13:AQ40').clear();
+  sh.showColumns(15, 30);
+
+  var hf = [];
+  for (var i = 0; i < 12; i++) {
+    var r = 2 + i;
+    var cur = 'AJ' + r, cmp = 'AN' + r;
+    var fc = jlMonthF_(cur), fp = jlMonthF_(cmp);
+    var blank = function (ref, f) { return '=IF(' + ref + '="","",' + f + ')'; };
+    hf.push([
+      '=IF(OR($B$6="",$C$6=""),"",IF(EDATE(DATE(YEAR($B$6),MONTH($B$6),1),' + i + ')>$C$6,"",EDATE(DATE(YEAR($B$6),MONTH($B$6),1),' + i + ')))',
+      blank(cur, fc.join), blank(cur, fc.leave), blank(cur, fc.start),
+      '=IF(OR(' + cur + '="",$H$6="",' + KAIGI_CELLS_.cmp + '="比較なし"),"",EDATE(DATE(YEAR($H$6),MONTH($H$6),1),' + i + '))',
+      blank(cmp, fp.join), blank(cmp, fp.leave), blank(cmp, fp.start)
+    ]);
+  }
+  sh.getRange('AJ1:AQ1').setValues([['今回の月', '入会', '退会', '月初', '比較の月', '入会', '退会', '月初']]);
+  sh.getRange(2, 36, 12, 8).setFormulas(hf);
+  sh.getRange('AJ2:AJ13').setNumberFormat('yyyy/m');
+  sh.getRange('AN2:AN13').setNumberFormat('yyyy/m');
+
+  sh.getRange('O13').setValue('月ごとの比較').setFontSize(12).setFontWeight('bold').setFontFamily('Meiryo');
+  sh.getRange('R13').setFormula('=IF(' + KAIGI_CELLS_.cmp + '="比較なし","",' + KAIGI_CELLS_.cmp + '&"の同じ順番の月と比べています（比率＝今回÷比較）")')
+    .setFontSize(9).setFontColor(MUTE);
+  var head = ['月', '比較の月', '入会', '比較', '比率', '退会', '比較', '比率', '純増', '比較', '退会率', '比較', '差'];
+  sh.getRange(14, 15, 1, 13).setValues([head]).setBackground(INK).setFontColor('#FFFFFF').setFontWeight('bold')
+    .setFontSize(9).setHorizontalAlignment('center');
+  [17, 20, 23, 25].forEach(function (c) { sh.getRange(14, c).setBorder(null, true, null, null, null, null, '#FFFFFF', SOLID); });
+
+  var rows = [];
+  for (var k = 0; k < 12; k++) {
+    var h = 2 + k, rr = 15 + k;
+    var on = function (f) { return '=IF($AJ' + h + '="","",' + f + ')'; };
+    var oc = function (f) { return '=IF($AN' + h + '="","",' + f + ')'; };
+    rows.push([
+      on('$AJ' + h), oc('$AN' + h),
+      on('AK' + h), oc('AO' + h), '=IFERROR(IF(OR(Q' + rr + '="",R' + rr + '=""),"",Q' + rr + '/R' + rr + '),"")',
+      on('AL' + h), oc('AP' + h), '=IFERROR(IF(OR(T' + rr + '="",U' + rr + '=""),"",T' + rr + '/U' + rr + '),"")',
+      on('AK' + h + '-AL' + h), oc('AO' + h + '-AP' + h),
+      on('IFERROR(AL' + h + '/AM' + h + ',"")'), oc('IFERROR(AP' + h + '/AQ' + h + ',"")'),
+      '=IF(OR(Y' + rr + '="",Z' + rr + '=""),"",Y' + rr + '-Z' + rr + ')'
+    ]);
+  }
+  sh.getRange(15, 15, 12, 13).setFormulas(rows);
+  var sumIf = function (col) { return '=IF(COUNT(' + col + '15:' + col + '26)=0,"",SUM(' + col + '15:' + col + '26))'; };
+  sh.getRange(27, 15, 1, 13).setFormulas([[
+    '="合計"', '=""',
+    sumIf('Q'), sumIf('R'), '=IFERROR(IF(OR(Q27="",R27=""),"",Q27/R27),"")',
+    sumIf('T'), sumIf('U'), '=IFERROR(IF(OR(T27="",U27=""),"",T27/U27),"")',
+    sumIf('W'), sumIf('X'),
+    '=IFERROR(SUM(AL2:AL13)/SUM(AM2:AM13),"")', '=IF(R27="","",IFERROR(SUM(AP2:AP13)/SUM(AQ2:AQ13),""))',
+    '=IF(OR(Y27="",Z27=""),"",Y27-Z27)'
+  ]]);
+  var body = sh.getRange(15, 15, 13, 13);
+  body.setFontFamily('Meiryo').setFontSize(10).setVerticalAlignment('middle').setHorizontalAlignment('right');
+  sh.getRange('O15:P27').setHorizontalAlignment('center').setNumberFormat('yyyy/m');
+  sh.getRange('P15:P27').setFontColor(MUTE);
+  ['Q', 'T'].forEach(function (c) { sh.getRange(c + '15:' + c + '27').setNumberFormat('#,##0').setFontWeight('bold'); });
+  ['R', 'U', 'X'].forEach(function (c) { sh.getRange(c + '15:' + c + '27').setNumberFormat('#,##0').setFontColor(MUTE); });
+  ['S', 'V'].forEach(function (c) { sh.getRange(c + '15:' + c + '27').setNumberFormat('0%').setFontWeight('bold').setBackground(SOFT); });
+  sh.getRange('W15:W27').setNumberFormat('+#,##0;-#,##0;0').setFontWeight('bold');
+  sh.getRange('X15:X27').setNumberFormat('+#,##0;-#,##0;0');
+  sh.getRange('Y15:Y27').setNumberFormat('0.0%').setFontWeight('bold');
+  sh.getRange('Z15:Z27').setNumberFormat('0.0%').setFontColor(MUTE);
+  sh.getRange('AA15:AA27').setNumberFormat('+0.0%;-0.0%;0.0%').setBackground(SOFT);
+  sh.getRange(15, 15, 12, 13).setBorder(null, null, true, null, null, true, LINE, SOLID);
+  sh.getRange(27, 15, 1, 13).setFontWeight('bold').setBackground(SOFT).setBorder(true, null, true, null, null, null, INK, SOLID);
+  [17, 20, 23, 25].forEach(function (c) { sh.getRange(15, c, 13, 1).setBorder(null, true, null, null, null, null, '#BDBDBD', SOLID); });
+  sh.getRange('O27').setHorizontalAlignment('center');
+  for (var c2 = 15; c2 <= 27; c2++) sh.setColumnWidth(c2, c2 <= 16 ? 76 : 64);
+  sh.setColumnWidth(28, 18);
+
+  var rules = sh.getConditionalFormatRules().filter(function (ru) { return ru.getRanges()[0].getColumn() < 15; });
+  var cf = function () { return SpreadsheetApp.newConditionalFormatRule(); };
+  rules.push(cf().whenNumberLessThan(1).setFontColor(RED).setRanges([sh.getRange('S15:S27')]).build());
+  rules.push(cf().whenNumberGreaterThan(1).setFontColor(RED).setRanges([sh.getRange('V15:V27')]).build());
+  rules.push(cf().whenFormulaSatisfied('=AND(ISNUMBER(W15),ISNUMBER(X15),W15<X15)').setFontColor(RED).setRanges([sh.getRange('W15:W27')]).build());
+  rules.push(cf().whenNumberGreaterThan(0).setFontColor(RED).setRanges([sh.getRange('AA15:AA27')]).build());
+  sh.setConditionalFormatRules(rules);
+
+  sh.hideColumns(34, sh.getMaxColumns() - 33);
+  var editors = [];
+  try { editors = ss.getEditors().map(function (u) { return u.getEmail(); }); } catch (e) { editors = ['?' + e.message.slice(0, 40)]; }
+  props.setProperty('KAIGI_MON', 'v1');
+  return { ok: true, editors: editors };
 }
 
 function kaigiApplyPeriod_(sh) {
