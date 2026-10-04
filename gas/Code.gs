@@ -4034,7 +4034,22 @@ function billingPullTriggered() {
   mark('kaigiMon', function () { return addKaigiMonthly_(ss); });
   mark('kaigiFrom', function () { return addKaigiFromMonth_(ss); });
   mark('kaigiSurvey', function () { return addKaigiSurvey_(ss); });
+  mark('kaigiSimple', function () { return kaigiSimplify_(ss); });
   mark('kaigiByMon', function () { return rebuildKaigiByMonth_(ss); });
+  mark('kaigiCharts', function () { return kaigiCharts_(ss); });
+  mark('kaigiCharts2', function () {
+    var props = PropertiesService.getDocumentProperties();
+    if (props.getProperty('KAIGI_CHARTS') !== 'v1' || props.getProperty('KAIGI_CHARTS2') === 'v1') return { ok: true, skipped: true };
+    var sh = ss.getSheetByName(KAIGI_SHEET_);
+    var n = 0;
+    sh.getCharts().forEach(function (ch) {
+      if (String(ch.getOptions().get('title')) !== '退会率（月ごと）') return;
+      sh.updateChart(ch.modify().setOption('vAxis.format', '0.0%').setOption('vAxes', { 0: { format: '0.0%' } }).build());
+      n++;
+    });
+    props.setProperty('KAIGI_CHARTS2', 'v1');
+    return { ok: true, fixed: n };
+  });
   mark('kaigiSurveyW', function () {
     var props = PropertiesService.getDocumentProperties();
     if (props.getProperty('KAIGI_SURVEY_W') === 'v1') return { ok: true, skipped: true };
@@ -5881,7 +5896,8 @@ function protectInputsOnly_(sh, inputs) {
  */
 var KAIGI_SHEET_ = '会議用';
 var KAIGI_MODES_ = ['月を選ぶ', '開始月〜対象月', '直近2ヶ月', '直近3ヶ月', '直近6ヶ月', '今年度（4月〜）', '手入力'];
-var KAIGI_CMP_ = ['前年同期', '前の期間', '月ごとの増減', '比較なし'];
+var KAIGI_CMP_YOY_ = '前年の同じ月', KAIGI_CMP_MOM_ = '前の月', KAIGI_CMP_OFF_ = '比べない';
+var KAIGI_CMP_ = [KAIGI_CMP_YOY_, KAIGI_CMP_MOM_, KAIGI_CMP_OFF_];
 
 function migrateKaigiSheet_(ss) {
   var props = PropertiesService.getDocumentProperties();
@@ -5977,7 +5993,7 @@ function migrateKaigiHq_(ss) {
  * 数字は 分析用_期間集計 から読むだけ。期間の日付は B6:C6（今回）・H6:I6（比較）。
  */
 var KAIGI_V_ = 'v4';
-var KAIGI_CELLS_ = { mode: 'B4', month: 'E4', cmp: 'H4', cur: 'B6:C6', prev: 'H6:I6', from: 'K4' };
+var KAIGI_CELLS_ = { mode: 'B4', month: 'E4', cmp: 'H4', cur: 'B6:C6', prev: 'H6:I6', from: 'B4' };
 
 function rebuildKaigiSheet_(ss) {
   var props = PropertiesService.getDocumentProperties();
@@ -6206,6 +6222,7 @@ function rebuildKaigiSheet_(ss) {
   props.deleteProperty('KAIGI_SURVEY');
   props.deleteProperty('KAIGI_BYMON');
   props.deleteProperty('KAIGI_SHIFT');
+  props.deleteProperty('KAIGI_SIMPLE');
   props.setProperty('KAIGI_V', KAIGI_V_);
   return { ok: true };
 }
@@ -6574,7 +6591,7 @@ function addKaigiSurvey_(ss) {
 var KAIGI_SLOTS_ = 12;
 function rebuildKaigiByMonth_(ss) {
   var props = PropertiesService.getDocumentProperties();
-  if (props.getProperty('KAIGI_V') !== KAIGI_V_ || props.getProperty('KAIGI_MON') !== 'v1' || props.getProperty('KAIGI_BYMON') === 'v5') return { ok: true, skipped: true };
+  if (props.getProperty('KAIGI_V') !== KAIGI_V_ || props.getProperty('KAIGI_MON') !== 'v1' || props.getProperty('KAIGI_BYMON') === 'v6') return { ok: true, skipped: true };
   var sh = ss.getSheetByName(KAIGI_SHEET_);
   if (!sh) return { ok: false };
   // 1ヶ月3列×12ヶ月で AH より右まで使うので、非表示の補助列（AH・AJ:AQ・AS）を12列右へずらす（参照は自動で付いてくる）
@@ -6586,8 +6603,8 @@ function rebuildKaigiByMonth_(ss) {
   var INK = '#111111', MUTE = '#7A7A7A', LINE = '#E3E3E3', SOFT = '#F7F7F7', RED = '#B91C1C';
   var SOLID = SpreadsheetApp.BorderStyle.SOLID;
   var C = KAIGI_CELLS_, G = "'分析用_期間集計'!";
-  var off = C.cmp + '="比較なし"';
-  var MOM = C.cmp + '="月ごとの増減"';
+  var off = C.cmp + '="' + KAIGI_CMP_OFF_ + '"';
+  var MOM = C.cmp + '="' + KAIGI_CMP_MOM_ + '"';
   var W = 3, LAST_COL = 2 + KAIGI_SLOTS_ * W, SUM_COL = LAST_COL + 1;
   var colL = function (c) { return sh.getRange(1, c).getA1Notation().replace(/\d+/, ''); };
   var ca = function (k) { return 3 + k * W; };
@@ -6618,18 +6635,13 @@ function rebuildKaigiByMonth_(ss) {
     sh.getRange(cd[0] + '9').setFormula('=' + G + 'B' + cd[1]).setNumberFormat(cd[2]);
     var diff = cd[1] === 24 ? 'TEXT(' + dr + '*100,"+0.0;-0.0;0.0")&"pt"' : 'TEXT(' + dr + ',"' + cd[3] + '")';
     var sub = sh.getRange(cd[0] + '10');
-    sub.setFormula('=IF(' + dr + '="","",IF(' + C.cmp + '="前年同期","前年","前期間")&" "&TEXT(' + G + 'C' + cd[1] + ',"' + cd[2] + '")&CHAR(10)&"差 "&' + diff + ')')
+    sub.setFormula('=IF(' + dr + '="","","前年 "&TEXT(' + G + 'C' + cd[1] + ',"' + cd[2] + '")&CHAR(10)&"差 "&' + diff + ')')
       .setWrap(true).setFontSize(9).setVerticalAlignment('top');
     var abs = '$' + X.diff + '$' + (2 + i);
     if (cd[4] === -1) rules.push(SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=N(' + abs + ')>0').setFontColor(RED).setBold(true).setRanges([sub]).build());
     if (cd[4] === 1) rules.push(SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=N(' + abs + ')<0').setFontColor(RED).setBold(true).setRanges([sub]).build());
   });
   sh.setRowHeight(10, 36);
-  sh.getRange('K4:L4').getMergedRanges().length || sh.getRange('K4:L4').merge();
-  sh.getRange(C.cmp).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(KAIGI_CMP_, true).setAllowInvalid(false).build());
-  sh.getRange('H1').setFormula('=IF(' + C.mode + '="開始月〜対象月",' + C.from + '&"〜"&' + C.month + ',' + C.month + '&IF(' + C.mode + '="月を選ぶ","",IF(' + C.mode + '="手入力","（手入力）","　"&' + C.mode + ')))&"　｜　"&IF(' + C.cmp + '="比較なし","比較なし",IF(' + C.cmp + '="月ごとの増減","前の月からの増減",' + C.cmp + '&"と比較"))');
-  rules.push(SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=$B$4<>"開始月〜対象月"')
-    .setFontColor('#BDBDBD').setBackground('#F3F3F3').setRanges([sh.getRange('K4:L4')]).build());
 
   var curM = function (k) { return '$' + X.cur + '$' + (2 + k); };
   var cmpM = function (k) { return '$' + X.cmp + '$' + (2 + k); };
@@ -6699,7 +6711,9 @@ function rebuildKaigiByMonth_(ss) {
     for (var k = 0; k < KAIGI_SLOTS_; k++) {
       sh.getRange(r1, ca(k), n, 1).setFontWeight('bold');
       sh.getRange(r1, ca(k) + 1, n, 1).setFontColor(MUTE);
-      sh.getRange(r1, ca(k) + 2, n, 1).setFontSize(9).setBackground(SOFT);
+      sh.getRange(r1, ca(k) + 2, n, 1).setFontSize(9);
+      rules.push(SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=' + curM(k) + '<>""').setBackground(SOFT)
+        .setRanges([sh.getRange(r1, ca(k) + 2, n, 1)]).build());
       if (k) sh.getRange(r1, ca(k), n, 1).setBorder(null, true, null, null, null, null, '#BDBDBD', SOLID);
     }
     sh.getRange(r1, SUM_COL, n, 1).setFontWeight('bold').setBackground(SOFT);
@@ -6708,7 +6722,7 @@ function rebuildKaigiByMonth_(ss) {
 
   var row = 12;
   // 主要指標
-  title(row, '主要指標（月ごと）', '比較＝「比較」で選んだ期間の同じ順番の月（「月ごとの増減」なら前の月）。増減＝今回÷比較。右端＝期間の最初の月→最後の月。赤＝悪くなった');
+  title(row, '主要指標（月ごと）', '増減＝今回÷比べる相手（前年の同じ月／前の月）。右端＝期間の最初の月→最後の月。赤＝悪くなった');
   slotHead(row + 1, '指標');
   var h = function (col) { return function (k) { return col + (2 + k); }; };
   var hx = function (expr) { return function (k) { return 'IFERROR(' + expr.replace(/\{(\w+)\}/g, function (_, n) { return X[n] + (2 + k); }) + ',"")'; }; };
@@ -6788,7 +6802,7 @@ function rebuildKaigiByMonth_(ss) {
   sh.setConditionalFormatRules(rules);
   sh.hideColumns(SUM_COL + 1, sh.getMaxColumns() - SUM_COL);
   kaigiApplyPeriod_(sh);
-  props.setProperty('KAIGI_BYMON', 'v5');
+  props.setProperty('KAIGI_BYMON', 'v6');
   return { ok: true, rows: row };
 }
 
@@ -6932,57 +6946,127 @@ function addKaigiMonthly_(ss) {
   return { ok: true, editors: editors };
 }
 
-function kaigiApplyPeriod_(sh) {
-  var mode = String(sh.getRange(KAIGI_CELLS_.mode).getValue());
-  if (mode === '手入力') return;
-  var m = String(sh.getRange(KAIGI_CELLS_.month).getDisplayValue()).match(/^(\d{4})年(\d{1,2})月$/);
-  if (!m) return;
-  var f = String(sh.getRange(KAIGI_CELLS_.from).getDisplayValue()).match(/^(\d{4})年(\d{1,2})月$/);
-  var from = f ? new Date(Number(f[1]), Number(f[2]) - 1, 1) : null;
-  var p = kaigiPeriod_(mode, Number(m[1]), Number(m[2]), String(sh.getRange(KAIGI_CELLS_.cmp).getValue()), from);
-  sh.getRange(KAIGI_CELLS_.cur).setValues([[p.start, p.end]]);
-  sh.getRange(KAIGI_CELLS_.prev).setValues([[p.cs, p.ce]]);
+function kaigiMonthOf_(sh, a1) {
+  var m = String(sh.getRange(a1).getDisplayValue()).match(/^(\d{4})年(\d{1,2})月$/);
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, 1) : null;
 }
 
-function kaigiPeriod_(mode, y, mo, cmp, from) {
-  var start = new Date(y, mo - 1, 1);
-  if (mode === '開始月〜対象月' && from) {
-    if (from > start) { var t = from; from = start; start = t; y = start.getFullYear(); mo = start.getMonth() + 1; }
-    start = from;
-  }
-  if (mode === '直近2ヶ月') start = new Date(y, mo - 2, 1);
-  if (mode === '直近3ヶ月') start = new Date(y, mo - 3, 1);
-  if (mode === '直近6ヶ月') start = new Date(y, mo - 6, 1);
-  if (mode.indexOf('今年度') === 0) start = new Date(mo >= 4 ? y : y - 1, 3, 1);
-  var end = new Date(y, mo, 0);
-  var cs = '', ce = '';
-  if (cmp === '前年同期') {
-    cs = new Date(start.getFullYear() - 1, start.getMonth(), 1);
-    ce = new Date(end.getFullYear() - 1, end.getMonth() + 1, 0);
-  } else if (cmp === '前の期間') {
-    var n = (end.getFullYear() - start.getFullYear()) * 12 + end.getMonth() - start.getMonth() + 1;
-    cs = new Date(start.getFullYear(), start.getMonth() - n, 1);
-    ce = new Date(start.getFullYear(), start.getMonth(), 0);
-  }
-  return { start: start, end: end, cs: cs, ce: ce };
+/** 開始月（B4）〜終了月（E4）を今回の期間に、比べる相手（H4）が「前年の同じ月」なら1年前を比較の期間に入れる */
+function kaigiApplyPeriod_(sh) {
+  var s = kaigiMonthOf_(sh, KAIGI_CELLS_.from), e = kaigiMonthOf_(sh, KAIGI_CELLS_.month);
+  if (!e) return;
+  if (!s) s = e;
+  if (s > e) { var t = s; s = e; e = t; }
+  var end = new Date(e.getFullYear(), e.getMonth() + 1, 0);
+  var yoy = String(sh.getRange(KAIGI_CELLS_.cmp).getValue()) === KAIGI_CMP_YOY_;
+  sh.getRange(KAIGI_CELLS_.cur).setValues([[s, end]]);
+  sh.getRange(KAIGI_CELLS_.prev).setValues(yoy
+    ? [[new Date(s.getFullYear() - 1, s.getMonth(), 1), new Date(end.getFullYear() - 1, end.getMonth() + 1, 0)]]
+    : [['', '']]);
 }
 
 function kaigiOnEdit_(e) {
   var sh = e.range.getSheet();
   var a = e.range.getA1Notation().split(':')[0];
-  if (a === KAIGI_CELLS_.from) {
-    if (String(sh.getRange(KAIGI_CELLS_.mode).getValue()) !== '開始月〜対象月') sh.getRange(KAIGI_CELLS_.mode).setValue('開始月〜対象月');
-    kaigiApplyPeriod_(sh);
-    return;
-  }
-  if (a === KAIGI_CELLS_.mode || a === KAIGI_CELLS_.month || a === KAIGI_CELLS_.cmp) {
-    kaigiApplyPeriod_(sh);
-    return;
-  }
-  var r = e.range.getRow(), c = e.range.getColumn();
-  if (r === 6 && (c === 2 || c === 3 || c === 8 || c === 9) && String(sh.getRange(KAIGI_CELLS_.mode).getValue()) !== '手入力') {
-    sh.getRange(KAIGI_CELLS_.mode).setValue('手入力');
-  }
+  if (a === KAIGI_CELLS_.from || a === KAIGI_CELLS_.month || a === KAIGI_CELLS_.cmp) kaigiApplyPeriod_(sh);
+}
+
+/**
+ * 会議用の上の選択を「開始月・終了月・比べる相手」の3つだけにする（期間の選び方・開始月の欄・手入力をやめる）。1回だけ。
+ */
+function kaigiSimplify_(ss) {
+  var props = PropertiesService.getDocumentProperties();
+  if (props.getProperty('KAIGI_V') !== KAIGI_V_ || props.getProperty('KAIGI_FROM') !== 'v1' || props.getProperty('KAIGI_SIMPLE') === 'v1') return { ok: true, skipped: true };
+  var sh = ss.getSheetByName(KAIGI_SHEET_);
+  if (!sh) return { ok: false };
+  var C = KAIGI_CELLS_;
+  var fmt = function (d) { return d instanceof Date ? Utilities.formatDate(d, 'Asia/Tokyo', 'yyyy年M月') : ''; };
+  var endTxt = String(sh.getRange(C.month).getDisplayValue());
+  var startTxt = fmt(sh.getRange('B6').getValue()) || endTxt;
+  var oldCmp = String(sh.getRange(C.cmp).getValue());
+  var newCmp = oldCmp === '前年同期' ? KAIGI_CMP_YOY_ : (oldCmp === '比較なし' ? KAIGI_CMP_OFF_ : KAIGI_CMP_MOM_);
+  var monthRule = sh.getRange(C.month).getDataValidation();
+
+  var k = sh.getRange('K3:M4');
+  k.breakApart();
+  k.clearDataValidations();
+  k.clear();
+  sh.getRange('B3').setValue('開始月');
+  sh.getRange('E3').setValue('終了月');
+  sh.getRange('H3').setValue('比べる相手');
+  sh.getRange('B3:I3').setFontSize(9).setFontColor('#7A7A7A').setFontFamily('Meiryo');
+  var b4 = sh.getRange(C.from);
+  b4.clearDataValidations();
+  b4.setNumberFormat('@').setValue(startTxt);
+  if (monthRule) b4.setDataValidation(monthRule);
+  var h4 = sh.getRange(C.cmp);
+  h4.clearDataValidations();
+  h4.setValue(newCmp);
+  h4.setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(KAIGI_CMP_, true).setAllowInvalid(false).build());
+  ['B6:C6', 'H6:I6'].forEach(function (a) { sh.getRange(a).clearDataValidations(); });
+  sh.getRange('H1').setFormula('=IF(' + C.from + '=' + C.month + ',' + C.month + ',' + C.from + '&"〜"&' + C.month + ')&"　｜　"&IF(' + C.cmp + '="' + KAIGI_CMP_OFF_ + '","比較なし",' + C.cmp + '&"と比較")');
+  protectInputsOnly_(sh, [C.from, C.month, C.cmp]);
+  kaigiApplyPeriod_(sh);
+  props.deleteProperty('KAIGI_BYMON');
+  props.setProperty('KAIGI_SIMPLE', 'v1');
+  return { ok: true, start: startTxt, end: endTxt, cmp: newCmp };
+}
+
+/**
+ * 会議用の右上（カードの右）に簡単なグラフを4つ。データは非表示列 BG〜BT に、今回の期間の月だけ並べる。
+ * 一度作ったグラフは作り直さない（見た目を手で直しても消えないように）。
+ */
+function kaigiCharts_(ss) {
+  var props = PropertiesService.getDocumentProperties();
+  if (props.getProperty('KAIGI_SIMPLE') !== 'v1' || props.getProperty('KAIGI_CHARTS') === 'v1') return { ok: true, skipped: true };
+  var sh = ss.getSheetByName(KAIGI_SHEET_);
+  if (!sh) return { ok: false };
+  if (sh.getMaxColumns() < 72) sh.insertColumnsAfter(sh.getMaxColumns(), 72 - sh.getMaxColumns());
+  var yoy = '$H$4="' + KAIGI_CMP_YOY_ + '"';
+  var blank12 = 'IF(ROW($AV$2:$AV$13),"")';
+  var block = function (cur, cmp) {
+    return '=LET(m,$AV$2:$AV$13,VSTACK(HSTACK("月","今回","前年"),IFERROR(FILTER(HSTACK(TEXT(m,"yy/m"),' + cur + ',IF(' + yoy + ',' + cmp + ',' + blank12 + ')),m<>""),HSTACK("",0,""))))';
+  };
+  sh.getRange('BG1').setFormula(block('$AW$2:$AW$13', '$BA$2:$BA$13'));
+  sh.getRange('BK1').setFormula(block('$AX$2:$AX$13', '$BB$2:$BB$13'));
+  sh.getRange('BO1').setFormula(block('IFERROR($AX$2:$AX$13/$AY$2:$AY$13,"")', 'IFERROR($BB$2:$BB$13/$BC$2:$BC$13,"")'));
+  var S = "'" + LEAVE_SURVEY_SHEET_ + "'!";
+  var labs = '{' + LEAVE_REASONS_.map(function (x) { return '"' + x + '"'; }).join(';') + '}';
+  sh.getRange('BS1').setFormula('=LET(l,' + labs + ',c,MAP(l,LAMBDA(x,COUNTIFS(' + S + '$I$2:$I,">="&$B$6,' + S + '$I$2:$I,"<="&$C$6,' + S + '$C$2:$C,x))),' +
+    'VSTACK(HSTACK("理由","人数"),IFERROR(SORTN(FILTER(HSTACK(l,c),c>0),5,0,2,FALSE),HSTACK("回答なし",0))))');
+
+  var have = {};
+  sh.getCharts().forEach(function (ch) { have[String(ch.getOptions().get('title') || '')] = true; });
+  var specs = [
+    ['column', 'BG1:BI13', '入会（月ごと）', ['#111111', '#C8C8C8'], null],
+    ['column', 'BK1:BM13', '退会（月ごと）', ['#111111', '#C8C8C8'], null],
+    ['line', 'BO1:BQ13', '退会率（月ごと）', ['#B91C1C', '#C8C8C8'], '0.0%'],
+    ['bar', 'BS1:BT6', '退会理由 トップ5（期間）', ['#111111'], null]
+  ];
+  var made = 0;
+  specs.forEach(function (sp, i) {
+    if (have[sp[2]]) return;
+    var b = sh.newChart();
+    b = sp[0] === 'line' ? b.asLineChart() : sp[0] === 'bar' ? b.asBarChart() : b.asColumnChart();
+    b.addRange(sh.getRange(sp[1]))
+      .setNumHeaders(1)
+      .setHiddenDimensionStrategy(Charts.ChartHiddenDimensionStrategy.SHOW_BOTH)
+      .setOption('title', sp[2])
+      .setOption('titleTextStyle', { fontName: 'Meiryo', fontSize: 12, bold: true, color: '#111111' })
+      .setOption('fontName', 'Meiryo')
+      .setOption('colors', sp[3])
+      .setOption('legend', { position: sp[0] === 'bar' ? 'none' : 'top', textStyle: { fontSize: 9, color: '#7A7A7A' } })
+      .setOption('width', 400)
+      .setOption('height', 262)
+      .setPosition(1, 14, i * 410, 6);
+    if (sp[4]) b.setOption('vAxis', { format: sp[4] });
+    if (sp[0] === 'line') b.setOption('pointSize', 5);
+    sh.insertChart(b.build());
+    made++;
+  });
+  sh.hideColumns(40, sh.getMaxColumns() - 39);
+  props.setProperty('KAIGI_CHARTS', 'v1');
+  return { ok: true, made: made };
 }
 
 /** トップ A2 に日報の自動更新の状態を出す。新しい更新があれば IMPORTRANGE を読み直させる */
