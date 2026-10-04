@@ -4018,6 +4018,17 @@ function billingPullTriggered() {
     props.setProperty('JL_3Y_SUB', 'v1');
     return { ok: true };
   });
+  mark('jl3yInk', function () {
+    var props = PropertiesService.getDocumentProperties();
+    if (props.getProperty('JL_3Y') !== JL_3Y_V_ || props.getProperty('JL_3Y_INK') === 'v1') return { ok: true, skipped: true };
+    var sh = ss.getSheetByName(JL_SHEET_);
+    sh.getRange('D10:F22').setFontColor('#111111');
+    sh.getRange('I10:K22').setFontColor('#111111');
+    sh.getRange('G10:G22').setFontColor('#111111').setFontWeight('bold');
+    sh.getRange('L10:L22').setFontColor('#111111').setFontWeight('bold');
+    props.setProperty('JL_3Y_INK', 'v1');
+    return { ok: true };
+  });
   mark('top', function () { ensureTopSimple_(ss); });
   writeTrace();
 }
@@ -5596,8 +5607,6 @@ function rebuildJoinLeave3y_(ss) {
   sh.getRange('A10:M22').setFontSize(10).setVerticalAlignment('middle');
   sh.getRange('B10:M22').setHorizontalAlignment('right');
   sh.getRange('A10:A22').setHorizontalAlignment('center');
-  sh.getRange('D10:F22').setFontColor(MUTE);
-  sh.getRange('I10:K22').setFontColor(MUTE);
   sh.getRange('G10:G22').setBackground(SOFT);
   sh.getRange('L10:L22').setBackground(SOFT);
   sh.getRange('C10:C22').setFontWeight('bold');
