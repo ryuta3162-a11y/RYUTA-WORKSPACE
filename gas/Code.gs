@@ -3896,6 +3896,10 @@ function billingOnEdit(e) {
     reviewTodoOnEdit_(e);
     return;
   }
+  if (sh.getName() === KAIGI_SHEET_) {
+    kaigiOnEdit_(e);
+    return;
+  }
   if (sh.getName() !== BILL_SHEET_) return;
   var months = billMonths_();
   var r0 = e.range.getRow();
@@ -3962,6 +3966,7 @@ function billingPullTriggered() {
       if (log) log.getRange('H1:H2').setValues([[Utilities.formatDate(new Date(), 'Asia/Tokyo', 'M/d HH:mm:ss')], [trace.join(' / ') + ' / total ' + Math.round((Date.now() - t0) / 1000) + 's']]);
     } catch (eLog) {}
   };
+  mark('topStatus', function () { return syncTopRefreshStatus_(ss); });
   mark('reviewTodo', function () { return syncReviewTodo_(ss); });
   mark('unpaidMirror', function () { syncUnpaidMirror_(ss, false); });
   writeTrace();
@@ -3984,6 +3989,9 @@ function billingPullTriggered() {
   mark('hqOptNotes', function () { clearHqOptionNotes_(); });
   mark('optPlan', function () { ensureOptionPlanSheet_(ss); });
   mark('joinLeave', function () { return ensureJoinLeaveAnalysis_(ss); });
+  mark('joinLeaveHq', function () { return migrateJoinLeaveHq_(ss); });
+  mark('kaigi', function () { return migrateKaigiSheet_(ss); });
+  mark('kaigiHq', function () { return migrateKaigiHq_(ss); });
   mark('top', function () { ensureTopSimple_(ss); });
   writeTrace();
 }
@@ -5297,6 +5305,239 @@ function migrateJoinLeaveSheet_(ss) {
   sh.getRange(1, 1, sh.getMaxRows(), sh.getMaxColumns()).setFontFamily('Meiryo');
   props.setProperty('JL_MIG', 'v1');
   return { ok: true, cleared: cleared };
+}
+
+/** 会員動向（本部）の月の値。今年度は実績/見込の行、前年度は前年の行。見つからなければ 0 */
+function jlHqExpr_(monExpr, rowCur, rowPrev, key) {
+  var H = "'【経堂】会員動向'!";
+  return 'LET(mon,' + monExpr + ',fyr,YEAR(mon)-(MONTH(mon)<4),cur,YEAR(TODAY())-(MONTH(TODAY())<4),' +
+    'colx,IFERROR(MATCH(MONTH(mon)&"",ARRAYFORMULA(' + H + '$C$1:$N$1&""),0),0),' +
+    'rowx,IF(fyr=cur,' + rowCur + ',IF(fyr=cur-1,' + rowPrev + ',0)),' +
+    'val,IF(OR(colx=0,rowx=0),"",IF(ISNUMBER(SEARCH("' + key + '",INDEX(' + H + '$B$1:$B$20,rowx))),INDEX(' + H + '$C$1:$N$20,rowx,colx),"")),' +
+    'IFERROR(VALUE(SUBSTITUTE(val&"",",","")),0))';
+}
+
+/**
+ * 入会・退会分析 ①：月初・入会・退会は本部の会員動向の数字を優先（今月の入会・退会は日報）。
+ * 会員動向に無い月だけ累計データから数える。③ の平均は対象月が3つ未満なら出さない。1回だけ。
+ */
+function migrateJoinLeaveHq_(ss) {
+  var props = PropertiesService.getDocumentProperties();
+  if (props.getProperty('JL_MIG2') === 'v1') return { ok: true, skipped: true };
+  var sh = ss.getSheetByName(JL_SHEET_);
+  if (!sh || !ss.getSheetByName('【経堂】会員動向')) return { ok: false };
+  var J = "'累計入会データ'!", L = "'累計退会データ'!";
+  var jV = J + '$V$2:$V$8000', lU = L + '$U$2:$U$8000';
+  var thisMonth = 'DATE(YEAR(TODAY()),MONTH(TODAY()),1)';
+  var out = [];
+  for (var r = 6; r <= 17; r++) {
+    var A = '$A' + r;
+    var isNow = 'TEXT(' + A + ',"yymm")=TEXT(\'日報\'!$B$1,"0")';
+    var calcB = 'COUNTIFS(' + jV + ',">0",' + jV + ',"<"&' + A + ')-COUNTIFS(' + lU + ',"<="&' + A + ')';
+    out.push([
+      '=LET(h,' + jlHqExpr_(A, 3, 4, '月初') + ',IF(h>0,h,' + calcB + '))',
+      '=IF(' + isNow + ',N(\'日報\'!$C$13),LET(h,' + jlHqExpr_(A, 6, 7, '入') + ',IF(AND(h>0,' + A + '<' + thisMonth + '),h,COUNTIF(' + jV + ',' + A + '))))',
+      '=IF(' + isNow + ',N(\'日報\'!$C$15),LET(h,' + jlHqExpr_(A, 9, 10, '解') + ',IF(AND(h>0,' + A + '<' + thisMonth + '),h,COUNTIF(' + lU + ',EDATE(' + A + ',1)))))'
+    ]);
+  }
+  sh.getRange(6, 2, 12, 3).setFormulas(out);
+  var avg = ['C', 'D', 'E', 'F'].map(function (c) {
+    var rg = c + '45:' + c + '56';
+    return '=IF(COUNT(' + rg + ')<3,"—",IFERROR(SUMPRODUCT(N(' + rg + '),$B45:$B56)/SUMPRODUCT((' + rg + '<>"")*$B45:$B56),""))';
+  });
+  sh.getRange('C57:F57').setFormulas([avg]);
+  protectInputsOnly_(sh, ['B2']);
+  props.setProperty('JL_MIG2', 'v1');
+  return { ok: true };
+}
+
+/** 入力欄以外を「編集前に警告」にする（店舗の人の誤入力よけ） */
+function protectInputsOnly_(sh, inputs) {
+  sh.getProtections(SpreadsheetApp.ProtectionType.SHEET).forEach(function (p) { p.remove(); });
+  var p = sh.protect().setDescription('入力はプルダウンの欄だけ');
+  p.setWarningOnly(true);
+  p.setUnprotectedRanges(inputs.map(function (a) { return sh.getRange(a); }));
+}
+
+/**
+ * 会議用：期間はプルダウンで選ぶ（M1 かんたん期間・B2 対象月・D2 比較）。選ぶと B4:C5 の日付を自動で入れる。
+ * 退会は「実際に辞めた月（最終在籍月）」で数える＝会員動向の「解除」と同じ。1回だけ。
+ */
+var KAIGI_SHEET_ = '会議用';
+var KAIGI_MODES_ = ['月を選ぶ', '直近3ヶ月', '直近6ヶ月', '今年度（4月〜）', '手入力'];
+var KAIGI_CMP_ = ['前年同期', '前の期間', '比較なし'];
+
+function migrateKaigiSheet_(ss) {
+  var props = PropertiesService.getDocumentProperties();
+  if (props.getProperty('KAIGI_MIG') === 'v1') return { ok: true, skipped: true };
+  var sh = ss.getSheetByName(KAIGI_SHEET_);
+  var mst = ss.getSheetByName('分析用_会員マスタ');
+  var agg = ss.getSheetByName('分析用_期間集計');
+  if (!sh || !mst || !agg) return { ok: false };
+
+  mst.getRange('W1').setValue('退会基準日（最終在籍月末）');
+  mst.getRange('W2').setFormula('=ARRAYFORMULA(IF(S2:S8000="","",IF(P2:P8000="","",IFERROR(EOMONTH(P2:P8000,-1),""))))');
+  var rows = Math.min(agg.getMaxRows(), 120);
+  var fr = agg.getRange(1, 1, rows, 5).getFormulas();
+  var changed = 0;
+  for (var r = 0; r < rows; r++) {
+    for (var c = 0; c < 5; c++) {
+      var f = fr[r][c];
+      if (!f || f.indexOf("'分析用_会員マスタ'!O$2:O$8000") < 0) continue;
+      agg.getRange(r + 1, c + 1).setFormula(f.split("'分析用_会員マスタ'!O$2:O$8000").join("'分析用_会員マスタ'!W$2:W$8000"));
+      changed++;
+    }
+  }
+
+  var J = "'累計入会データ'!$V$2:$V$8000";
+  sh.getRange('AH1').setFormula('=ARRAYFORMULA(TEXT(EDATE(DATE(YEAR(TODAY()),MONTH(TODAY()),1),1-SEQUENCE(DATEDIF(MINIFS(' + J + ',' + J + ',">0"),DATE(YEAR(TODAY()),MONTH(TODAY()),1),"M")+1)),"yyyy年m月"))');
+  sh.hideColumns(34);
+  var drop = function (a, list, value) {
+    var cell = sh.getRange(a);
+    cell.clearDataValidations();
+    cell.setNumberFormat('@').setValue(value);
+    var rule = Array.isArray(list)
+      ? SpreadsheetApp.newDataValidation().requireValueInList(list, true)
+      : SpreadsheetApp.newDataValidation().requireValueInRange(list, true);
+    cell.setDataValidation(rule.setAllowInvalid(false).build());
+    cell.setHorizontalAlignment('center').setFontWeight('bold').setBackground('#FFF7E6')
+      .setBorder(true, true, true, true, null, null, '#111111', SpreadsheetApp.BorderStyle.SOLID);
+  };
+  var b4 = sh.getRange('B4').getValue();
+  var month = b4 instanceof Date ? Utilities.formatDate(b4, 'Asia/Tokyo', 'yyyy年M月') : '';
+  if (!month) {
+    var prev = new Date(); prev.setDate(1); prev.setMonth(prev.getMonth() - 1);
+    month = Utilities.formatDate(prev, 'Asia/Tokyo', 'yyyy年M月');
+  }
+  drop('M1', KAIGI_MODES_, KAIGI_MODES_[0]);
+  drop('B2', sh.getRange('AH1:AH200'), month);
+  drop('D2', KAIGI_CMP_, KAIGI_CMP_[0]);
+  sh.getRange('A2').setValue('対象月 ▶').setFontWeight('bold').setHorizontalAlignment('right');
+  sh.getRange('C2').setValue('比較 ▶').setFontWeight('bold').setHorizontalAlignment('right');
+  sh.getRange('B4:E5').setDataValidation(SpreadsheetApp.newDataValidation().requireDate().setAllowInvalid(false).build());
+  kaigiApplyPeriod_(sh);
+  protectInputsOnly_(sh, ['D1', 'F1', 'H1', 'J1', 'M1', 'B2', 'D2', 'B4:E5']);
+  props.setProperty('KAIGI_MIG', 'v1');
+  return { ok: true, changed: changed };
+}
+
+/**
+ * 会議用の期間開始時会員・入会・退会：期間が月単位なら本部の会員動向（今月の入会・退会は日報）の合計を使う。
+ * 会員動向に無い期間は従来どおり累計データから。1回だけ。
+ */
+function migrateKaigiHq_(ss) {
+  var props = PropertiesService.getDocumentProperties();
+  if (props.getProperty('KAIGI_MIG2') === 'v1') return { ok: true, skipped: true };
+  var agg = ss.getSheetByName('分析用_期間集計');
+  if (!agg || !ss.getSheetByName('【経堂】会員動向')) return { ok: false };
+  var thisMonth = 'DATE(YEAR(TODAY()),MONTH(TODAY()),1)';
+  var sumExpr = function (X, rowCur, rowPrev, key, nippoCell) {
+    return 'LET(s,' + X + '$6,e,' + X + '$7,IF(NOT(IFERROR(AND(ISNUMBER(s),ISNUMBER(e),DAY(s)=1,e=EOMONTH(e,0),e>=s),FALSE)),"",' +
+      'LET(ms,EDATE(s,SEQUENCE(DATEDIF(s,e+1,"M"),1,0)),' +
+      'vs,MAP(ms,LAMBDA(mm,IF(mm=' + thisMonth + ',N(\'日報\'!' + nippoCell + '),IF(mm>' + thisMonth + ',0,' + jlHqExpr_('mm', rowCur, rowPrev, key) + ')))),' +
+      'IF(COUNTIF(vs,">0")=ROWS(vs),SUM(vs),""))))';
+  };
+  var startExpr = function (X) {
+    return 'IFERROR(IF(DAY(' + X + '$6)=1,LET(v,' + jlHqExpr_(X + '$6', 3, 4, '月初') + ',IF(v>0,v,"")),""),"")';
+  };
+  var done = 0;
+  ['B', 'C', 'D', 'E'].forEach(function (X) {
+    [[18, startExpr(X)], [20, sumExpr(X, 6, 7, '入', '$C$13')], [21, sumExpr(X, 9, 10, '解', '$C$15')]].forEach(function (p) {
+      var cell = agg.getRange(X + p[0]);
+      var f = cell.getFormula();
+      if (!f || f.indexOf('hqv') >= 0) return;
+      cell.setFormula('=LET(hqv,' + p[1] + ',IF(hqv<>"",hqv,' + f.slice(1) + '))');
+      done++;
+    });
+  });
+  var mst = ss.getSheetByName('分析用_会員マスタ');
+  if (mst) mst.getRange('W2:W8000').setNumberFormat('yyyy/m/d');
+  props.setProperty('KAIGI_MIG2', 'v1');
+  return { ok: true, done: done };
+}
+
+function kaigiApplyPeriod_(sh) {
+  var mode = String(sh.getRange('M1').getValue());
+  if (mode === '手入力') return;
+  var m = String(sh.getRange('B2').getDisplayValue()).match(/^(\d{4})年(\d{1,2})月$/);
+  if (!m) return;
+  var y = Number(m[1]), mo = Number(m[2]);
+  var start = new Date(y, mo - 1, 1);
+  if (mode === '直近3ヶ月') start = new Date(y, mo - 3, 1);
+  if (mode === '直近6ヶ月') start = new Date(y, mo - 6, 1);
+  if (mode.indexOf('今年度') === 0) start = new Date(mo >= 4 ? y : y - 1, 3, 1);
+  var end = new Date(y, mo, 0);
+  var cmp = String(sh.getRange('D2').getValue());
+  var cs = '', ce = '';
+  if (cmp === '前年同期') {
+    cs = new Date(start.getFullYear() - 1, start.getMonth(), 1);
+    ce = new Date(end.getFullYear() - 1, end.getMonth() + 1, 0);
+  } else if (cmp === '前の期間') {
+    var n = (end.getFullYear() - start.getFullYear()) * 12 + end.getMonth() - start.getMonth() + 1;
+    cs = new Date(start.getFullYear(), start.getMonth() - n, 1);
+    ce = new Date(start.getFullYear(), start.getMonth(), 0);
+  }
+  sh.getRange('B4:C5').setValues([[start, cs], [end, ce]]);
+}
+
+function kaigiOnEdit_(e) {
+  var sh = e.range.getSheet();
+  var a = e.range.getA1Notation();
+  if (a === 'M1' || a === 'B2' || a === 'D2') {
+    kaigiApplyPeriod_(sh);
+    return;
+  }
+  var r = e.range.getRow(), c = e.range.getColumn();
+  if (r >= 4 && r <= 5 && c >= 2 && c <= 3 && String(sh.getRange('M1').getValue()) !== '手入力') {
+    sh.getRange('M1').setValue('手入力');
+  }
+}
+
+/** トップ A2 に日報の自動更新の状態を出す。新しい更新があれば IMPORTRANGE を読み直させる */
+function syncTopRefreshStatus_(ss) {
+  var sh = ss.getSheetByName(HUB_HOME_SHEET_);
+  if (!sh) return;
+  var h = callReceptionRefreshApi_('health');
+  var parse = function (s) {
+    try { return s ? Utilities.parseDate(String(s), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm:ss') : null; } catch (e) { return null; }
+  };
+  var fmt = function (d) { return Utilities.formatDate(d, 'Asia/Tokyo', 'M/d HH:mm'); };
+  var checked = parse(h && h.checked), last = parse(h && h.lastUpdate);
+  var status, bad = true;
+  if (!h || !h.ok) status = '⚠ 自動更新の状態を確認できませんでした';
+  else if (!checked || Date.now() - checked.getTime() > 10 * 60 * 1000) status = '⚠ 数字の自動更新が止まっています' + (checked ? '（最終チェック ' + fmt(checked) + '）' : '');
+  else if (h.lastError) status = '⚠ 前回の自動更新でエラー：' + String(h.lastError).slice(0, 40);
+  else {
+    status = '● 日報の数字は自動更新中　最終更新 ' + (last ? fmt(last) : '—') + '（入会・退会・オプションのメールが届くと数分で反映）';
+    bad = false;
+  }
+  var guide = '　｜　シート名を押すと、そのシートへ移動します';
+  var cell = sh.getRange('A2');
+  if (String(cell.getDisplayValue()) !== status + guide) {
+    var rich = SpreadsheetApp.newRichTextValue().setText(status + guide)
+      .setTextStyle(0, status.length, SpreadsheetApp.newTextStyle().setForegroundColor(bad ? '#B91C1C' : '#111111').setBold(true).setFontSize(10).build())
+      .setTextStyle(status.length, status.length + guide.length, SpreadsheetApp.newTextStyle().setForegroundColor('#7A7A7A').setBold(false).setFontSize(9).build())
+      .build();
+    cell.setRichTextValue(rich);
+  }
+  var props = PropertiesService.getDocumentProperties();
+  if (h && h.lastUpdate && props.getProperty('NUMBERS_LAST_SEEN') !== h.lastUpdate) {
+    try { reloadReceptionImports_(ss); } catch (e1) {}
+    try { reloadNippoMirror_(ss); } catch (e2) {}
+    props.setProperty('NUMBERS_LAST_SEEN', h.lastUpdate);
+  }
+  return { status: status };
+}
+
+/** 日報の写し（IMPORTRANGE）を式の書き換えで読み直させる */
+function reloadNippoMirror_(ss) {
+  var sh = ss.getSheetByName('日報');
+  if (!sh) return;
+  var cell = sh.getRange('A1');
+  var f = cell.getFormula();
+  if (!/IMPORTRANGE/i.test(f)) return;
+  f = f.indexOf('"&"",') >= 0 ? f.replace('"&"",', '",') : f.replace(/IMPORTRANGE\("([^"]+)",/i, 'IMPORTRANGE("$1"&"",');
+  cell.setFormula(f);
 }
 
 function clearHqOptionNotes_() {
