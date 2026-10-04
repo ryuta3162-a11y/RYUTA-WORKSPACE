@@ -53,13 +53,7 @@ function onOpen() {
   var ui = SpreadsheetApp.getUi();
   ui.createMenu('ファイルUP')
   .addItem('月初作業ファイルUP（会員数・オプション・年齢男女のExcel）', 'openGessho3Files')
-  .addItem('数値更新ファイルUP（退会アンケートのCSV）', 'openNumbersUpload')
-  .addToUi();
-  ui.createMenu('月初３ファイル')
-  .addItem('3ファイルを取り込む', 'openGessho3Files')
-  .addItem('日報の写しを出す', 'ensureNippoMirror')
-  .addItem('累計入会・退会を整える', 'formatCumulativeSheets_')
-  .addItem('10月の日報を直す', 'fixOctoberNippo_')
+  .addItem('数値更新ファイルUP（入会・退会手続き一覧表、退会アンケートCSV）', 'openNumbersUpload')
   .addToUi();
   try { hideGesshoSideSheets_(); } catch (eHideSide) { Logger.log(eHideSide); }
   try { ensureNippoMirror_(); } catch (eMirror) { Logger.log(eMirror); }
@@ -6296,15 +6290,110 @@ function openNumbersUpload() {
   SpreadsheetApp.getUi().showModalDialog(html, '数値更新ファイルUP');
 }
 
-function uploadNumbersFile(payload) {
+/**
+ * 数値更新ファイル1つ分。{name, grid}（CSVはブラウザで表にして送る）または {name, base64}（Excel）。
+ * 中身で判定：退会アンケート（uid・q_id・answer）／入会手続き一覧表（利用開始年月）／退会手続き一覧表（退会年月）。
+ */
+function uploadNumbersFile(file) {
   try {
-    if (!payload || payload.kind !== 'leaveSurvey') throw new Error('対応していないファイルです');
-    var res = importLeaveSurvey_(payload.rows || []);
+    var grid = file && file.grid ? file.grid : gessho3ReadExcel_(file || {});
+    var res = numbersImportGrid_(grid, String(file && file.name || ''));
+    var props = PropertiesService.getDocumentProperties();
+    if (res.ok && res.kind !== 'leaveSurvey') props.setProperty('CUMULATIVE_AT', Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm'));
     try { syncTopRefreshStatus_(SpreadsheetApp.getActiveSpreadsheet()); } catch (e) {}
     return res;
   } catch (err) {
     return { ok: false, message: String(err && err.message ? err.message : err) };
   }
+}
+
+function numbersNorm_(v) { return String(v == null ? '' : v).replace(/[\s\u3000]/g, ''); }
+
+function numbersImportGrid_(grid, name) {
+  var hr = -1;
+  for (var r = 0; r < Math.min(grid.length, 15) && hr < 0; r++) {
+    var t = grid[r].map(numbersNorm_);
+    if (t.indexOf('uid') >= 0 && t.indexOf('q_id') >= 0) {
+      var iu = t.indexOf('uid'), iname = t.indexOf('name'), iq = t.indexOf('q_id'), ia = t.indexOf('answer');
+      var people = {}, order = [];
+      grid.slice(r + 1).forEach(function (x) {
+        if (!x || !x[iu]) return;
+        if (!people[x[iu]]) { people[x[iu]] = { name: x[iname] || '' }; order.push(x[iu]); }
+        people[x[iu]][String(x[iq])] = x[ia];
+      });
+      var rows = order.map(function (u) { var d = people[u]; return [u, d.name, d['7'] || '', d['8'] || '', d['11'] || '', d['12'] || '']; })
+        .filter(function (x) { return x[5] || x[2]; });
+      var res = importLeaveSurvey_(rows);
+      res.kind = 'leaveSurvey'; res.label = '退会アンケート';
+      return res;
+    }
+    if (t.indexOf('会員番号') >= 0) hr = r;
+  }
+  if (hr < 0) throw new Error('会員番号の見出しが見つからないため、種類を判定できません: ' + name);
+  var head = grid[hr].map(numbersNorm_);
+  var isLeave = head.some(function (h) { return h.indexOf('退会年月') >= 0 || h.indexOf('退会届出日') >= 0; });
+  var isJoin = head.some(function (h) { return h.indexOf('利用開始') >= 0; });
+  if (!isLeave && !isJoin) throw new Error('入会・退会どちらの手続き一覧表か判定できません（利用開始年月・退会年月の列がありません）: ' + name);
+  return appendCumulative_(isLeave ? '累計退会データ' : '累計入会データ', grid, hr, name);
+}
+
+/** 手続き一覧表を累計シートの末尾へ足す。同じ人・同じ手続き（会員番号＋届出日／退会年月）はとばす。T列より右の自動列は触らない */
+function appendCumulative_(sheetName, grid, hr, fileName) {
+  var ss = SpreadsheetApp.openById(WS_CONFIG.SPREADSHEET_ID);
+  var sh = ss.getSheetByName(sheetName);
+  if (!sh) throw new Error(sheetName + 'がありません');
+  var leave = sheetName === '累計退会データ';
+  var width = leave ? 19 : 15;
+  var target = sh.getRange(1, 1, 1, width).getValues()[0].map(numbersNorm_);
+  var src = grid[hr].map(numbersNorm_);
+  var map = target.map(function (h) { return src.indexOf(h); });
+  var matched = map.filter(function (i) { return i >= 0; }).length;
+  var colNo = target.indexOf('会員番号');
+  if (map[colNo] < 0 || matched < 8) throw new Error(fileName + '：列の見出しが' + sheetName + 'と合いません（一致 ' + matched + '列）。');
+  var dateCols = {}, ymCols = {};
+  target.forEach(function (h, i) {
+    if (/年月$/.test(h)) ymCols[i] = true;
+    else if (/日$/.test(h)) dateCols[i] = true;
+  });
+  var keyCol = target.indexOf(leave ? '退会年月' : '届出日');
+  var fmt = function (v, i) {
+    if (v instanceof Date) return Utilities.formatDate(v, 'Asia/Tokyo', ymCols[i] ? 'yyyy/MM' : 'yyyy/MM/dd');
+    if (typeof v === 'number' && (dateCols[i] || ymCols[i]) && v > 20000 && v < 80000) {
+      var d = new Date(Math.round((v - 25569) * 86400000));
+      return Utilities.formatDate(d, 'UTC', ymCols[i] ? 'yyyy/MM' : 'yyyy/MM/dd');
+    }
+    return v == null ? '' : v;
+  };
+  var keyOf = function (no, k) {
+    var n = String(no).replace(/\D/g, '').replace(/^0+/, '');
+    return n + '|' + String(k).replace(/\D/g, '').slice(0, ymCols[keyCol] ? 6 : 8);
+  };
+  var lastRow = 1;
+  var colF = sh.getRange(1, colNo + 1, Math.max(sh.getMaxRows(), 2), 1).getValues();
+  for (var i = colF.length - 1; i >= 1; i--) if (String(colF[i][0]) !== '') { lastRow = i + 1; break; }
+  var have = {};
+  if (lastRow >= 2) {
+    var ex = sh.getRange(2, 1, lastRow - 1, width).getValues();
+    ex.forEach(function (row) { have[keyOf(row[colNo], fmt(row[keyCol], keyCol))] = true; });
+  }
+  var carry = {};
+  var out = [], skipped = 0;
+  grid.slice(hr + 1).forEach(function (row) {
+    var vals = map.map(function (si, i) { return si < 0 ? '' : fmt(row[si], i); });
+    [0, 1, 2].forEach(function (i) { if (vals[i] !== '') carry[i] = vals[i]; else if (carry[i]) vals[i] = carry[i]; });
+    var no = String(vals[colNo]).replace(/\s/g, '');
+    if (!/\d{3,}/.test(no)) return;
+    var k = keyOf(no, vals[keyCol]);
+    if (have[k]) { skipped++; return; }
+    have[k] = true;
+    out.push(vals);
+  });
+  if (out.length) {
+    if (sh.getMaxRows() < lastRow + out.length) sh.insertRowsAfter(sh.getMaxRows(), lastRow + out.length - sh.getMaxRows());
+    sh.getRange(lastRow + 1, colNo + 1, out.length, 1).setNumberFormat('@');
+    sh.getRange(lastRow + 1, 1, out.length, width).setValues(out);
+  }
+  return { ok: true, kind: leave ? 'leave' : 'join', label: leave ? '退会手続き一覧表' : '入会手続き一覧表', added: out.length, skipped: skipped, total: lastRow - 1 + out.length };
 }
 
 /**
@@ -6694,7 +6783,8 @@ function syncTopRefreshStatus_(ss) {
     }
   } catch (eG) {}
   var survey = String(PropertiesService.getDocumentProperties().getProperty('LEAVE_SURVEY_AT') || '').replace(/^\d{4}\//, '').replace(/^0/, '').replace(/\/0/, '/').replace(/ .*/, '');
-  var guide = '　｜　月初ファイル ' + gessho + '　｜　退会アンケート ' + (survey || '—');
+  var cum = String(PropertiesService.getDocumentProperties().getProperty('CUMULATIVE_AT') || '').replace(/^\d{4}\//, '').replace(/^0/, '').replace(/\/0/, '/').replace(/ .*/, '');
+  var guide = '　｜　月初ファイル ' + gessho + '　｜　入会・退会一覧 ' + (cum || '—') + '　｜　退会アンケート ' + (survey || '—');
   var cell = sh.getRange('A2');
   if (String(cell.getDisplayValue()) !== status + guide) {
     var rich = SpreadsheetApp.newRichTextValue().setText(status + guide)

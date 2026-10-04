@@ -162,6 +162,24 @@ function gessho3ReadXls_(bytes) {
       cells[nrow + ':' + ncol] = gessho3F64_(rec.data, 6);
       if (nrow > maxR) maxR = nrow;
       if (ncol > maxC) maxC = ncol;
+    } else if (rec.op === 0x027E && rec.data.length >= 10) {
+      var krow = gessho3U16_(rec.data, 0), kcol = gessho3U16_(rec.data, 2);
+      cells[krow + ':' + kcol] = gessho3Rk_(rec.data, 6);
+      if (krow > maxR) maxR = krow;
+      if (kcol > maxC) maxC = kcol;
+    } else if (rec.op === 0x00BD && rec.data.length >= 12) {
+      var mrow = gessho3U16_(rec.data, 0), mcol = gessho3U16_(rec.data, 2);
+      var mlast = gessho3U16_(rec.data, rec.data.length - 2);
+      for (var mc = mcol; mc <= mlast; mc++) cells[mrow + ':' + mc] = gessho3Rk_(rec.data, 4 + (mc - mcol) * 6 + 2);
+      if (mrow > maxR) maxR = mrow;
+      if (mlast > maxC) maxC = mlast;
+    } else if (rec.op === 0x0204 && rec.data.length >= 9) {
+      var lrow = gessho3U16_(rec.data, 0), lcol = gessho3U16_(rec.data, 2);
+      var llen = gessho3U16_(rec.data, 6), wide = rec.data[8] & 1, ls = '';
+      for (var li = 0; li < llen; li++) ls += String.fromCharCode(wide ? gessho3U16_(rec.data, 9 + li * 2) : rec.data[9 + li]);
+      cells[lrow + ':' + lcol] = ls;
+      if (lrow > maxR) maxR = lrow;
+      if (lcol > maxC) maxC = lcol;
     }
   }
   var grid = [];
@@ -251,6 +269,20 @@ function gessho3F64_(bytes, i) {
   var view = new Uint8Array(buf);
   for (var k = 0; k < 8; k++) view[k] = bytes[i + k];
   return new DataView(buf).getFloat64(0, true);
+}
+
+function gessho3Rk_(bytes, i) {
+  var b0 = bytes[i];
+  var v;
+  if (b0 & 2) {
+    v = (bytes[i] | (bytes[i + 1] << 8) | (bytes[i + 2] << 16) | (bytes[i + 3] << 24)) >> 2;
+  } else {
+    var buf = new ArrayBuffer(8);
+    var view = new Uint8Array(buf);
+    view[4] = b0 & 0xFC; view[5] = bytes[i + 1]; view[6] = bytes[i + 2]; view[7] = bytes[i + 3];
+    v = new DataView(buf).getFloat64(0, true);
+  }
+  return (b0 & 1) ? v / 100 : v;
 }
 
 function gessho3OleStream_(bytes, streamName) {
