@@ -4003,6 +4003,14 @@ function billingPullTriggered() {
   try { fixNippoOctKiyaku_(); } catch (e15) { console.error(e15); }
   mark('hqOptHistory', function () { fixHqOptionHistory_(); });
   mark('hqOptNotes', function () { clearHqOptionNotes_(); });
+  mark('masterLineFix', function () {
+    var p = PropertiesService.getDocumentProperties();
+    if (p.getProperty('MASTER_LINE_FIX') === 'v1') return { ok: true, skipped: true };
+    var s = ss.getSheetByName('経堂マスタ');
+    if (s) s.getRange('F9:O14').setBorder(null, null, null, null, false, null);
+    p.setProperty('MASTER_LINE_FIX', 'v1');
+    return { ok: true };
+  });
   mark('masterRead', function () { return masterReading_(ss, false); });
   mark('optLog', function () { return optLogSync_(ss); });
   mark('optAnalysis', function () { return optAnalysisBuild_(ss); });
