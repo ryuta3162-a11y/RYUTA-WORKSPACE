@@ -7633,118 +7633,126 @@ function masterReading_(ss, force) {
   var vals = sh.getRange('A16:J60').getValues();
   var props = PropertiesService.getDocumentProperties();
   var now = new Date();
-  var sig = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, 'v3' + JSON.stringify(vals) + Utilities.formatDate(now, 'Asia/Tokyo', 'yyyyMMdd')));
+  var jlog = ss.getSheetByName('経堂_入会'), llog = ss.getSheetByName('経堂_退会'), olog = ss.getSheetByName(OPT_LOG_SHEET_);
+  var jv = jlog ? jlog.getRange('A2:C' + Math.max(2, jlog.getLastRow())).getValues() : [];
+  var lv = llog ? llog.getRange('A2:F' + Math.max(2, llog.getLastRow())).getValues() : [];
+  var sig = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5,
+    'v4' + JSON.stringify(vals) + jv.length + '|' + lv.length + '|' + Utilities.formatDate(now, 'Asia/Tokyo', 'yyyyMMddHH')));
   if (!force && props.getProperty('MASTER_READ_SIG') === sig) return { ok: true, skipped: true };
 
   var R = {};
   vals.forEach(function (r) { var k = String(r[0]).trim(); if (k && !R[k]) R[k] = r; });
-  var num = function (v) { return typeof v === 'number' ? v : (v === '' || v === null ? null : (isNaN(Number(String(v).replace(/[,%]/g, ''))) ? null : Number(String(v).replace(/[,%]/g, '')))); };
+  var num = function (v) { if (typeof v === 'number') return v; var s = String(v).replace(/[,%]/g, ''); return s === '' || isNaN(Number(s)) ? null : Number(s); };
   var g = function (k, c) { return R[k] ? num(R[k][c]) : null; };
-  var fmt = function (n) { return n === null ? '—' : Utilities.formatString('%s', Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ','); };
-  var pc = function (n) { return n === null ? '—' : Math.round(n * 100) + '%'; };
-  var sg = function (n) { return n === null ? '' : (n > 0 ? '+' : n < 0 ? '−' : '±') + fmt(Math.abs(n)); };
-  var ratio = function (a, b) { return a === null || b === null || b === 0 ? null : a / b; };
-  var CUR = 5, PREV = 4, LAND = 6, PLAN = 7, PROG = 8;
-  var day = now.getDate(), dim = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  var early = day < 10;
-  var avg3 = function (k) { var a = [1, 2, 3].map(function (c) { return g(k, c + 1); }).filter(function (x) { return x !== null; }); return a.length ? a.reduce(function (s, x) { return s + x; }, 0) / a.length : null; };
-
-  // 前年同月（累計入会・累計退会）
-  var ly = new Date(now.getFullYear() - 1, now.getMonth(), 1);
-  var countMonth = function (name, col, target) {
-    var s = ss.getSheetByName(name);
-    if (!s) return null;
-    var v = s.getRange(col + '2:' + col + Math.max(2, s.getLastRow())).getValues();
-    var serial = Math.round((Date.UTC(target.getFullYear(), target.getMonth(), 1) - Date.UTC(1899, 11, 30)) / 86400000);
-    var n = 0;
-    v.forEach(function (r) {
-      var d = r[0];
-      if (d instanceof Date) { if (d.getFullYear() === target.getFullYear() && d.getMonth() === target.getMonth()) n++; }
-      else if (typeof d === 'number' && Math.round(d) === serial) n++;
+  var fmt = function (n) { return n === null ? '—' : String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ','); };
+  var chg = function (a, b) { return a === null || b === null || b === 0 ? '' : (a >= b ? '+' : '−') + Math.round(Math.abs(a / b - 1) * 100) + '%'; };
+  var cmp = function (label, a, b) { return label + ' ' + fmt(b) + '名' + (chg(a, b) ? ' → ' + chg(a, b) : ''); };
+  var CUR = 5, PREV = 4;
+  var y = now.getFullYear(), m = now.getMonth(), day = now.getDate();
+  var dim = new Date(y, m + 1, 0).getDate();
+  var cutoff = function (yy, mm) { return new Date(yy, mm, Math.min(day, new Date(yy, mm + 1, 0).getDate()) + 1); };
+  var label = function (yy, mm) { return yy + '年' + (mm + 1) + '月'; };
+  var toD = function (v) {
+    if (v instanceof Date) return v;
+    var s = String(v).match(/^(\d{4})\/(\d{1,2})(?:\/(\d{1,2}))?(?:\s+(\d{1,2}):(\d{2}))?/);
+    return s ? new Date(+s[1], +s[2] - 1, +(s[3] || 1), +(s[4] || 0), +(s[5] || 0)) : null;
+  };
+  // 今月・先月：受付状況表のメール（今日まで／先月の同じ日まで）
+  var logCount = function (rows, yy, mm, cancelCol) {
+    var lab = label(yy, mm), end = cutoff(yy, mm), n = 0;
+    rows.forEach(function (r) {
+      if (String(r[2]) !== lab) return;
+      if (cancelCol !== undefined && (r[cancelCol] === true || String(r[cancelCol]).toUpperCase() === 'TRUE')) return;
+      var d = toD(r[0]);
+      if (d && d < end) n++;
     });
     return n;
   };
-  var lyJoin = countMonth('累計入会データ', 'V', ly);
-  var lyLeave = countMonth('累計退会データ', 'U', new Date(ly.getFullYear(), ly.getMonth() + 1, 1));
-
-  // 見込み：入会は「前月の実績 × 前月同日との比」、ほかは「今の数 ＋ 直近3ヶ月平均の残り日数分」。月の後半は表の着地見込をそのまま使う
-  var joinSame = g('入会 同日比較', CUR), joinSamePrev = g('入会 同日比較', PREV);
-  var joinPace = ratio(joinSame, joinSamePrev);
-  var rest = (dim - day) / dim;
-  var est = function (k) {
-    var cur = g(k, CUR);
-    if (cur === null) return null;
-    if (!early && g(k, LAND) !== null) return g(k, LAND);
-    if (k === '入会実績' && joinPace !== null && g(k, PREV) !== null) return Math.max(cur, g(k, PREV) * joinPace);
-    var a = avg3(k);
-    return a === null ? cur : cur + a * rest;
+  var pm = new Date(y, m - 1, 1);
+  var joinCur = logCount(jv, y, m), joinPrev = logCount(jv, pm.getFullYear(), pm.getMonth());
+  var leaveCur = logCount(lv, y, m, 5), leavePrev = logCount(lv, pm.getFullYear(), pm.getMonth(), 5);
+  // 昨年の同じ日まで：累計データの届出日
+  var lastYear = function (name, dateCol, monCol, monShift) {
+    var s = ss.getSheetByName(name);
+    if (!s) return null;
+    var last = s.getLastRow();
+    var a = s.getRange(dateCol + '2:' + dateCol + last).getValues(), b = s.getRange(monCol + '2:' + monCol + last).getValues();
+    var tm = new Date(y - 1, m + monShift, 1), end = cutoff(y - 1, m), n = 0;
+    for (var i = 0; i < a.length; i++) {
+      var mv = b[i][0], md = mv instanceof Date ? mv : toD(mv);
+      if (!md && typeof mv === 'number') md = new Date(Math.round((mv - 25569) * 86400000) + new Date().getTimezoneOffset() * 60000);
+      if (!md || md.getFullYear() !== tm.getFullYear() || md.getMonth() !== tm.getMonth()) continue;
+      var d = toD(a[i][0]);
+      if (d && d < end) n++;
+    }
+    return n;
   };
-  var paceTxt = function (k, label) {
-    var cur = g(k, CUR), a = avg3(k);
-    if (cur === null || a === null) return '';
-    var exp = a * day / dim;
-    return label + ' ' + fmt(cur) + '（いつものペースなら ' + fmt(exp) + '・' + pc(ratio(cur, exp)) + '）';
-  };
-  var joinEst = est('入会実績'), joinPlan = g('入会計画', CUR);
-  var leaveEst = est('解除実績'), leavePlan = g('解除計画', CUR);
-  var endEst = (g('月初実績', CUR) !== null && joinEst !== null && leaveEst !== null) ? g('月初実績', CUR) + joinEst - leaveEst : null;
-  var endPlan = g('月末計画', CUR);
+  var joinLy = lastYear('累計入会データ', 'M', 'N', 0);
+  var leaveLy = lastYear('累計退会データ', 'Q', 'R', 1);
 
-  // オプションは入会1人あたりの件数を前月と比べる（月の初めでも比べられる）
-  var opNames = vals.slice(13, 29).map(function (r) { return String(r[0]).trim(); }).filter(String);
-  var joinCur = g('入会実績', CUR), joinPrev = g('入会実績', PREV);
-  var opUp = [], opDown = [];
-  opNames.forEach(function (k) {
-    var a = ratio(g(k, CUR), joinCur), b = ratio(g(k, PREV), joinPrev);
-    if (a === null || b === null || (g(k, CUR) + g(k, PREV)) < 3) return;
-    var x = { k: k, a: a, b: b };
-    if (b > 0 && a >= b * 1.1) opUp.push(x);
-    else if (b > 0 && a <= b * 0.9) opDown.push(x);
-  });
-  opUp.sort(function (p, q) { return q.a / q.b - p.a / p.b; });
-  opDown.sort(function (p, q) { return p.a / p.b - q.a / q.b; });
-  var opTxt = function (x) { return x.k + ' ' + Math.round(x.a * 100) + '%（前月' + Math.round(x.b * 100) + '%）'; };
+  // オプション：その月に始まった契約（自動付与＋契約追加）を今日まで／先月の同じ日まで
+  var opCur = {}, opPrev = {};
+  if (olog && olog.getLastRow() > 1) {
+    var ov = olog.getRange(2, 2, olog.getLastRow() - 1, 4).getValues();
+    var e1 = cutoff(y, m), e0 = cutoff(pm.getFullYear(), pm.getMonth());
+    ov.forEach(function (r) {
+      if (r[2] === '停止' || !(r[0] instanceof Date)) return;
+      var d = r[0], o = String(r[3]);
+      if (d.getFullYear() === y && d.getMonth() === m && d < e1) opCur[o] = (opCur[o] || 0) + 1;
+      if (d.getFullYear() === pm.getFullYear() && d.getMonth() === pm.getMonth() && d < e0) opPrev[o] = (opPrev[o] || 0) + 1;
+    });
+  }
+  var opMoves = Object.keys(opCur).concat(Object.keys(opPrev)).filter(function (o, i, a) { return a.indexOf(o) === i && o !== 'その他'; })
+    .map(function (o) { return { k: o, a: opCur[o] || 0, b: opPrev[o] || 0 }; })
+    .filter(function (x) { return Math.abs(x.a - x.b) >= 2; })
+    .sort(function (p, q) { return Math.abs(q.a - q.b) - Math.abs(p.a - p.b); });
+  var opTxt = function (x) { return x.k + ' ' + x.b + '→' + x.a + '名（' + (chg(x.a, x.b) || (x.a > x.b ? '新規' : '')) + '）'; };
 
-  var leaveOver = leaveEst !== null && leavePlan !== null && leaveEst > leavePlan;
-  var headline = (joinPace === null ? '' : joinPace >= 1 ? '入会は前月より速い' : '入会は前月より遅い') + '。' + (leaveOver ? '解除が計画を超えそう' : '解除は計画内');
+  // その他の項目：先月の同じペース（先月の数×今日までの日数÷月の日数）と比べる
+  var others = ['休会', '紹介', '口コミ', '見学体験', 'レクチャー', '販促乗換', '販促ペア', '学校関係者', 'ラグビー割', '6ヶ月継続'];
+  var moves = others.map(function (k) {
+    var a = g(k, CUR), b0 = g(k, PREV);
+    if (a === null || b0 === null) return null;
+    return { k: k, a: a, b: b0 * day / dim, full: b0 };
+  }).filter(function (x) { return x && Math.abs(x.a - x.b) >= 2; })
+    .sort(function (p, q) { return Math.abs(q.a - q.b) - Math.abs(p.a - p.b); });
+  var mvTxt = function (x) { return x.k + ' ' + fmt(x.a) + '名（先月のペースなら ' + fmt(x.b) + '名・' + chg(x.a, x.b) + '）'; };
 
+  // 見込み（月末）
+  var joinPlan = g('入会計画', CUR), leavePlan = g('解除計画', CUR), start = g('月初実績', CUR), endPlan = g('月末計画', CUR);
+  var joinEst = joinPrev ? g('入会実績', PREV) * joinCur / joinPrev : null;
+  var leaveEst = leavePrev ? g('解除実績', PREV) * leaveCur / leavePrev : null;
+  var endEst = start !== null && joinEst !== null && leaveEst !== null ? start + joinEst - leaveEst : null;
+
+  var headline = (joinCur >= joinPrev ? '入会は先月より多い' : '入会は先月より少ない') + '。' + (leaveCur > leavePrev ? '退会は先月より多い' : '退会は先月より少ない');
   var lines = [
-    ['計画比', '入会 見込み' + fmt(joinEst) + '（計画' + fmt(joinPlan) + '・' + pc(ratio(joinEst, joinPlan)) + '）／解除 見込み' + fmt(leaveEst) + '（計画' + fmt(leavePlan) + '・' + pc(ratio(leaveEst, leavePlan)) + '）／月末 見込み' + fmt(endEst) + '（計画' + fmt(endPlan) + '）'],
-    ['前月同日', '入会 ' + fmt(joinSame) + '件（前月の同じ日 ' + fmt(joinSamePrev) + '件・' + sg(joinSame === null || joinSamePrev === null ? null : joinSame - joinSamePrev) + '・' + pc(joinPace) + '）'],
-    ['3ヶ月平均', [paceTxt('解除実績', '解除'), paceTxt('休会', '休会'), paceTxt('見学体験', '見学体験')].filter(String).join('／')],
-    ['前年同月', '入会 見込み' + fmt(joinEst) + '（前年' + fmt(lyJoin) + '・' + pc(ratio(joinEst, lyJoin)) + '）／退会 見込み' + fmt(leaveEst) + '（前年' + fmt(lyLeave) + '・' + pc(ratio(leaveEst, lyLeave)) + '）'],
-    ['オプション', '入会1人あたり　増えた：' + (opUp.slice(0, 3).map(opTxt).join('、') || 'なし') + '　減った：' + (opDown.slice(0, 3).map(opTxt).join('、') || 'なし')]
+    ['入会', '今日まで ' + fmt(joinCur) + '名｜' + cmp('先月の同じ日', joinCur, joinPrev) + '｜' + cmp('昨年の同じ日', joinCur, joinLy)],
+    ['退会', '今日まで ' + fmt(leaveCur) + '名｜' + cmp('先月の同じ日', leaveCur, leavePrev) + '｜' + cmp('昨年の同じ日', leaveCur, leaveLy)],
+    ['月末見込み', '入会 ' + fmt(joinEst) + '名（計画' + fmt(joinPlan) + '）｜退会 ' + fmt(leaveEst) + '名（計画' + fmt(leavePlan) + '）｜月末の会員 ' + fmt(endEst) + '名（計画' + fmt(endPlan) + '）'],
+    ['オプション', (opMoves.length ? '先月の同じ日と比べて大きく動いたもの：' + opMoves.slice(0, 4).map(opTxt).join('、') : '先月の同じ日と比べて大きな変動なし') + '（昨年のデータなし）'],
+    ['変動大', moves.length ? moves.slice(0, 4).map(mvTxt).join('、') : '大きな変動なし']
   ];
-  var acts = [];
-  if (joinPace !== null && joinPace < 1) acts.push('入会が前月同日より' + fmt(joinSamePrev - joinSame) + '件少ない。見学・体験の当日クロージングを強める');
-  else if (joinPace !== null) acts.push('入会は前月同日を上回っている。今のペースを維持');
-  if (leaveOver) acts.push('解除が計画を' + fmt(leaveEst - leavePlan) + '件超えそう。退会・休会の申し出には引き止めの声かけを');
-  if (opDown.length) acts.push(opDown[0].k + 'の付き方が前月より低い。入会時の案内漏れをなくす');
-  var vRatio = ratio(g('見学体験', CUR), avg3('見学体験') === null ? null : avg3('見学体験') * day / dim);
-  if (vRatio !== null && vRatio < 0.9) acts.push('見学体験がいつもより少ない。予約の声かけを増やす');
-  lines.push(['一手', acts.join('。') || '大きな崩れなし']);
-  var goods = opUp, bads = opDown;
 
-  var A = sh.getRange('F7:O14');
-  A.breakApart();
-  A.clearContent();
-  A.setFontFamily('Meiryo').setFontStyle('normal').setFontColor('#111111').setVerticalAlignment('middle').setBorder(false, false, false, false, false, false);
-  sh.getRange('F7:O7').merge().setValue('今月の読み（自動分析）　' + headline)
-    .setBackground('#B91C1C').setFontColor('#FFFFFF').setFontWeight('bold').setFontSize(10).setHorizontalAlignment('left');
-  sh.getRange('F8:M8').merge().setValue(day + '日目／' + dim + '日' + (early ? '（月の初めなので着地は参考。前月同日で判断）' : ''))
-    .setBackground('#FFFFFF').setFontSize(8).setFontColor('#7A7A7A').setFontWeight('normal').setHorizontalAlignment('left');
-  sh.getRange('N8:O8').merge().setValue(Utilities.formatDate(now, 'Asia/Tokyo', 'M/d H:mm') + ' 更新')
-    .setBackground('#FFFFFF').setFontSize(8).setFontColor('#7A7A7A').setFontWeight('normal').setHorizontalAlignment('right');
-  lines.forEach(function (ln, i) {
-    var r = 9 + i;
-    sh.getRange(r, 6).setValue(ln[0]).setBackground('#EDEDED').setFontWeight('bold').setFontSize(9).setHorizontalAlignment('center');
-    sh.getRange(r, 7, 1, 9).merge().setValue(ln[1]).setBackground('#FFFFFF').setFontWeight(ln[0] === '一手' ? 'bold' : 'normal')
-      .setFontSize(9).setHorizontalAlignment('left').setWrap(true);
-  });
-  sh.getRange('F9:O14').setBorder(null, null, true, null, null, true, '#E3E3E3', SpreadsheetApp.BorderStyle.SOLID);
-  sh.setRowHeights(9, 6, 30);
+  // NA：これから考えること・やること
+  var na = [];
+  var leftDays = dim - day;
+  if (joinPlan !== null && joinEst !== null && joinEst < joinPlan) na.push('入会は計画まであと' + fmt(joinPlan - joinCur) + '名（残り' + leftDays + '日・1日' + (Math.round((joinPlan - joinCur) / Math.max(1, leftDays) * 10) / 10) + '名）。見学・体験の当日クロージングを強める');
+  else if (joinCur < joinPrev) na.push('入会が先月の同じ日より' + (joinPrev - joinCur) + '名少ない。見学・体験の予約を増やす');
+  if (leaveCur > leavePrev) na.push('退会が先月の同じ日より' + (leaveCur - leavePrev) + '名多い。退会理由（アンケート）を確認し、申し出の時に休会・プラン変更を案内');
+  var down = opMoves.filter(function (x) { return x.a < x.b; })[0];
+  if (down) na.push(down.k + 'が先月より' + (down.b - down.a) + '名少ない。入会時の案内漏れがないか確認');
+  var rest = moves.filter(function (x) { return x.k === '休会' && x.a > x.b; })[0];
+  if (rest) na.push('休会が多い。復帰の声かけ予定を立てる');
+  if (!na.length) na.push('大きな崩れなし。今のペースを維持');
+  lines.push(['NA', na.join('。')]);
+
+  sh.getRange('F7').setValue('今月の読み（自動分析）　' + headline);
+  sh.getRange('F8').setValue(day + '日目／' + dim + '日　入会・退会はメールの件数（今日まで）。先月・昨年は同じ日まで');
+  sh.getRange('N8').setValue(Utilities.formatDate(now, 'Asia/Tokyo', 'M/d H:mm') + ' 更新');
+  sh.getRange(9, 6, lines.length, 1).setValues(lines.map(function (l) { return [l[0]]; }));
+  sh.getRange(9, 7, lines.length, 1).setValues(lines.map(function (l) { return [l[1]]; }));
   props.setProperty('MASTER_READ_SIG', sig);
-  return { ok: true, goods: goods.length, bads: bads.length };
+  return { ok: true, join: [joinCur, joinPrev, joinLy], leave: [leaveCur, leavePrev, leaveLy] };
 }
 
 /** 会議用（統合後は「入会・退会分析」という名前） */
