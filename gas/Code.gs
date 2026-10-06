@@ -7637,7 +7637,7 @@ function masterReading_(ss, force) {
   var jv = jlog ? jlog.getRange('A2:C' + Math.max(2, jlog.getLastRow())).getValues() : [];
   var lv = llog ? llog.getRange('A2:F' + Math.max(2, llog.getLastRow())).getValues() : [];
   var sig = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5,
-    'v4' + JSON.stringify(vals) + jv.length + '|' + lv.length + '|' + Utilities.formatDate(now, 'Asia/Tokyo', 'yyyyMMddHH')));
+    'v5' + JSON.stringify(vals) + jv.length + '|' + lv.length + '|' + Utilities.formatDate(now, 'Asia/Tokyo', 'yyyyMMddHH')));
   if (!force && props.getProperty('MASTER_READ_SIG') === sig) return { ok: true, skipped: true };
 
   var R = {};
@@ -7709,7 +7709,7 @@ function masterReading_(ss, force) {
   var opTxt = function (x) { return x.k + ' ' + x.b + '→' + x.a + '名（' + (chg(x.a, x.b) || (x.a > x.b ? '新規' : '')) + '）'; };
 
   // その他の項目：先月の同じペース（先月の数×今日までの日数÷月の日数）と比べる
-  var others = ['休会', '紹介', '口コミ', '見学体験', 'レクチャー', '販促乗換', '販促ペア', '学校関係者', 'ラグビー割', '6ヶ月継続'];
+  var others = ['紹介', '口コミ', '見学体験', 'レクチャー', '販促乗換', '販促ペア', '学校関係者', 'ラグビー割', '6ヶ月継続'];
   var moves = others.map(function (k) {
     var a = g(k, CUR), b0 = g(k, PREV);
     if (a === null || b0 === null) return null;
@@ -7738,11 +7738,9 @@ function masterReading_(ss, force) {
   var leftDays = dim - day;
   if (joinPlan !== null && joinEst !== null && joinEst < joinPlan) na.push('入会は計画まであと' + fmt(joinPlan - joinCur) + '名（残り' + leftDays + '日・1日' + (Math.round((joinPlan - joinCur) / Math.max(1, leftDays) * 10) / 10) + '名）。見学・体験の当日クロージングを強める');
   else if (joinCur < joinPrev) na.push('入会が先月の同じ日より' + (joinPrev - joinCur) + '名少ない。見学・体験の予約を増やす');
-  if (leaveCur > leavePrev) na.push('退会が先月の同じ日より' + (leaveCur - leavePrev) + '名多い。退会理由（アンケート）を確認し、申し出の時に休会・プラン変更を案内');
+  if (leaveCur > leavePrev) na.push('退会が先月の同じ日より' + (leaveCur - leavePrev) + '名多い。退会理由（アンケート）を確認し、申し出の時にプラン変更を案内');
   var down = opMoves.filter(function (x) { return x.a < x.b; })[0];
   if (down) na.push(down.k + 'が先月より' + (down.b - down.a) + '名少ない。入会時の案内漏れがないか確認');
-  var rest = moves.filter(function (x) { return x.k === '休会' && x.a > x.b; })[0];
-  if (rest) na.push('休会が多い。復帰の声かけ予定を立てる');
   if (!na.length) na.push('大きな崩れなし。今のペースを維持');
   lines.push(['NA', na.join('。')]);
 
