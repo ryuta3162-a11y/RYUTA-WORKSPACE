@@ -257,17 +257,56 @@
   @keyframes grow { from { transform: scaleY(0); } }
   @keyframes rise { from { opacity: 0; transform: translateY(8px); } }
   @keyframes fade { from { opacity: 0; } }
-  @media (max-width: 900px) { .app { grid-template-columns: 1fr; } nav { position: static; height: auto; } .navfoot { position: static; margin: 10px; } main { padding: 20px; } }
+  /* 枠なし・全面 */
+  :root { --fs: 14px; --fs-s: 12.5px; --fs-l: 36px; }
+  body { background: radial-gradient(1200px 700px at 70% -10%, #101010, #000 60%) fixed; }
+  nav { background: linear-gradient(180deg, #070707, #000); border-right: 0; box-shadow: 1px 0 0 #141414; }
+  .brand { border-bottom: 0; padding-bottom: 26px; }
+  .brand b { font-size: 19px; letter-spacing: .16em; text-shadow: 0 0 14px rgba(255,255,255,.35); }
+  .nv { position: relative; overflow: hidden; font-family: 'Yu Gothic UI', 'Yu Gothic', 'Hiragino Sans', Meiryo, sans-serif; font-weight: 700; font-size: 14.5px; letter-spacing: .16em; color: #7a7a7a; padding: 12px 24px; transition: color .2s, letter-spacing .3s; }
+  .nv:hover { background: transparent; color: #fff; letter-spacing: .2em; }
+  .nv.on { background: linear-gradient(90deg, rgba(255,255,255,.13), rgba(255,255,255,0) 85%); color: #fff; font-weight: 800; text-shadow: 0 0 10px rgba(255,255,255,.7); }
+  .nv.on::before { content: ''; position: absolute; left: 0; top: 8px; bottom: 8px; width: 2px; background: #fff; box-shadow: 0 0 10px #fff, 0 0 22px #fff; animation: barin .35s cubic-bezier(.2,.8,.2,1) both; }
+  .nv.on::after { content: ''; position: absolute; top: 0; bottom: 0; left: -60%; width: 50%; background: linear-gradient(100deg, transparent, rgba(255,255,255,.55), transparent); transform: skewX(-20deg); animation: shine .55s cubic-bezier(.3,.7,.2,1) .05s both; }
+  @keyframes barin { from { transform: scaleY(0); opacity: 0; } }
+  @keyframes shine { from { left: -60%; } to { left: 120%; } }
+  main { padding: 40px 52px 90px; max-width: none; }
+  .ph { border-bottom: 0; margin-bottom: 18px; padding-bottom: 0; }
+  .card, .card:hover { background: transparent; border: 0; padding: 0; margin-bottom: 52px; }
+  .card h2 { font-size: 19px; margin-bottom: 18px; }
+  .row { gap: 48px; }
+  .row > .card { flex: 1 1 460px; }
+  .kpi, .rc { border: 0; background: linear-gradient(165deg, #141414, #070707 70%); box-shadow: inset 0 1px 0 rgba(255,255,255,.09), 0 14px 34px rgba(0,0,0,.7); }
+  .kpi:hover, .rc:hover { background: linear-gradient(165deg, #1a1a1a, #090909 70%); box-shadow: inset 0 1px 0 rgba(255,255,255,.18), 0 14px 34px rgba(0,0,0,.7); }
+  .kpi .v { font-size: var(--fs-l); }
+  .live .kpis { gap: 12px; }
+  .live .kpi { padding: 12px 16px 10px; }
+  .rings { gap: 16px; }
+  .rc { padding: 16px 14px 18px; }
+  .rv b { font-size: 26px; }
+  .rn { font-size: 17px; }
+  .half2 { gap: 48px; margin-top: 12px; }
+  .half2 > div { border-top: 0; }
+  .mlab b { font-size: 24px; }
+  .fbk { font-size: 14px; }
+  th { background: #000; }
+  svg text { font-size: 11px; }
+  .clk path { transform-box: view-box; transform-origin: 50% 50%; }
+  .clk .peak { transform-box: view-box; transform-origin: 50% 50%; }
+  .loading { padding: 60px; }
+  .loading.full { position: fixed; left: 236px; right: 0; top: 0; bottom: 0; padding: 0 0 10vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; font-size: 13px; letter-spacing: .4em; color: #9a9a9a; z-index: 40; animation: fade .3s both; }
+  .loading.full::before { content: ''; width: 64px; height: 64px; border-radius: 50%; border: 1.5px solid #222; border-top-color: #fff; box-shadow: 0 0 24px rgba(255,255,255,.08); filter: drop-shadow(0 0 6px rgba(255,255,255,.6)); animation: rspin .8s linear infinite; }
+  @media (max-width: 900px) { .app { grid-template-columns: 1fr; } nav { position: static; height: auto; } .navfoot { position: static; margin: 10px; } main { padding: 20px; } .loading.full { left: 0; } }
 </style>
 </head>
 <body>
 <div class="app">
   <nav>
-    <div class="brand"><b>Work Space</b><div id="at">読み込み中</div></div><div class="navlbl">項目</div>
+    <div class="brand"><b>Work Space</b><div id="at">読み込み中</div></div>
     <div id="items"></div>
-    <div class="navfoot"><button class="rld" id="reload" data-t="最新のデータを読み込みます"><svg viewBox="0 0 40 40" width="40" height="40"><circle class="rt" cx="20" cy="20" r="17"/><circle class="ra" cx="20" cy="20" r="17"/><circle class="rd" cx="20" cy="3" r="2.2"/></svg></button></div>
+    <div class="navfoot"><button class="rld" id="reload" aria-label="最新にする"><svg viewBox="0 0 40 40" width="40" height="40"><circle class="rt" cx="20" cy="20" r="17"/><circle class="ra" cx="20" cy="20" r="17"/><circle class="rd" cx="20" cy="3" r="2.2"/></svg></button></div>
   </nav>
-  <main><div class="ph" id="ph"></div><div id="main"><div class="loading"></div></div></main>
+  <main><div class="ph" id="ph"></div><div id="main"><div class="loading full">読み込み中</div></div></main>
 </div>
 <div id="tip"></div>
 <script>
@@ -388,7 +427,7 @@ function legend(el, list) {
 /** 縦棒（系列を横に並べる）。series: [{name, color, vals}] / o.lines: 折れ線 */
 function bars(el, labels, series, o) {
   o = o || {};
-  var W = el.clientWidth || 600, H = o.height || 210, pl = 44, pr = 8, pt = 18, pb = 22;
+  var W = el.clientWidth || 600, H = o.height || 250, pl = 44, pr = 8, pt = 18, pb = 22;
   var max = 0;
   series.concat(o.lines || []).forEach(function (s) { s.vals.forEach(function (v) { if (v != null && v > max) max = v; }); });
   var tk = ticks(max); max = tk.max;
@@ -533,7 +572,7 @@ function burn(el, o) {
 /** 進捗リング */
 function ring(p, tick) {
   var S = 136, c = 68, r = 54, C = 2 * Math.PI * r, f = Math.max(0, Math.min(1, p || 0));
-  var s = '<svg width="' + S + '" height="' + S + '" class="rg"><defs><filter id="neon" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="4"/></filter></defs><circle cx="' + c + '" cy="' + c + '" r="' + (r + 9) + '" fill="none" stroke="#1a1a1a"/><circle cx="' + c + '" cy="' + c + '" r="' + r + '" fill="none" stroke="#151515" stroke-width="5"/>';
+  var s = '<svg width="168" height="168" viewBox="0 0 ' + S + ' ' + S + '" class="rg"><defs><filter id="neon" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="4"/></filter></defs><circle cx="' + c + '" cy="' + c + '" r="' + (r + 9) + '" fill="none" stroke="#1a1a1a"/><circle cx="' + c + '" cy="' + c + '" r="' + r + '" fill="none" stroke="#151515" stroke-width="5"/>';
   s += '<circle class="rgf rgg" filter="url(#neon)" cx="' + c + '" cy="' + c + '" r="' + r + '" fill="none" stroke="#fff" stroke-width="8" stroke-dasharray="0 ' + C + '" data-len="' + (f * C) + '" data-c="' + C + '" transform="rotate(-90 ' + c + ' ' + c + ')"/>';
   s += '<circle class="rgf" cx="' + c + '" cy="' + c + '" r="' + r + '" fill="none" stroke="#fff" stroke-width="5" stroke-dasharray="0 ' + C + '" data-len="' + (f * C) + '" data-c="' + C + '" transform="rotate(-90 ' + c + ' ' + c + ')"/>';
   if (p > 1) s += '<circle class="rgf rgo" cx="' + c + '" cy="' + c + '" r="' + (r - 8) + '" fill="none" stroke="#9a9a9a" stroke-width="2" stroke-dasharray="0 ' + C + '" data-len="' + (Math.min(1, p - 1) * 2 * Math.PI * (r - 8)) + '" data-c="' + C + '" transform="rotate(-90 ' + c + ' ' + c + ')"/>';
@@ -548,7 +587,7 @@ function ring(p, tick) {
  * ドラッグ・クリックで期間を選ぶ（比較期間は自動）
  */
 function brush(el, buckets, st, onSel, tickFn) {
-  var W = el.clientWidth || 900, H = 180, pl = 44, pr = 8, pt = 10, pb = 22;
+  var W = el.clientWidth || 900, H = 230, pl = 44, pr = 8, pt = 10, pb = 22;
   var n = buckets.length, bw = (W - pl - pr) / Math.max(1, n);
   var max = 1;
   buckets.forEach(function (b) { if (b.v > max) max = b.v; });
@@ -1090,7 +1129,7 @@ function renderMaster(main) {
     var hA = new Array(24).fill(0), hB = new Array(24).fill(0);
     JLd.join.forEach(function (r) { if (r[1] == null) return; var n = dn(r[0]); if (n > T - 7 && n <= T) hA[r[1]]++; else if (n > T - 14 && n <= T - 7) hB[r[1]]++; });
     hl.appendChild(h('div', { class: 'sub', 'data-t': '直近7日（' + ds(T - 6) + '〜今日）の入会を、時計のように24時間を一周で表示。外に伸びるほど多い時間です。白＝直近7日、グレー＝その前の7日。' }, '時間帯の入会　直近7日 <i class="qi">?</i>'));
-    clock(hl, hA, hB);
+    clock(hl, hA, hB, { size: 330 });
     var td = JLd.todays || [];
     var lst = function (k, nm) {
       var rows = td.filter(function (r) { return r[0] === k; }).sort(function (p, q) { return q[1].localeCompare(p[1], 'ja', { numeric: true }); });
@@ -1361,7 +1400,7 @@ function open(id, force) {
   $('ph').style.display = id === 'master' ? 'none' : '';
   try { if (location.hash !== '#' + id) history.replaceState(null, '', '#' + id); } catch (e) {}
   var main = $('main');
-  main.innerHTML = '<div class="loading">読み込み中</div>';
+  main.innerHTML = '<div class="loading full">読み込み中</div>';
   var rb = $('reload'); if (force) rb.classList.add('spin');
   load(id, force).then(function (d) {
     rb.classList.remove('spin');
