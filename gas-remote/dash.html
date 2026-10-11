@@ -5,100 +5,104 @@
 <meta charset="utf-8">
 <style>
   :root {
-    --bg: #191919; --side: #202020; --panel: #202020; --line: #2f2f2f; --line2: #3a3a3a; --hover: #2c2c2c;
-    --tx: #d4d4d4; --mut: #8f8f8f; --dim: #5a5a5a; --hi: #f0f0f0; --b: #6b6b6b;
-    --fs: 13px; --fs-s: 12px; --fs-l: 26px; --fs-h: 28px;
+    --bg: #000; --side: #000; --panel: #050505; --line: #262626; --line2: #3d3d3d; --hover: #141414;
+    --tx: #e6e6e6; --mut: #8a8a8a; --dim: #555; --hi: #fff; --b: #6e6e6e;
+    --fs: 13px; --fs-s: 12px; --fs-l: 30px; --fs-h: 34px;
+    --serif: 'Yu Mincho', 'YuMincho', 'Hiragino Mincho ProN', 'Noto Serif JP', 'MS PMincho', serif;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; background: var(--bg); color: var(--tx); font-family: 'Segoe UI', 'Hiragino Sans', Meiryo, sans-serif; font-size: var(--fs); -webkit-font-smoothing: antialiased; }
-  .app { display: grid; grid-template-columns: 232px 1fr; min-height: 100vh; }
-  nav { background: var(--side); padding: 14px 8px; position: sticky; top: 0; height: 100vh; border-right: 1px solid #262626; }
-  .brand { padding: 4px 10px 14px; }
-  .brand b { font-size: 14px; color: var(--hi); font-weight: 600; }
-  .brand div { font-size: var(--fs-s); color: var(--mut); margin-top: 4px; font-variant-numeric: tabular-nums; }
-  .navlbl { font-size: 11px; color: var(--dim); padding: 10px 10px 4px; }
-  .nv { display: block; padding: 6px 10px; margin: 1px 0; cursor: pointer; color: var(--mut); border-radius: 5px; transition: background .15s, color .15s; }
-  .nv:hover { background: var(--hover); color: var(--tx); }
-  .nv.on { background: #2f2f2f; color: var(--hi); }
-  .nv small { display: block; font-size: 11px; color: var(--dim); margin-top: 1px; }
-  .nv.on small { color: var(--mut); }
-  .navfoot { position: absolute; bottom: 14px; left: 8px; right: 8px; }
-  .btn { background: transparent; border: 1px solid var(--line); color: var(--mut); padding: 7px 10px; cursor: pointer; font-family: inherit; font-size: var(--fs-s); width: 100%; border-radius: 5px; transition: all .15s; }
-  .btn:hover { background: var(--hover); color: var(--hi); }
-  main { padding: 36px 56px 80px; min-width: 0; max-width: 1500px; }
-  .ph { margin-bottom: 22px; animation: fade .3s both; }
-  .ph h1 { font-size: var(--fs-h); font-weight: 700; color: var(--hi); margin: 0 0 6px; letter-spacing: .01em; }
-  .ph div { color: var(--mut); font-size: var(--fs); }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; margin-bottom: 14px; }
-  .card.anim { animation: rise .35s cubic-bezier(.2,.8,.2,1) both; }
-  .card h2 { font-size: 14px; margin: 0 0 12px; color: var(--hi); font-weight: 600; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-  .card h2 small { font-weight: normal; color: var(--mut); font-size: var(--fs-s); }
-  .row { display: flex; gap: 14px; flex-wrap: wrap; }
+  .app { display: grid; grid-template-columns: 236px 1fr; min-height: 100vh; }
+  nav { background: var(--side); padding: 22px 0; position: sticky; top: 0; height: 100vh; border-right: 1px solid #2a2a2a; }
+  .brand { padding: 0 20px 18px; margin-bottom: 8px; border-bottom: 1px solid #fff; }
+  .brand b { font-family: var(--serif); font-size: 17px; color: var(--hi); font-weight: 700; letter-spacing: .08em; white-space: nowrap; }
+  .brand div { font-size: var(--fs-s); color: var(--mut); margin-top: 8px; font-variant-numeric: tabular-nums; letter-spacing: .04em; }
+  .navlbl { font-size: 11px; color: var(--dim); padding: 12px 20px 6px; letter-spacing: .2em; }
+  .nv { display: block; padding: 9px 20px; cursor: pointer; color: var(--mut); transition: background .15s, color .15s; font-family: var(--serif); font-size: 14px; letter-spacing: .06em; }
+  .nv:hover { background: var(--hover); color: var(--hi); }
+  .nv.on { background: #fff; color: #000; font-weight: 700; }
+  .nv small { display: block; font-family: 'Segoe UI', Meiryo, sans-serif; font-size: 11px; color: var(--dim); margin-top: 2px; letter-spacing: 0; font-weight: normal; }
+  .nv.on small { color: #444; }
+  .navfoot { position: absolute; bottom: 18px; left: 16px; right: 16px; }
+  .btn { background: transparent; border: 1px solid var(--line2); color: var(--mut); padding: 8px 10px; cursor: pointer; font-family: inherit; font-size: var(--fs-s); width: 100%; transition: all .15s; letter-spacing: .1em; }
+  .btn:hover { background: #fff; color: #000; border-color: #fff; }
+  main { padding: 40px 56px 80px; min-width: 0; max-width: 1500px; }
+  .ph { margin-bottom: 26px; padding-bottom: 14px; border-bottom: 1px solid #fff; animation: fade .4s both; display: flex; align-items: baseline; gap: 18px; flex-wrap: wrap; }
+  .ph h1 { font-family: var(--serif); font-size: var(--fs-h); font-weight: 700; color: var(--hi); margin: 0; letter-spacing: .14em; }
+  .ph div { color: var(--mut); font-size: var(--fs); letter-spacing: .06em; }
+  .card { background: var(--panel); border: 1px solid var(--line); padding: 18px 20px; margin-bottom: 16px; }
+  .card.anim { animation: rise .4s cubic-bezier(.2,.8,.2,1) both; }
+  .card h2 { font-family: var(--serif); font-size: 16px; margin: 0 0 14px; color: var(--hi); font-weight: 700; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; letter-spacing: .08em; }
+  .card h2 small { font-family: 'Segoe UI', Meiryo, sans-serif; font-weight: normal; color: var(--mut); font-size: var(--fs-s); letter-spacing: 0; }
+  .row { display: flex; gap: 16px; flex-wrap: wrap; }
   .row > .card { flex: 1 1 400px; min-width: 0; }
   .ctl { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-bottom: 8px; }
   .lbl { font-size: var(--fs-s); color: var(--mut); margin-right: 4px; }
-  .chip { border: none; background: transparent; color: var(--mut); padding: 4px 9px; cursor: pointer; font-family: inherit; font-size: var(--fs-s); border-radius: 4px; transition: background .15s, color .15s; }
-  .chip:hover { background: var(--hover); color: var(--tx); }
-  .chip.on { background: #3a3a3a; color: var(--hi); }
-  .sep { width: 1px; height: 16px; background: var(--line); margin: 0 8px; }
-  .periods { display: flex; gap: 18px; font-size: var(--fs-s); margin: 8px 0 6px; flex-wrap: wrap; color: var(--tx); font-variant-numeric: tabular-nums; }
-  .pa::before, .pb::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; }
+  .chip { border: 1px solid transparent; background: transparent; color: var(--mut); padding: 4px 10px; cursor: pointer; font-family: inherit; font-size: var(--fs-s); transition: background .15s, color .15s, border-color .15s; }
+  .chip:hover { border-color: var(--line2); color: var(--hi); }
+  .chip.on { background: #fff; color: #000; font-weight: 600; }
+  .sep { width: 1px; height: 16px; background: var(--line2); margin: 0 8px; }
+  .periods { display: flex; gap: 18px; font-size: var(--fs-s); margin: 10px 0 2px; flex-wrap: wrap; color: var(--tx); font-variant-numeric: tabular-nums; }
+  .pa::before, .pb::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 6px; }
   .pa::before { background: var(--hi); }
   .pb::before { background: var(--b); }
   .hint { font-size: var(--fs-s); color: var(--mut); }
-  .pbox { background: #1c1c1c; border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; margin: 4px 0 10px; }
+  .pbox { background: #000; border: 1px solid var(--line2); padding: 12px 14px; margin: 6px 0 12px; }
   .prow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-  .plbl { font-size: var(--fs-s); color: var(--mut); }
+  .plbl { font-size: var(--fs-s); color: var(--mut); letter-spacing: .1em; }
   .dates { display: inline-flex; align-items: center; gap: 6px; }
-  .sel { background: #262626; border: 1px solid var(--line2); color: var(--hi); border-radius: 5px; padding: 5px 8px; font-family: inherit; font-size: var(--fs); color-scheme: dark; cursor: pointer; }
-  .sel:hover { border-color: #4a4a4a; }
-  .sel:focus { outline: none; border-color: #6b6b6b; }
-  .periods b { color: var(--hi); font-weight: 600; }
+  .sel { background: #000; border: 1px solid var(--line2); color: var(--hi); padding: 5px 8px; font-family: inherit; font-size: var(--fs); color-scheme: dark; cursor: pointer; border-radius: 0; }
+  .sel:hover { border-color: #888; }
+  .sel:focus { outline: none; border-color: #fff; }
+  .periods b { color: var(--hi); font-weight: 700; }
   .periods .hint { margin-left: auto; }
-  .kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
-  .kpi { border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; transition: background .15s; }
-  .kpi:hover { background: #242424; }
-  .kpi .t { font-size: var(--fs-s); color: var(--mut); }
-  .kpi .v { font-size: var(--fs-l); font-weight: 700; color: var(--hi); margin-top: 4px; font-variant-numeric: tabular-nums; }
-  .kpi .v small { font-size: var(--fs-s); font-weight: normal; color: var(--mut); margin-left: 3px; }
-  .kpi .s { font-size: var(--fs-s); color: var(--mut); margin-top: 4px; font-variant-numeric: tabular-nums; }
-  .up { color: var(--hi); font-weight: 600; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+  .kpi { border: 1px solid var(--line); border-top: 1px solid #fff; padding: 12px 14px 14px; transition: background .15s; }
+  .kpi:hover { background: #0e0e0e; }
+  .kpi .t { font-size: var(--fs-s); color: var(--mut); letter-spacing: .04em; }
+  .kpi .v { font-family: var(--serif); font-size: var(--fs-l); font-weight: 700; color: var(--hi); margin-top: 6px; font-variant-numeric: tabular-nums; display: flex; align-items: baseline; flex-wrap: wrap; }
+  .kpi .v small { font-family: 'Segoe UI', Meiryo, sans-serif; font-size: var(--fs-s); font-weight: normal; color: var(--mut); margin-left: 4px; }
+  .kpi .dl { font-family: 'Segoe UI', Meiryo, sans-serif; font-style: normal; font-size: 16px; font-weight: 700; margin-left: 12px; padding: 1px 7px; }
+  .kpi .dl.up { background: #fff; color: #000; }
+  .kpi .dl.down { border: 1px solid var(--line2); color: var(--mut); }
+  .kpi .s { font-size: var(--fs-s); color: var(--mut); margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .up { color: var(--hi); font-weight: 700; }
   .down { color: var(--mut); font-weight: 600; }
   table { border-collapse: collapse; width: 100%; font-size: var(--fs); font-variant-numeric: tabular-nums; }
-  th, td { border-bottom: 1px solid var(--line); padding: 7px 10px; text-align: right; white-space: nowrap; }
-  th { color: var(--mut); font-weight: normal; font-size: var(--fs-s); position: sticky; top: 0; background: var(--panel); }
+  th, td { border-bottom: 1px solid #1c1c1c; padding: 7px 10px; text-align: right; white-space: nowrap; }
+  th { color: var(--mut); font-weight: normal; font-size: var(--fs-s); position: sticky; top: 0; background: var(--panel); border-bottom: 1px solid #fff; }
   th:first-child, td:first-child { text-align: left; }
-  tr:hover td { background: #262626; }
+  tr:hover td { background: #111; }
   tr.click { cursor: pointer; }
-  tr.sel td { background: #2f2f2f; color: var(--hi); }
+  tr.sel td { background: #fff; color: #000; }
   .scroll { max-height: 480px; overflow: auto; }
-  .scroll::-webkit-scrollbar { width: 8px; height: 8px; } .scroll::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 4px; }
+  .scroll::-webkit-scrollbar { width: 8px; height: 8px; } .scroll::-webkit-scrollbar-thumb { background: #333; }
   svg text { font-family: 'Segoe UI', Meiryo, sans-serif; fill: var(--mut); font-size: 10px; }
-  svg .gl { stroke: #2a2a2a; }
+  svg .gl { stroke: #1e1e1e; }
   svg rect.b { transform-box: fill-box; transform-origin: 50% 100%; animation: grow .5s cubic-bezier(.2,.8,.2,1) both; transition: filter .15s; }
-  svg rect.b:hover { filter: brightness(1.25); }
+  svg rect.b:hover { filter: brightness(1.4); }
   svg.still rect.b { animation: none; }
   svg .vl { fill: var(--tx); font-size: 10px; animation: fade .5s .25s both; }
   svg .ln { animation: fade .6s .2s both; }
   .brush { user-select: none; touch-action: none; cursor: crosshair; }
-  .loading { padding: 80px; text-align: center; color: var(--mut); }
+  .loading { padding: 80px; text-align: center; color: var(--mut); letter-spacing: .2em; font-family: var(--serif); }
   .reading td:first-child { color: var(--mut); width: 96px; font-size: var(--fs-s); }
   .reading td { white-space: normal; text-align: left; line-height: 1.7; }
   .heat td { text-align: center; font-size: var(--fs-s); padding: 6px 4px; }
   .hb { display: grid; grid-template-columns: minmax(120px, 34%) 1fr 54px 54px; gap: 7px 10px; align-items: center; font-size: var(--fs); font-variant-numeric: tabular-nums; }
   .hb .nm { color: var(--tx); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .hb .tr { position: relative; height: 14px; }
-  .hb .fa, .hb .fb { position: absolute; left: 0; height: 6px; border-radius: 3px; transition: width .6s cubic-bezier(.2,.8,.2,1); width: 0; }
+  .hb .fa, .hb .fb { position: absolute; left: 0; height: 6px; transition: width .6s cubic-bezier(.2,.8,.2,1); width: 0; }
   .hb .fa { top: 0; background: var(--hi); }
   .hb .fb { bottom: 0; background: var(--b); }
   .hb .va, .hb .vb { text-align: right; }
   .hb .vb { color: var(--mut); }
   .lgd { display: flex; gap: 16px; font-size: var(--fs-s); color: var(--mut); margin-top: 6px; flex-wrap: wrap; }
-  .lgd i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; }
-  #tip { position: fixed; pointer-events: none; z-index: 60; background: #252525; border: 1px solid #3a3a3a; border-radius: 5px; color: var(--hi); padding: 5px 9px; font-size: var(--fs-s); opacity: 0; transition: opacity .12s; white-space: nowrap; box-shadow: 0 4px 16px rgba(0,0,0,.5); font-variant-numeric: tabular-nums; }
+  .lgd i { display: inline-block; width: 8px; height: 8px; margin-right: 6px; }
+  #tip { position: fixed; pointer-events: none; z-index: 60; background: #fff; color: #000; padding: 5px 10px; font-size: var(--fs-s); font-weight: 600; opacity: 0; transition: opacity .12s; white-space: nowrap; font-variant-numeric: tabular-nums; }
   #tip.on { opacity: 1; }
   @keyframes grow { from { transform: scaleY(0); } }
-  @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+  @keyframes rise { from { opacity: 0; transform: translateY(8px); } }
   @keyframes fade { from { opacity: 0; } }
   @media (max-width: 900px) { .app { grid-template-columns: 1fr; } nav { position: static; height: auto; } .navfoot { position: static; margin: 10px; } main { padding: 20px; } }
 </style>
@@ -124,7 +128,7 @@ var ITEMS = [
   { id: 'unpaid', name: '未納', sub: '件数・金額・回収率' }
 ];
 var DATA = {}, CUR = null, FIRST = true, KEYNAV = null;
-var A_C = '#e6e6e6', RED = '#6b6b6b', GRAY = '#3a3a3a', PREV = '#474747', FUT = '#9a9a9a', PLAN = '#bdbdbd';
+var A_C = '#ffffff', RED = '#6e6e6e', GRAY = '#2b2b2b', PREV = '#3d3d3d', FUT = '#9a9a9a', PLAN = '#cfcfcf';
 var WD = ['日', '月', '火', '水', '木', '金', '土'];
 
 /* ---------- 共通 ---------- */
@@ -186,7 +190,18 @@ function countUp(root) {
 }
 function kpi(t, v, u, d, s) {
   var val = v == null || isNaN(v) ? '—' : '<span data-v="' + v + '" data-d="' + (d || 0) + '">' + fmt(v, d || 0) + '</span>';
-  return '<div class="kpi"><div class="t">' + t + '</div><div class="v">' + val + (u ? '<small>' + u + '</small>' : '') + '</div><div class="s">' + (s || '&nbsp;') + '</div></div>';
+  var m = String(s || '').match(/<span class="(up|down)">[^<]*<\/span>/), dl = '';
+  if (m && String(s).indexOf('今日') < 0) { dl = '<em class="dl ' + m[1] + '">' + m[0].replace(/<[^>]+>/g, '') + '</em>'; s = s.replace(m[0], '').replace(/[\s　]+$/, ''); }
+  return '<div class="kpi"><div class="t">' + t + '</div><div class="v">' + val + (u ? '<small>' + u + '</small>' : '') + dl + '</div><div class="s">' + (s || '&nbsp;') + '</div></div>';
+}
+/** 目盛りが切りのいい数字になるよう最大値と間隔を決める（4〜5本） */
+function ticks(max) {
+  max = max > 0 ? max : 1;
+  var raw = max / 4, p = Math.pow(10, Math.floor(Math.log10(raw))), r = raw / p;
+  var step = (r <= 1 ? 1 : r <= 2 ? 2 : r <= 2.5 ? 2.5 : r <= 5 ? 5 : 10) * p;
+  if (max < 4 && Number.isInteger(max)) step = 1;
+  var top = Math.ceil(max / step - 1e-9) * step;
+  return { max: top, step: step, n: Math.round(top / step) };
 }
 function kpis(c, html) { var d = h('div', { class: 'kpis' }, html); c.appendChild(d); countUp(d); }
 
@@ -222,14 +237,15 @@ function bars(el, labels, series, o) {
   var W = el.clientWidth || 600, H = o.height || 210, pl = 44, pr = 8, pt = 18, pb = 22;
   var max = 0;
   series.concat(o.lines || []).forEach(function (s) { s.vals.forEach(function (v) { if (v != null && v > max) max = v; }); });
-  max = max || 1;
+  var tk = ticks(max); max = tk.max;
   var gw = (W - pl - pr) / labels.length, ns = series.length, bw = Math.max(1, Math.min(26, gw * 0.78 / ns));
   var y = function (v) { return pt + (H - pt - pb) * (1 - Math.max(0, v) / max); };
   var f = o.fmt || function (v) { return fmt(v, o.dec || 0); };
+  var ft = o.fmt || function (v) { return fmt(v, tk.step % 1 ? 1 : 0); };
   var s = '<svg width="' + W + '" height="' + H + '">';
-  for (var g = 0; g <= 4; g++) {
-    var gv = max * g / 4;
-    s += '<line class="gl" x1="' + pl + '" x2="' + (W - pr) + '" y1="' + y(gv) + '" y2="' + y(gv) + '"/><text x="' + (pl - 6) + '" y="' + (y(gv) + 3) + '" text-anchor="end">' + f(gv) + '</text>';
+  for (var g = 0; g <= tk.n; g++) {
+    var gv = tk.step * g;
+    s += '<line class="gl" x1="' + pl + '" x2="' + (W - pr) + '" y1="' + y(gv) + '" y2="' + y(gv) + '"/><text x="' + (pl - 6) + '" y="' + (y(gv) + 3) + '" text-anchor="end">' + ft(gv) + '</text>';
   }
   var showVal = labels.length * ns <= 40, step = Math.ceil(labels.length / 24);
   labels.forEach(function (lb, i) {
@@ -278,16 +294,17 @@ function brush(el, buckets, st, onSel, tickFn) {
   var n = buckets.length, bw = (W - pl - pr) / Math.max(1, n);
   var max = 1;
   buckets.forEach(function (b) { if (b.v > max) max = b.v; });
+  var tk = ticks(max); max = tk.max;
   var y = function (v) { return pt + (H - pt - pb) * (1 - v / max); };
   var inR = function (b, r) { return r && b.s >= r[0] && b.e <= r[1]; };
   function draw(tmp, still) {
     var A = tmp && tmp.t === 'A' ? tmp.r : st.A, B = tmp && tmp.t === 'B' ? tmp.r : st.B;
     var s = '<svg class="brush' + (still ? ' still' : '') + '" width="' + W + '" height="' + H + '">';
-    for (var g = 0; g <= 2; g++) {
-      var gv = max * g / 2;
-      s += '<line class="gl" x1="' + pl + '" x2="' + (W - pr) + '" y1="' + y(gv) + '" y2="' + y(gv) + '"/><text x="' + (pl - 6) + '" y="' + (y(gv) + 3) + '" text-anchor="end">' + fmt(gv) + '</text>';
+    for (var g = 0; g <= tk.n; g++) {
+      var gv = tk.step * g;
+      s += '<line class="gl" x1="' + pl + '" x2="' + (W - pr) + '" y1="' + y(gv) + '" y2="' + y(gv) + '"/><text x="' + (pl - 6) + '" y="' + (y(gv) + 3) + '" text-anchor="end">' + fmt(gv, gv % 1 ? 1 : 0) + '</text>';
     }
-    [[A, '#8a8a8a', 'rgba(255,255,255,.07)']].forEach(function (z) {
+    [[A, '#ffffff', 'rgba(255,255,255,.06)']].forEach(function (z) {
       if (!z[0]) return;
       var i0 = -1, i1 = -1;
       buckets.forEach(function (b, i) { if (b.e >= z[0][0] && b.s <= z[0][1]) { if (i0 < 0) i0 = i; i1 = i; } });
@@ -376,6 +393,16 @@ function fitView(st, unit, T) {
   var vs = unit === 'day' ? [90, 180, 365] : [24, 60];
   if (need > +st.view) st.view = String(vs.filter(function (v) { return v >= need; })[0] || 'all');
 }
+/** 表示範囲を狭めたとき、選んだ期間が外に出たら同じ長さで最新側へ寄せる */
+function keepInView(st, unit) {
+  if (st.view === 'all' || !st.A) return;
+  var T = unit === 'day' ? dn(DATA[CUR].today) : mi(DATA[CUR].today);
+  var lo = unit === 'day' ? T - (+st.view) + 1 : T - (+st.view);
+  if (st.A[0] >= lo) return;
+  var L = st.A[1] - st.A[0] + 1, end = unit === 'day' ? T : T - 1;
+  st.A = [Math.max(lo, end - L + 1), end];
+  st.B = cmpRange(st, unit);
+}
 function shiftRange(A, dir, unit, T) {
   var L = A[1] - A[0] + 1;
   if (unit === 'day') {
@@ -416,7 +443,7 @@ function prefix(dates, from, to) {
 function viewCtl(top, st, rr, grans) {
   var c1 = h('div', { class: 'ctl' });
   c1.appendChild(h('span', { class: 'lbl' }, '表示範囲'));
-  chips(c1, [['90', '3ヶ月'], ['180', '6ヶ月'], ['365', '1年'], ['all', '全期間']], st.view, function (v) { st.view = v; st.anim = true; rr(); });
+  chips(c1, [['90', '3ヶ月'], ['180', '6ヶ月'], ['365', '1年'], ['all', '全期間']], st.view, function (v) { st.view = v; st.anim = true; keepInView(st, 'day'); rr(); });
   if (grans !== false) {
     c1.appendChild(h('span', { class: 'sep' }));
     c1.appendChild(h('span', { class: 'lbl' }, '棒の単位'));
@@ -548,7 +575,7 @@ function renderVisit(main) {
   ag.forEach(function (r) { if (!r.n && !r.nb) return; t += '<tr><td>' + esc(r.label) + '</td><td>' + r.n + '</td><td>' + r.j + '</td><td>' + fmt(r.r, 0) + '%</td>' + (B ? '<td>' + fmt(r.rb, 0) + '%</td>' : '') + '</tr>'; });
   var sx = by(function (e) { return e.sx; }, D.sexes);
   sx.forEach(function (r) { t += '<tr><td>' + esc(r.label) + '</td><td>' + r.n + '</td><td>' + r.j + '</td><td>' + fmt(r.r, 0) + '%</td>' + (B ? '<td>' + fmt(r.rb, 0) + '%</td>' : '') + '</tr>'; });
-  bars(g1, ag.map(function (r) { return r.label; }), AB(B, ag.map(function (r) { return r.r; }), ag.map(function (r) { return r.rb; }), '入会した割合 A', '入会した割合 B'), { fmt: function (v) { return fmt(v) + '%'; }, height: 180 });
+  bars(g1, ag.map(function (r) { return r.label; }), AB(B, ag.map(function (r) { return r.r; }), ag.map(function (r) { return r.rb; }), '入会した割合（選んだ期間）', '入会した割合（比較期間）'), { fmt: function (v) { return fmt(v) + '%'; }, height: 180 });
   g1.appendChild(h('div', null, t + '</table>'));
   var ord = [1, 2, 3, 4, 5, 6, 0];
   var wA = ord.map(function (d) { return sA.filter(function (e) { return e.w != null && wd(e.w) === d; }).length; });
@@ -723,7 +750,7 @@ function renderMember(main) {
   chips(c1, [['join', '入会'], ['leave', '退会']], st.kind, function (v) { st.kind = v; st.anim = true; rr(); });
   c1.appendChild(h('span', { class: 'sep' }));
   c1.appendChild(h('span', { class: 'lbl' }, '表示範囲'));
-  chips(c1, [['24', '2年'], ['60', '5年'], ['all', '全期間']], st.view, function (v) { st.view = v; st.anim = true; rr(); });
+  chips(c1, [['24', '2年'], ['60', '5年'], ['all', '全期間']], st.view, function (v) { st.view = v; st.anim = true; keepInView(st, 'month'); rr(); });
   top.appendChild(c1);
   periodBar(top, st, 'month', rr);
   var bel = h('div'); top.appendChild(bel);
