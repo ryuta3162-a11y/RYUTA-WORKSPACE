@@ -1,5 +1,5 @@
 ﻿/**
- * 分析ダッシュボード（Webアプリ ?page=dash）。元のシートは読むだけ。氏名・メールは返さない。
+ * 分析ダッシュボード（Webアプリ ?page=dash）。元のシートは読むだけ。メールは返さない。氏名は当日の入会・退会のみ。
  */
 var DASH_ITEMS_ = ['jl', 'visit', 'op', 'hq', 'master', 'member', 'unpaid'];
 
@@ -13,7 +13,7 @@ function dashPage_() {
 function dashData(item, force) {
   if (DASH_ITEMS_.indexOf(item) < 0) return { ok: false, message: 'unknown item' };
   var cache = CacheService.getScriptCache();
-  var key = 'dash5_' + item;
+  var key = 'dash6_' + item;
   if (!force) {
     var hit = dashCacheGet_(cache, key);
     if (hit) return hit;
@@ -82,12 +82,16 @@ function dashIdx_(list, v) {
 
 /** 入会・退会：受付メールの日時・区分 */
 function dashJl_(ss) {
-  var kinds = [], out = { kinds: kinds, join: [], leave: [] };
+  var kinds = [], out = { kinds: kinds, join: [], leave: [], todays: [] };
+  var today = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+  var hm = function (v) { return v instanceof Date ? Utilities.formatDate(v, 'Asia/Tokyo', 'H:mm') : (String(v).match(/\s(\d{1,2}:\d{2})/) || [])[1] || ''; };
   var js = ss.getSheetByName('経堂_入会');
   if (js && js.getLastRow() > 1) {
     js.getRange(2, 1, js.getLastRow() - 1, 4).getValues().forEach(function (r) {
       var t = dashDate_(r[0]);
-      if (t) out.join.push([t.d, t.h, dashIdx_(kinds, r[3]), dashYm_(r[2])]);
+      if (!t) return;
+      out.join.push([t.d, t.h, dashIdx_(kinds, r[3]), dashYm_(r[2])]);
+      if (t.d === today) out.todays.push(['join', hm(r[0]), String(r[1]).trim(), String(r[3]).trim()]);
     });
   }
   var ls = ss.getSheetByName('経堂_退会');
@@ -95,7 +99,9 @@ function dashJl_(ss) {
     ls.getRange(2, 1, ls.getLastRow() - 1, 6).getValues().forEach(function (r) {
       if (r[5] === true || String(r[5]).toUpperCase() === 'TRUE') return;
       var t = dashDate_(r[0]);
-      if (t) out.leave.push([t.d, t.h, dashIdx_(kinds, r[3]), dashYm_(r[2])]);
+      if (!t) return;
+      out.leave.push([t.d, t.h, dashIdx_(kinds, r[3]), dashYm_(r[2])]);
+      if (t.d === today) out.todays.push(['leave', hm(r[0]), String(r[1]).trim(), String(r[3]).trim()]);
     });
   }
   return out;

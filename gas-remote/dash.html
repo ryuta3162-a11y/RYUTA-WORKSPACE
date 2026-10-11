@@ -93,6 +93,24 @@
   .mfill::after { content: ''; position: absolute; right: -1px; top: -6px; width: 2px; height: 14px; background: #fff; box-shadow: 0 0 8px #fff, 0 0 18px #fff; animation: blink 1.6s ease-in-out infinite; }
   .mlab { display: flex; justify-content: space-between; margin-top: 8px; font-family: var(--serif); font-size: 12px; color: var(--mut); letter-spacing: .12em; }
   .mlab b { font-size: 20px; color: #fff; margin: 0 3px; font-weight: 700; text-shadow: 0 0 10px rgba(255,255,255,.45); }
+  .half2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 4px; }
+  .half2 > div { min-width: 0; border-top: 1px solid var(--line); }
+  @media (max-width: 1000px) { .half2 { grid-template-columns: 1fr; } }
+  .tlist { max-height: 340px; overflow: auto; }
+  .tlh { display: flex; align-items: baseline; justify-content: space-between; font-family: var(--serif); font-size: 14px; color: var(--hi); letter-spacing: .14em; border-bottom: 1px solid #fff; padding: 4px 2px 6px; margin-top: 6px; }
+  .tlh b { font-size: 20px; text-shadow: 0 0 10px rgba(255,255,255,.4); }
+  .tlr { display: grid; grid-template-columns: 10px 48px 1fr auto; gap: 10px; align-items: center; padding: 8px 2px; border-bottom: 1px solid #1a1a1a; animation: slidein .45s cubic-bezier(.2,.8,.2,1) both; font-variant-numeric: tabular-nums; }
+  .tlr:hover { background: #0e0e0e; }
+  .tlr i { width: 5px; height: 5px; border-radius: 50%; background: #555; }
+  .tlr.new i { background: #fff; box-shadow: 0 0 8px #fff; animation: blink 1.4s ease-in-out infinite; }
+  .tlr time { color: var(--mut); font-size: var(--fs-s); }
+  .tlr span { font-family: var(--serif); font-size: 14px; color: #fff; letter-spacing: .06em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tlr em { font-style: normal; font-size: 11px; color: var(--mut); border: 1px solid #2a2a2a; padding: 1px 6px; }
+  .tle { color: var(--dim); font-size: var(--fs-s); padding: 10px 2px 14px; letter-spacing: .2em; }
+  @keyframes slidein { from { opacity: 0; transform: translateX(12px); } }
+  .kswc .ksw { display: flex; gap: 2px; margin-top: 6px; }
+  .kswc .ksw .chip { padding: 1px 7px; font-size: 11px; border: 1px solid #2a2a2a; }
+  .kswc .ksw .chip.on { border-color: #fff; }
   .fbk { font-size: 13px; line-height: 1.9; color: var(--tx); border-left: 2px solid #fff; padding: 2px 0 2px 12px; margin: 4px 0 16px; box-shadow: -6px 0 12px -8px #fff; }
   .yb rect.b { fill: #3a3a3a; }
   .yb rect.b.ok, .yb rect.b.now { fill: #fff; }
@@ -1046,15 +1064,42 @@ function renderMaster(main) {
     '当月入会': '今月の入会数。' + (ij && ij.plan ? '計画 ' + ij.plan + '名に対して ' + Math.round((hd['当月入会'] || 0) / ij.plan * 100) + '%。' : ''),
     '当月末退会': '今月末で退会する人数。', '当月移籍': '今月の移籍の数。', '当月紹介': '今月の紹介の数。', '当月学割': '今月の学割の数。'
   };
-  kpis(live, (D.head || []).map(function (x) { return kpi(esc(x[0]), hd[x[0]], '', 0, '', lt[x[0]] || x[0]); }).join(''));
-  if (DATA.jl) {
-    var hrs = new Array(24).fill(0), lhrs = new Array(24).fill(0), nowH = new Date().getHours();
-    DATA.jl.join.forEach(function (r) { if (r[1] == null) return; var n = dn(r[0]); if (n === T) hrs[r[1]]++; if (n === T - 7) lhrs[r[1]]++; });
-    var tl = '<div class="tline">', hm = Math.max(2, Math.max.apply(null, hrs), Math.max.apply(null, lhrs));
-    for (var i = 0; i < 24; i++) tl += '<div class="th' + (i > nowH ? ' fut' : '') + (i === nowH ? ' now' : '') + '" data-t="' + i + '時台　今日 ' + hrs[i] + '名　先週の' + WD[wd(T)] + '曜 ' + lhrs[i] + '名"><b style="height:' + (hrs[i] / hm * 100) + '%"></b><s style="height:' + (lhrs[i] / hm * 100) + '%"></s>' + (hrs[i] ? '<em>' + hrs[i] + '</em>' : '') + '<span>' + (i % 3 === 0 ? i : '') + '</span></div>';
-    live.appendChild(h('div', { class: 'sub', 'data-t': '今日の入会を1時間ごとに表示。白＝今日、グレー＝先週の同じ曜日。下の白い線が今の時間です。' }, '時間帯の入会 <i class="qi">?</i>'));
-    live.appendChild(h('div', null, tl + '</div>'));
+  var nowH = new Date().getHours(), JLd = DATA.jl;
+  var lastWk = function (k) { return JLd ? JLd[k].filter(function (r) { return dn(r[0]) === T - 7 && (r[1] == null || r[1] <= nowH); }).length : null; };
+  var lwJ = lastWk('join'), lwL = lastWk('leave'), wdn = '先週の' + WD[wd(T)] + '曜';
+  lt['当日入会'] += lwJ != null ? wdn + 'の同じ時刻までは ' + lwJ + '名。右上はその比較です。' : '';
+  lt['当日退会'] += lwL != null ? wdn + 'の同じ時刻までは ' + lwL + '名。右上はその比較です。' : '';
+  var subs = (D.head || []).filter(function (x) { return /移籍|紹介|学割/.test(x[0]); }).map(function (x) { return x[0]; });
+  if (subs.indexOf(MS.kp) < 0) MS.kp = subs[0];
+  var kh = (D.head || []).filter(function (x) { return subs.indexOf(x[0]) < 0; }).map(function (x) {
+    var lw = x[0] === '当日入会' ? lwJ : x[0] === '当日退会' ? lwL : null;
+    return kpi(esc(x[0]), hd[x[0]], '', 0, lw != null ? chg(hd[x[0]], lw) : '', lt[x[0]] || x[0]);
+  }).join('');
+  if (MS.kp) kh += kpi(esc(MS.kp), hd[MS.kp], '', 0, '', (lt[MS.kp] || MS.kp) + '下のボタンで切り替えられます。');
+  kpis(live, kh);
+  if (MS.kp) {
+    var kl = live.querySelectorAll('.kpi'), ksw = h('div', { class: 'ksw' });
+    subs.forEach(function (n) { var bt = h('button', { class: 'chip' + (n === MS.kp ? ' on' : '') }, esc(n.replace(/^当月/, ''))); bt.onclick = function (e) { e.stopPropagation(); MS.kp = n; renderMaster(main); }; ksw.appendChild(bt); });
+    var kL = kl[kl.length - 1]; kL.classList.add('kswc'); kL.querySelector('.s').replaceWith(ksw);
   }
+  var half = h('div', { class: 'half2' });
+  var hl = h('div'), hr = h('div', { class: 'tlist' });
+  half.appendChild(hl); half.appendChild(hr);
+  live.appendChild(half);
+  if (JLd) {
+    var hA = new Array(24).fill(0), hB = new Array(24).fill(0);
+    JLd.join.forEach(function (r) { if (r[1] == null) return; var n = dn(r[0]); if (n > T - 7 && n <= T) hA[r[1]]++; else if (n > T - 14 && n <= T - 7) hB[r[1]]++; });
+    hl.appendChild(h('div', { class: 'sub', 'data-t': '直近7日（' + ds(T - 6) + '〜今日）の入会を、時計のように24時間を一周で表示。外に伸びるほど多い時間です。白＝直近7日、グレー＝その前の7日。' }, '時間帯の入会　直近7日 <i class="qi">?</i>'));
+    clock(hl, hA, hB);
+    var td = JLd.todays || [];
+    var lst = function (k, nm) {
+      var rows = td.filter(function (r) { return r[0] === k; }).sort(function (p, q) { return q[1].localeCompare(p[1], 'ja', { numeric: true }); });
+      var s = '<div class="tlh"><span>' + nm + '</span><b>' + rows.length + '</b></div>';
+      if (!rows.length) return s + '<div class="tle">なし</div>';
+      return s + rows.map(function (r, i) { return '<div class="tlr' + (i === 0 ? ' new' : '') + '" style="animation-delay:' + (i * 60) + 'ms"><i></i><time>' + esc(r[1]) + '</time><span>' + esc(r[2]) + '</span><em>' + esc(r[3]) + '</em></div>'; }).join('');
+    };
+    hr.innerHTML = '<div class="sub" data-t="今日届いた受付メールの氏名と時刻。新しい順です。">今日の入会・退会 <i class="qi">?</i></div>' + lst('join', '入会') + lst('leave', '退会');
+  } else hl.innerHTML = '<div class="loading">読み込み中</div>';
   main.appendChild(live);
 
   /* 目標リング */
