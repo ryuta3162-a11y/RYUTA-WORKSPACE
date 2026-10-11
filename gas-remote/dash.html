@@ -24,6 +24,15 @@
   .nv small { display: block; font-family: 'Segoe UI', Meiryo, sans-serif; font-size: 11px; color: var(--dim); margin-top: 2px; letter-spacing: 0; font-weight: normal; }
   .nv.on small { color: #444; }
   .navfoot { position: absolute; bottom: 18px; left: 16px; right: 16px; }
+  .rld { display: block; width: 40px; height: 40px; padding: 0; border: 0; background: transparent; cursor: pointer; border-radius: 50%; transition: transform .3s; }
+  .rld svg { display: block; overflow: visible; }
+  .rld .rt { fill: none; stroke: #2a2a2a; stroke-width: 1.5; }
+  .rld .ra { fill: none; stroke: #fff; stroke-width: 1.5; stroke-dasharray: 26 81; stroke-linecap: round; transform-origin: 20px 20px; filter: drop-shadow(0 0 3px #fff); transition: stroke-dasharray .4s; }
+  .rld .rd { fill: #fff; filter: drop-shadow(0 0 4px #fff); animation: blink 1.6s ease-in-out infinite; }
+  .rld:hover .ra { stroke-dasharray: 60 47; animation: rspin 1.4s linear infinite; }
+  .rld.spin .ra { stroke-dasharray: 40 67; animation: rspin .7s linear infinite; }
+  .rld.spin .rd { opacity: 0; animation: none; }
+  @keyframes rspin { to { transform: rotate(360deg); } }
   .btn { background: transparent; border: 1px solid var(--line2); color: var(--mut); padding: 8px 10px; cursor: pointer; font-family: inherit; font-size: var(--fs-s); width: 100%; transition: all .15s; letter-spacing: .1em; }
   .btn:hover { background: #fff; color: #000; border-color: #fff; }
   main { padding: 40px 56px 80px; min-width: 0; max-width: 1500px; }
@@ -236,16 +245,16 @@
 <body>
 <div class="app">
   <nav>
-    <div class="brand"><b>経堂ダッシュボード</b><div id="at">読み込み中</div></div><div class="navlbl">項目</div>
+    <div class="brand"><b>Work Space</b><div id="at">読み込み中</div></div><div class="navlbl">項目</div>
     <div id="items"></div>
-    <div class="navfoot"><button class="btn" id="reload">最新にする</button></div>
+    <div class="navfoot"><button class="rld" id="reload" data-t="最新のデータを読み込みます"><svg viewBox="0 0 40 40" width="40" height="40"><circle class="rt" cx="20" cy="20" r="17"/><circle class="ra" cx="20" cy="20" r="17"/><circle class="rd" cx="20" cy="3" r="2.2"/></svg></button></div>
   </nav>
   <main><div class="ph" id="ph"></div><div id="main"><div class="loading"></div></div></main>
 </div>
 <div id="tip"></div>
 <script>
 var ITEMS = [
-  { id: 'master', name: '経堂マスタ' },
+  { id: 'master', name: 'TOP' },
   { id: 'jl', name: '入会・退会' },
   { id: 'visit', name: '見学・体験' },
   { id: 'op', name: 'オプション' },
@@ -1303,16 +1312,19 @@ function render(id) {
 function open(id, force) {
   CUR = id; drawItems();
   var it = ITEMS.filter(function (x) { return x.id === id; })[0];
-  $('ph').innerHTML = '<h1>' + it.name + '</h1>';
+  $('ph').innerHTML = id === 'master' ? '' : '<h1>' + it.name + '</h1>';
+  $('ph').style.display = id === 'master' ? 'none' : '';
   try { if (location.hash !== '#' + id) history.replaceState(null, '', '#' + id); } catch (e) {}
   var main = $('main');
   main.innerHTML = '<div class="loading">読み込み中</div>';
+  var rb = $('reload'); if (force) rb.classList.add('spin');
   load(id, force).then(function (d) {
+    rb.classList.remove('spin');
     if (CUR !== id) return;
     $('at').textContent = d.at;
     [JL, VS, OP, MB].forEach(function (s) { s.anim = true; });
     render(id);
-  }, function (err) { main.innerHTML = '<div class="loading">読み込めませんでした　' + esc((err && err.message) || err) + '</div>'; });
+  }, function (err) { rb.classList.remove('spin'); main.innerHTML = '<div class="loading">読み込めませんでした　' + esc((err && err.message) || err) + '</div>'; });
 }
 $('reload').onclick = function () { if (CUR) open(CUR, true); };
 var rt; window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(function () { if (CUR && DATA[CUR]) render(CUR); }, 200); });
