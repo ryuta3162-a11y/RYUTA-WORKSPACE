@@ -520,7 +520,7 @@ function clock(el, a, b, o) {
   }
   var pk = a.indexOf(Math.max.apply(null, a));
   if (a[pk]) s += wedge(pk, a[pk], 7, 'wa peak', '#fff');
-  s += '<text x="' + cx + '" y="' + (cx - 4) + '" text-anchor="middle" class="dnl">ピーク</text><text x="' + cx + '" y="' + (cx + 16) + '" text-anchor="middle" class="dnv" style="font-size:20px">' + pk + ':00</text></svg>';
+  s += '<text x="' + cx + '" y="' + (cx - 4) + '" text-anchor="middle" class="dnl">いちばん多い</text><text x="' + cx + '" y="' + (cx + 16) + '" text-anchor="middle" class="dnv" style="font-size:20px">' + pk + '時台</text><text x="' + cx + '" y="' + (cx + 32) + '" text-anchor="middle" class="dnl">' + fmt(a[pk]) + '件</text></svg>';
   el.appendChild(h('div', { class: 'cwrap' }, s));
 }
 /** カレンダー型のヒートマップ（週×曜日）。cnt(a, b) は日番号の範囲の件数 */
