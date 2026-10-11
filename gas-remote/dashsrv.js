@@ -1,7 +1,7 @@
-/**
+﻿/**
  * 分析ダッシュボード（Webアプリ ?page=dash）。元のシートは読むだけ。氏名・メールは返さない。
  */
-var DASH_ITEMS_ = ['jl', 'op', 'hq', 'master', 'member'];
+var DASH_ITEMS_ = ['jl', 'visit', 'op', 'hq', 'master', 'member', 'unpaid'];
 
 function dashPage_() {
   var html = HtmlService.createHtmlOutputFromFile('dash');
@@ -13,13 +13,13 @@ function dashPage_() {
 function dashData(item, force) {
   if (DASH_ITEMS_.indexOf(item) < 0) return { ok: false, message: 'unknown item' };
   var cache = CacheService.getScriptCache();
-  var key = 'dash2_' + item;
+  var key = 'dash3_' + item;
   if (!force) {
     var hit = dashCacheGet_(cache, key);
     if (hit) return hit;
   }
   var ss = openWorkspaceSpreadsheet_();
-  var fn = { jl: dashJl_, op: dashOp_, hq: dashHq_, master: dashMaster_, member: dashMember_ }[item];
+  var fn = { jl: dashJl_, visit: dashVisit_, op: dashOp_, hq: dashHq_, master: dashMaster_, member: dashMember_, unpaid: dashUnpaid_ }[item];
   var data = fn(ss);
   data.ok = true;
   data.at = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm');
@@ -159,5 +159,54 @@ function dashMember_(ss) {
       out.leave.push([um, dashIdx_(plans, a[k][13]), dashIdx_(reasons, a[k][10]), Number(a[k][7]) || 0, Number(a[k][1]) || 0, String(a[k][0]).trim()]);
     }
   }
+  var freqs = [], times = [];
+  out.freqs = freqs; out.times = times; out.survey = []; out.sreasons = [];
+  var q = ss.getSheetByName('退会アンケート');
+  if (q && q.getLastRow() > 1) {
+    q.getRange(2, 1, q.getLastRow() - 1, 9).getValues().forEach(function (r) {
+      var ym = dashYm_(r[8]);
+      if (!ym || !String(r[0]).trim()) return;
+      out.survey.push([ym, dashIdx_(out.sreasons, r[2]), dashIdx_(freqs, r[5]), dashIdx_(times, r[7])]);
+    });
+  }
   return out;
+}
+
+/** 見学・体験：申請日・区分・性別・年代・希望日・時刻・入会したか */
+function dashVisit_(ss) {
+  var kinds = [], sexes = [], ages = [], out = { kinds: kinds, sexes: sexes, ages: ages, ev: [] };
+  var sh = ss.getSheetByName('見学体験申請');
+  if (!sh || sh.getLastRow() < 2) return out;
+  // 入会の受付メールと、メールアドレスまたは氏名（空白を除く）で照合。申し込みから KENGAKU_JOIN_WINDOW_DAYS_ 日以内の入会を数える
+  var norm = function (s) { return String(s || '').replace(/[\s\u3000]/g, '').toLowerCase(); };
+  var joins = {};
+  var js = ss.getSheetByName('経堂_入会');
+  if (js && js.getLastRow() > 1) {
+    js.getRange(2, 1, js.getLastRow() - 1, 6).getValues().forEach(function (r) {
+      var t = dashDate_(r[0]);
+      if (!t) return;
+      [norm(r[1]), norm(r[5])].forEach(function (k) { if (k) (joins[k] = joins[k] || []).push(t.d); });
+    });
+  }
+  var dayN = function (d) { return Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10)) / 864e5; };
+  sh.getRange(2, 1, sh.getLastRow() - 1, 9).getValues().forEach(function (r) {
+    var t = dashDate_(r[0]);
+    if (!t || !String(r[1]).trim()) return;
+    var w = dashDate_(r[7]);
+    var tm = r[8] instanceof Date ? Number(Utilities.formatDate(r[8], 'Asia/Tokyo', 'H')) : (String(r[8]).match(/^(\d{1,2}):/) || [])[1];
+    var n0 = dayN(t.d), best = null;
+    [norm(r[2]), norm(r[3])].forEach(function (k) {
+      (joins[k] || []).forEach(function (d) { var x = dayN(d) - n0; if (x >= -1 && x <= KENGAKU_JOIN_WINDOW_DAYS_ && (best === null || x < best)) best = Math.max(0, x); });
+    });
+    out.ev.push([t.d, dashIdx_(kinds, r[1]), dashIdx_(sexes, r[5]), dashIdx_(ages, r[6]), w ? w.d : '', tm == null ? null : Number(tm), best === null ? 0 : 1, best]);
+  });
+  return out;
+}
+
+/** 未納：未納管理_推移の月ごとの表（A〜K） */
+function dashUnpaid_(ss) {
+  var sh = ss.getSheetByName('未納管理_推移');
+  if (!sh) return { rows: [] };
+  var v = sh.getRange(6, 1, Math.max(1, sh.getLastRow() - 5), 11).getDisplayValues();
+  return { head: v[0], rows: v.slice(1).filter(function (r) { return /^\d+年\d+月$/.test(String(r[0]).trim()); }) };
 }
