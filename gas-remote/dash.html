@@ -5,113 +5,99 @@
 <meta charset="utf-8">
 <style>
   :root {
-    --bg: #070707; --panel: #0e0e0e; --line: #1d1d1d; --line2: #2a2a2a;
-    --tx: #e4e4e4; --mut: #6f6f6f; --dim: #3a3a3a; --hi: #ffffff; --red: #e5484d;
-    --fs: 13px; --fs-s: 11px; --fs-l: 26px;
-    --mono: 'Consolas', 'Menlo', 'Meiryo', monospace;
+    --bg: #191919; --side: #202020; --panel: #202020; --line: #2f2f2f; --line2: #3a3a3a; --hover: #2c2c2c;
+    --tx: #d4d4d4; --mut: #8f8f8f; --dim: #5a5a5a; --hi: #f0f0f0; --b: #6b6b6b;
+    --fs: 13px; --fs-s: 12px; --fs-l: 26px; --fs-h: 28px;
   }
   * { box-sizing: border-box; }
-  html, body { margin: 0; background: var(--bg); color: var(--tx); font-family: Meiryo, 'Hiragino Sans', sans-serif; font-size: var(--fs); }
-  body::before { content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 50;
-    background: repeating-linear-gradient(0deg, rgba(255,255,255,.018) 0 1px, transparent 1px 3px); }
-  body::after { content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
-    background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
-    background-size: 48px 48px; opacity: .25; mask-image: radial-gradient(ellipse at 60% 0%, #000 0%, transparent 70%); -webkit-mask-image: radial-gradient(ellipse at 60% 0%, #000 0%, transparent 70%); }
-  .app { display: grid; grid-template-columns: 210px 1fr; min-height: 100vh; position: relative; z-index: 1; }
-  nav { border-right: 1px solid var(--line); padding: 18px 0; position: sticky; top: 0; height: 100vh; background: rgba(7,7,7,.92); }
-  .brand { padding: 0 18px 18px; border-bottom: 1px solid var(--line); margin-bottom: 10px; }
-  .brand b { font-size: var(--fs); letter-spacing: .25em; color: var(--hi); }
-  .brand b::after { content: '▌'; color: var(--red); margin-left: 2px; animation: blink 1s steps(1) infinite; }
-  .brand div { font-family: var(--mono); font-size: var(--fs-s); color: var(--mut); margin-top: 8px; }
-  .brand .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--red); margin-right: 6px; box-shadow: 0 0 8px var(--red); animation: pulse 2s ease-in-out infinite; }
-  .nv { display: flex; align-items: baseline; gap: 10px; padding: 10px 18px; cursor: pointer; color: var(--mut); border-left: 2px solid transparent; transition: all .2s; position: relative; }
-  .nv i { font-style: normal; font-family: var(--mono); font-size: var(--fs-s); color: var(--dim); transition: color .2s; }
-  .nv:hover { color: var(--tx); background: rgba(255,255,255,.02); }
-  .nv.on { color: var(--hi); border-left-color: var(--red); background: linear-gradient(90deg, rgba(229,72,77,.10), transparent); }
-  .nv.on i { color: var(--red); }
-  .nv small { display: block; font-size: var(--fs-s); color: var(--dim); margin-top: 2px; }
+  html, body { margin: 0; background: var(--bg); color: var(--tx); font-family: 'Segoe UI', 'Hiragino Sans', Meiryo, sans-serif; font-size: var(--fs); -webkit-font-smoothing: antialiased; }
+  .app { display: grid; grid-template-columns: 232px 1fr; min-height: 100vh; }
+  nav { background: var(--side); padding: 14px 8px; position: sticky; top: 0; height: 100vh; border-right: 1px solid #262626; }
+  .brand { padding: 4px 10px 14px; }
+  .brand b { font-size: 14px; color: var(--hi); font-weight: 600; }
+  .brand div { font-size: var(--fs-s); color: var(--mut); margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .navlbl { font-size: 11px; color: var(--dim); padding: 10px 10px 4px; }
+  .nv { display: block; padding: 6px 10px; margin: 1px 0; cursor: pointer; color: var(--mut); border-radius: 5px; transition: background .15s, color .15s; }
+  .nv:hover { background: var(--hover); color: var(--tx); }
+  .nv.on { background: #2f2f2f; color: var(--hi); }
+  .nv small { display: block; font-size: 11px; color: var(--dim); margin-top: 1px; }
   .nv.on small { color: var(--mut); }
-  .navfoot { position: absolute; bottom: 16px; left: 18px; right: 18px; }
-  .btn { background: transparent; border: 1px solid var(--line2); color: var(--tx); padding: 6px 10px; cursor: pointer; font-family: inherit; font-size: var(--fs-s); width: 100%; transition: all .2s; }
-  .btn:hover { border-color: var(--red); color: var(--hi); box-shadow: 0 0 12px rgba(229,72,77,.25); }
-  main { padding: 18px 22px 60px; min-width: 0; }
-  .card { background: var(--panel); border: 1px solid var(--line); padding: 14px 16px; margin-bottom: 12px; position: relative; }
-  .card.anim { animation: rise .45s cubic-bezier(.2,.8,.2,1) both; }
-  .card::before { content: ''; position: absolute; left: -1px; top: -1px; width: 10px; height: 10px; border-left: 1px solid var(--red); border-top: 1px solid var(--red); }
-  .card::after { content: ''; position: absolute; right: -1px; bottom: -1px; width: 10px; height: 10px; border-right: 1px solid var(--line2); border-bottom: 1px solid var(--line2); }
-  .card h2 { font-size: var(--fs); margin: 0 0 12px; color: var(--hi); letter-spacing: .12em; font-weight: bold; display: flex; align-items: baseline; gap: 10px; }
-  .card h2 small { font-weight: normal; color: var(--mut); font-size: var(--fs-s); letter-spacing: 0; }
-  .row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .navfoot { position: absolute; bottom: 14px; left: 8px; right: 8px; }
+  .btn { background: transparent; border: 1px solid var(--line); color: var(--mut); padding: 7px 10px; cursor: pointer; font-family: inherit; font-size: var(--fs-s); width: 100%; border-radius: 5px; transition: all .15s; }
+  .btn:hover { background: var(--hover); color: var(--hi); }
+  main { padding: 36px 56px 80px; min-width: 0; max-width: 1500px; }
+  .ph { margin-bottom: 22px; animation: fade .3s both; }
+  .ph h1 { font-size: var(--fs-h); font-weight: 700; color: var(--hi); margin: 0 0 6px; letter-spacing: .01em; }
+  .ph div { color: var(--mut); font-size: var(--fs); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; margin-bottom: 14px; }
+  .card.anim { animation: rise .35s cubic-bezier(.2,.8,.2,1) both; }
+  .card h2 { font-size: 14px; margin: 0 0 12px; color: var(--hi); font-weight: 600; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .card h2 small { font-weight: normal; color: var(--mut); font-size: var(--fs-s); }
+  .row { display: flex; gap: 14px; flex-wrap: wrap; }
   .row > .card { flex: 1 1 400px; min-width: 0; }
-  .ctl { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; }
-  .lbl { font-size: var(--fs-s); color: var(--mut); margin-right: 2px; }
-  .chip { border: 1px solid var(--line2); background: transparent; color: var(--mut); padding: 4px 11px; cursor: pointer; font-family: inherit; font-size: var(--fs-s); transition: all .18s; }
-  .chip:hover { color: var(--tx); border-color: #444; }
-  .chip.on { background: var(--hi); color: #000; border-color: var(--hi); }
-  .chip.b.on { background: var(--red); border-color: var(--red); color: #fff; }
-  .sep { width: 1px; height: 18px; background: var(--line2); margin: 0 6px; }
-  .periods { display: flex; gap: 18px; font-size: var(--fs-s); margin: 6px 0 4px; flex-wrap: wrap; font-family: var(--mono); color: var(--tx); }
-  .pa::before, .pb::before, .lg::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 6px; }
+  .ctl { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-bottom: 8px; }
+  .lbl { font-size: var(--fs-s); color: var(--mut); margin-right: 4px; }
+  .chip { border: none; background: transparent; color: var(--mut); padding: 4px 9px; cursor: pointer; font-family: inherit; font-size: var(--fs-s); border-radius: 4px; transition: background .15s, color .15s; }
+  .chip:hover { background: var(--hover); color: var(--tx); }
+  .chip.on { background: #3a3a3a; color: var(--hi); }
+  .sep { width: 1px; height: 16px; background: var(--line); margin: 0 8px; }
+  .periods { display: flex; gap: 18px; font-size: var(--fs-s); margin: 8px 0 6px; flex-wrap: wrap; color: var(--tx); font-variant-numeric: tabular-nums; }
+  .pa::before, .pb::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; }
   .pa::before { background: var(--hi); }
-  .pb::before { background: var(--red); }
+  .pb::before { background: var(--b); }
   .hint { font-size: var(--fs-s); color: var(--mut); }
-  .kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(175px, 1fr)); gap: 8px; }
-  .kpi { border: 1px solid var(--line); padding: 10px 12px; background: linear-gradient(180deg, rgba(255,255,255,.015), transparent); transition: border-color .2s; }
-  .kpi:hover { border-color: var(--line2); }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+  .kpi { border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; transition: background .15s; }
+  .kpi:hover { background: #242424; }
   .kpi .t { font-size: var(--fs-s); color: var(--mut); }
-  .kpi .v { font-family: var(--mono); font-size: var(--fs-l); font-weight: bold; color: var(--hi); margin-top: 4px; letter-spacing: .02em; }
-  .kpi .v small { font-size: var(--fs-s); font-weight: normal; color: var(--mut); margin-left: 3px; font-family: Meiryo, sans-serif; }
-  .kpi .s { font-size: var(--fs-s); color: var(--mut); margin-top: 4px; font-family: var(--mono); }
-  .up { color: var(--hi); font-weight: bold; }
-  .down { color: var(--red); font-weight: bold; }
-  table { border-collapse: collapse; width: 100%; font-size: var(--fs); }
-  th, td { border-bottom: 1px solid var(--line); padding: 6px 9px; text-align: right; white-space: nowrap; }
-  td { font-family: var(--mono); }
-  th { color: var(--mut); font-weight: normal; font-size: var(--fs-s); position: sticky; top: 0; background: var(--panel); border-bottom: 1px solid var(--line2); }
-  th:first-child, td:first-child { text-align: left; font-family: Meiryo, sans-serif; }
-  tbody tr, table tr { transition: background .15s; }
-  tr:hover td { background: rgba(255,255,255,.025); }
+  .kpi .v { font-size: var(--fs-l); font-weight: 700; color: var(--hi); margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .kpi .v small { font-size: var(--fs-s); font-weight: normal; color: var(--mut); margin-left: 3px; }
+  .kpi .s { font-size: var(--fs-s); color: var(--mut); margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .up { color: var(--hi); font-weight: 600; }
+  .down { color: var(--mut); font-weight: 600; }
+  table { border-collapse: collapse; width: 100%; font-size: var(--fs); font-variant-numeric: tabular-nums; }
+  th, td { border-bottom: 1px solid var(--line); padding: 7px 10px; text-align: right; white-space: nowrap; }
+  th { color: var(--mut); font-weight: normal; font-size: var(--fs-s); position: sticky; top: 0; background: var(--panel); }
+  th:first-child, td:first-child { text-align: left; }
+  tr:hover td { background: #262626; }
   tr.click { cursor: pointer; }
-  tr.sel td { background: rgba(229,72,77,.10); }
+  tr.sel td { background: #2f2f2f; color: var(--hi); }
   .scroll { max-height: 480px; overflow: auto; }
-  .scroll::-webkit-scrollbar { width: 6px; height: 6px; } .scroll::-webkit-scrollbar-thumb { background: var(--line2); }
-  svg text { font-family: var(--mono); fill: var(--mut); font-size: 10px; }
-  svg .gl { stroke: var(--line); }
-  svg rect.b { transform-box: fill-box; transform-origin: 50% 100%; animation: grow .55s cubic-bezier(.2,.8,.2,1) both; transition: opacity .15s, filter .15s; }
-  svg rect.b:hover { filter: brightness(1.4); }
+  .scroll::-webkit-scrollbar { width: 8px; height: 8px; } .scroll::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 4px; }
+  svg text { font-family: 'Segoe UI', Meiryo, sans-serif; fill: var(--mut); font-size: 10px; }
+  svg .gl { stroke: #2a2a2a; }
+  svg rect.b { transform-box: fill-box; transform-origin: 50% 100%; animation: grow .5s cubic-bezier(.2,.8,.2,1) both; transition: filter .15s; }
+  svg rect.b:hover { filter: brightness(1.25); }
   svg.still rect.b { animation: none; }
-  svg .vl { fill: var(--tx); font-size: 9px; animation: fade .6s .3s both; }
-  svg polyline.ln { animation: fade .8s .25s both; }
+  svg .vl { fill: var(--tx); font-size: 10px; animation: fade .5s .25s both; }
+  svg .ln { animation: fade .6s .2s both; }
   .brush { user-select: none; touch-action: none; cursor: crosshair; }
-  .loading { padding: 80px; text-align: center; color: var(--mut); font-family: var(--mono); letter-spacing: .2em; }
-  .loading::after { content: '▌'; color: var(--red); animation: blink 1s steps(1) infinite; }
+  .loading { padding: 80px; text-align: center; color: var(--mut); }
   .reading td:first-child { color: var(--mut); width: 96px; font-size: var(--fs-s); }
-  .reading td { white-space: normal; text-align: left; font-family: Meiryo, sans-serif; line-height: 1.7; }
-  .heat td { text-align: center; font-size: var(--fs-s); padding: 5px 4px; transition: transform .15s; }
-  .hb { display: grid; grid-template-columns: minmax(120px, 34%) 1fr 54px 54px; gap: 6px 10px; align-items: center; font-size: var(--fs); }
+  .reading td { white-space: normal; text-align: left; line-height: 1.7; }
+  .heat td { text-align: center; font-size: var(--fs-s); padding: 6px 4px; }
+  .hb { display: grid; grid-template-columns: minmax(120px, 34%) 1fr 54px 54px; gap: 7px 10px; align-items: center; font-size: var(--fs); font-variant-numeric: tabular-nums; }
   .hb .nm { color: var(--tx); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .hb .tr { position: relative; height: 14px; background: rgba(255,255,255,.02); }
-  .hb .fa, .hb .fb { position: absolute; left: 0; height: 6px; transition: width .7s cubic-bezier(.2,.8,.2,1); width: 0; }
+  .hb .tr { position: relative; height: 14px; }
+  .hb .fa, .hb .fb { position: absolute; left: 0; height: 6px; border-radius: 3px; transition: width .6s cubic-bezier(.2,.8,.2,1); width: 0; }
   .hb .fa { top: 0; background: var(--hi); }
-  .hb .fb { bottom: 0; background: var(--red); }
-  .hb .va, .hb .vb { font-family: var(--mono); text-align: right; }
-  .hb .vb { color: var(--red); }
+  .hb .fb { bottom: 0; background: var(--b); }
+  .hb .va, .hb .vb { text-align: right; }
+  .hb .vb { color: var(--mut); }
   .lgd { display: flex; gap: 16px; font-size: var(--fs-s); color: var(--mut); margin-top: 6px; flex-wrap: wrap; }
-  .lgd i { display: inline-block; width: 8px; height: 8px; margin-right: 6px; }
-  #tip { position: fixed; pointer-events: none; z-index: 60; background: #000; border: 1px solid var(--line2); color: var(--hi); padding: 5px 9px; font-family: var(--mono); font-size: var(--fs-s); opacity: 0; transition: opacity .12s; white-space: nowrap; box-shadow: 0 0 16px rgba(0,0,0,.8); }
+  .lgd i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; }
+  #tip { position: fixed; pointer-events: none; z-index: 60; background: #252525; border: 1px solid #3a3a3a; border-radius: 5px; color: var(--hi); padding: 5px 9px; font-size: var(--fs-s); opacity: 0; transition: opacity .12s; white-space: nowrap; box-shadow: 0 4px 16px rgba(0,0,0,.5); font-variant-numeric: tabular-nums; }
   #tip.on { opacity: 1; }
   @keyframes grow { from { transform: scaleY(0); } }
-  @keyframes rise { from { opacity: 0; transform: translateY(8px); } }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
   @keyframes fade { from { opacity: 0; } }
-  @keyframes blink { 50% { opacity: 0; } }
-  @keyframes pulse { 50% { opacity: .35; box-shadow: 0 0 2px var(--red); } }
-  @media (max-width: 900px) { .app { grid-template-columns: 1fr; } nav { position: static; height: auto; } .navfoot { position: static; margin: 10px 18px; } }
+  @media (max-width: 900px) { .app { grid-template-columns: 1fr; } nav { position: static; height: auto; } .navfoot { position: static; margin: 10px; } main { padding: 20px; } }
 </style>
 </head>
 <body>
 <div class="app">
   <nav>
-    <div class="brand"><b>分析</b><div><span class="dot"></span><span id="at">接続中</span></div></div>
+    <div class="brand"><b>分析ダッシュボード</b><div id="at">読み込み中</div></div><div class="navlbl">項目</div>
     <div id="items"></div>
     <div class="navfoot"><button class="btn" id="reload">最新のデータにする</button></div>
   </nav>
@@ -129,7 +115,7 @@ var ITEMS = [
   { id: 'unpaid', name: '未納', sub: '件数・金額・回収率' }
 ];
 var DATA = {}, CUR = null, FIRST = true;
-var A_C = '#ececec', RED = '#e5484d', GRAY = '#2c2c2c', PREV = '#4a4a4a', FUT = '#8a8a8a';
+var A_C = '#e6e6e6', RED = '#6b6b6b', GRAY = '#3a3a3a', PREV = '#474747', FUT = '#9a9a9a', PLAN = '#bdbdbd';
 var WD = ['日', '月', '火', '水', '木', '金', '土'];
 
 /* ---------- 共通 ---------- */
@@ -162,7 +148,7 @@ function card(title, sub) {
   c.style.animationDelay = (FIRST ? CARD_I++ * 45 : 0) + 'ms';
   var t = h('h2', null, '<span>' + esc(title) + '</span>' + (sub ? '<small>' + sub + '</small>' : ''));
   c.appendChild(t);
-  if (FIRST) scramble(t.firstChild, title);
+  
   return c;
 }
 /** 見出しの文字を一瞬乱してから表示する */
@@ -290,7 +276,7 @@ function brush(el, buckets, st, onSel, tickFn) {
       var gv = max * g / 2;
       s += '<line class="gl" x1="' + pl + '" x2="' + (W - pr) + '" y1="' + y(gv) + '" y2="' + y(gv) + '"/><text x="' + (pl - 6) + '" y="' + (y(gv) + 3) + '" text-anchor="end">' + fmt(gv) + '</text>';
     }
-    [[B, RED, 'rgba(229,72,77,.08)'], [A, '#bdbdbd', 'rgba(255,255,255,.05)']].forEach(function (z) {
+    [[B, '#6b6b6b', 'rgba(255,255,255,.03)'], [A, '#9a9a9a', 'rgba(255,255,255,.06)']].forEach(function (z) {
       if (!z[0]) return;
       var i0 = -1, i1 = -1;
       buckets.forEach(function (b, i) { if (b.e >= z[0][0] && b.s <= z[0][1]) { if (i0 < 0) i0 = i; i1 = i; } });
@@ -333,7 +319,7 @@ function periodBar(host, st, unit, rerender) {
   quick.forEach(function (x) { var b = h('button', { class: 'chip' }, x[0]); b.onclick = function () { st.A = x[1]; if (st.cmp !== 'free') st.B = cmpRange(st, unit); st.anim = true; rerender(); }; q.appendChild(b); });
   q.appendChild(h('span', { class: 'sep' }));
   q.appendChild(h('span', { class: 'lbl' }, '比較期間B'));
-  chips(q, [['prev', '直前の同じ長さ'], ['yoy', '前年の同じ期間'], ['free', 'ドラッグで自由に'], ['none', 'なし']], st.cmp, function (v) { st.cmp = v; if (v !== 'free') st.B = cmpRange(st, unit); else st.mode = 'B'; rerender(); }, 'b');
+  chips(q, [['prev', '直前の同じ長さ'], ['yoy', '前年の同じ期間'], ['free', 'ドラッグで自由に'], ['none', 'なし']], st.cmp, function (v) { st.cmp = v; if (v !== 'free') st.B = cmpRange(st, unit); else st.mode = 'B'; rerender(); });
   host.appendChild(q);
   var p = h('div', { class: 'periods' });
   var lab = function (r) { if (!r) return 'なし'; return unit === 'day' ? ds(r[0]) + ' 〜 ' + ds(r[1]) + '（' + (r[1] - r[0] + 1) + '日）' : ms(r[0]) + ' 〜 ' + ms(r[1]) + '（' + (r[1] - r[0] + 1) + 'ヶ月）'; };
@@ -554,7 +540,7 @@ function renderOp(main) {
     return { o: o, a0: g(mA, i, 0), a1: g(mA, i, 1), a2: g(mA, i, 2), as: g(mA, i, 0) + g(mA, i, 1), bs: g(mB, i, 0) + g(mB, i, 1), b2: g(mB, i, 2) };
   }).filter(function (r) { return r.as || r.a2 || r.bs || r.b2; }).sort(function (p, q) { return Math.abs(q.as - q.bs) - Math.abs(p.as - p.bs); });
   var row = h('div', { class: 'row' });
-  var c3 = card('始めた件数', 'オプション別　白＝期間A　赤＝比較期間B');
+  var c3 = card('始めた件数', 'オプション別　白＝期間A　グレー＝比較期間B');
   row.appendChild(c3);
   var c2 = card('オプション別の内訳', '比較期間Bとの差が大きい順');
   var t = '<table><tr><th>オプション</th><th>自動付与</th><th>契約追加</th><th>始めた</th>' + (B ? '<th>B</th><th>差</th><th>増減</th>' : '') + '<th>停止</th>' + (B ? '<th>B</th>' : '') + '</tr>';
@@ -619,7 +605,7 @@ function renderHq(main) {
     (m.prev ? kpi('前年の同じ月', pVal, u, dec, '前年比 ' + chg(aVal, pVal)) : '') +
     kpi('今月（見込み）', m.act[curIdx], u, dec, m.plan ? '計画 ' + fmt(m.plan[curIdx], dec) : ''));
   main.appendChild(k);
-  bars(g, mons, series, { height: 240, fmt: f, lines: m.plan ? [{ name: '計画', color: RED, vals: m.plan, dash: '4 3' }] : [] });
+  bars(g, mons, series, { height: 240, fmt: f, lines: m.plan ? [{ name: '計画', color: PLAN, vals: m.plan, dash: '4 3' }] : [] });
   var c2 = card(m.n + '　月ごとの数字');
   var t = '<table><tr><th></th>' + mons.map(function (x) { return '<th>' + x + '</th>'; }).join('') + '</tr>';
   var line = function (nm, v) { return v ? '<tr><td>' + nm + '</td>' + v.map(function (x) { return '<td>' + (x == null ? '' : f ? f(x) : fmt(x)) + '</td>'; }).join('') + '</tr>' : ''; };
@@ -656,7 +642,7 @@ function renderMaster(main) {
   main.appendChild(c2);
   c2.querySelectorAll('tr.click').forEach(function (tr) { tr.onclick = function () { MS.r = tr.getAttribute('data-k'); renderMaster(main); window.scrollTo({ top: 0, behavior: 'smooth' }); }; });
   var plan = num(row[7]);
-  bars(g, head.slice(1, 6), [{ name: '実績（今月は途中）', color: function (i) { return i === 4 ? FUT : A_C; }, lc: A_C, vals: row.slice(1, 6).map(num) }], { height: 220, lines: plan != null ? [{ name: '今月の計画', color: RED, vals: [null, null, null, null, plan] }] : [] });
+  bars(g, head.slice(1, 6), [{ name: '実績（今月は途中）', color: function (i) { return i === 4 ? FUT : A_C; }, lc: A_C, vals: row.slice(1, 6).map(num) }], { height: 220, lines: plan != null ? [{ name: '今月の計画', color: PLAN, vals: [null, null, null, null, plan] }] : [] });
 }
 
 /* ---------- 会員分析 ---------- */
@@ -794,7 +780,7 @@ function renderUnpaid(main) {
     (yo != null ? kpi('前年の同じ月', yo, col[2], dec, '前年比 ' + chg(last, yo)) : '') +
     kpi('未納件数', num(R[R.length - 1][1]), '件', 0, '') + kpi('回収率', num(R[R.length - 1][4]), '%', 1, ''));
   main.insertBefore(k, top.nextSibling);
-  bars(g, labels, [{ name: col[1], color: function (i) { return i === labels.length - 1 ? RED : A_C; }, lc: A_C, vals: vals }], { height: 240, fmt: function (v) { return col[2] === '円' ? '¥' + fmt(v / 1000) + '千' : fmt(v, dec) + (col[2] === '%' ? '%' : ''); } });
+  bars(g, labels, [{ name: col[1], color: function (i) { return i === labels.length - 1 ? FUT : A_C; }, lc: A_C, vals: vals }], { height: 240, fmt: function (v) { return col[2] === '円' ? '¥' + fmt(v / 1000) + '千' : fmt(v, dec) + (col[2] === '%' ? '%' : ''); } });
   var c2 = card('月ごとの数字');
   var t = '<table><tr>' + [0, 1, 2, 3, 4, 6, 7, 8, 9, 10].map(function (i) { return '<th>' + esc(head[i]) + '</th>'; }).join('') + '</tr>';
   R.slice().reverse().forEach(function (r) { t += '<tr>' + [0, 1, 2, 3, 4, 6, 7, 8, 9, 10].map(function (i) { return '<td>' + esc(r[i]) + '</td>'; }).join('') + '</tr>'; });
@@ -807,12 +793,16 @@ var RENDER = { jl: renderJl, visit: renderVisit, op: renderOp, hq: renderHq, mas
 function drawItems() {
   var el = $('items'); el.innerHTML = '';
   ITEMS.forEach(function (it, i) {
-    var d = h('div', { class: 'nv' + (CUR === it.id ? ' on' : '') }, '<i>0' + (i + 1) + '</i><div>' + it.name + '<small>' + it.sub + '</small></div>');
+    var d = h('div', { class: 'nv' + (CUR === it.id ? ' on' : '') }, it.name + '<small>' + it.sub + '</small>');
     d.onclick = function () { open(it.id); };
     el.appendChild(d);
   });
 }
-function render(id) { CARD_I = 0; FIRST = true; RENDER[id]($('main')); FIRST = false; }
+function render(id) {
+  CARD_I = 0; FIRST = true; RENDER[id]($('main')); FIRST = false;
+  var it = ITEMS.filter(function (x) { return x.id === id; })[0];
+  $('main').insertBefore(h('div', { class: 'ph' }, '<h1>' + it.name + '</h1><div>' + it.sub + '</div>'), $('main').firstChild);
+}
 function open(id, force) {
   CUR = id; drawItems();
   try { if (location.hash !== '#' + id) history.replaceState(null, '', '#' + id); } catch (e) {}
