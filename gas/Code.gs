@@ -34,6 +34,7 @@ function doGet(e) {
   if (e && e.parameter && e.parameter.api) {
     return handleApiGet_(e);
   }
+  if (e && e.parameter && e.parameter.page === 'dash') return dashPage_();
   var html = HtmlService.createTemplateFromFile('index').evaluate();
   html.addMetaTag('viewport', 'width=device-width, initial-scale=1');
   html.setTitle('RYUTA Workspace');
@@ -1081,6 +1082,10 @@ function handleApiGet_(e) {
       var resx = UrlFetchApp.fetch(url, { headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true });
       if (resx.getResponseCode() !== 200) return jsonOutput_({ ok: false, code: resx.getResponseCode(), text: resx.getContentText().slice(0, 200) });
       return jsonOutput_({ ok: true, pdf: Utilities.base64Encode(resx.getBlob().getBytes()) });
+    }
+    if (api === 'dashData' && String(e.parameter.token || '') === RECEPTION_REFRESH_TOKEN_) {
+      var dj = dashData(String(e.parameter.item || ''), e.parameter.force === '1');
+      return ContentService.createTextOutput(typeof dj === 'string' ? dj : JSON.stringify(dj)).setMimeType(ContentService.MimeType.JSON);
     }
     if (api === 'ensureNippoMirror') {
       return jsonOutput_(ensureNippoMirror_());
