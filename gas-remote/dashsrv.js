@@ -13,7 +13,7 @@ function dashPage_() {
 function dashData(item, force) {
   if (DASH_ITEMS_.indexOf(item) < 0) return { ok: false, message: 'unknown item' };
   var cache = CacheService.getScriptCache();
-  var key = 'dash4_' + item;
+  var key = 'dash5_' + item;
   if (!force) {
     var hit = dashCacheGet_(cache, key);
     if (hit) return hit;
@@ -139,7 +139,20 @@ function dashMaster_(ss) {
       if (/^当(日|月)/.test(lb) && lb.length <= 8) head.push([lb, String(top[i + 1][j]).trim()]);
     }
   }
-  return { rows: sh.getRange('A16:J60').getDisplayValues().filter(function (r) { return String(r[0]).trim(); }), reading: reading, head: head };
+  return { rows: sh.getRange('A16:J60').getDisplayValues().filter(function (r) { return String(r[0]).trim(); }), reading: reading, head: head, year: dashYear_(ss) };
+}
+
+/** 【経堂】会員動向の年度（4〜3月）の計画・実績/見込・前年。{ mon: [4..3], rows: { 入会計画: [12], ... } } */
+function dashYear_(ss) {
+  var sh = ss.getSheetByName('【経堂】会員動向');
+  if (!sh) return null;
+  var v = sh.getRange('B1:N20').getDisplayValues(), rows = {};
+  var key = function (s) { return String(s).replace(/[\s|｜]/g, ''); };
+  for (var i = 1; i < v.length; i++) {
+    var k = key(v[i][0]);
+    if (k && !rows[k]) rows[k] = v[i].slice(1).map(function (x) { var n = Number(String(x).replace(/[^\d.\-]/g, '')); return String(x).trim() === '' || isNaN(n) ? null : n; });
+  }
+  return { mon: v[0].slice(1).map(Number), rows: rows };
 }
 
 /** 会員分析：累計入会データ（入会月・退会月・プラン・年齢・性別）と累計退会データ（退会月・理由・在籍） */
