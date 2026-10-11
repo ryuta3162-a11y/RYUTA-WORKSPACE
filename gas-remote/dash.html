@@ -936,7 +936,8 @@ function renderMaster(main) {
   live.classList.add('live');
   live.querySelector('h2').insertAdjacentHTML('afterbegin', '<i class="dot"></i>');
   live.querySelector('h2').insertAdjacentHTML('beforeend', '<small class="clock">' + (M + 1) + '月' + day + '日　' + D.at.slice(11) + '</small>');
-  live.appendChild(h('div', { class: 'mbar', 'data-t': '今月' + N + '日のうち' + day + '日目（' + pct + '%）。計画どおりなら、どの目標も今日の時点で ' + pct + '% くらいまで進んでいるのが目安です。' },
+  var ji0 = get('入会実績'), pj0 = ji0 ? num(ji0[7]) : null;
+  live.appendChild(h('div', { class: 'mbar', 'data-t': '今月は' + N + '日あり、今日で' + day + '日目（月の' + pct + '%が経過）。' + (pj0 ? '例：入会の計画が' + pj0 + '名なら、今日の時点で約' + Math.round(pj0 * pace) + '名（' + pj0 + '×' + pct + '%）入っていれば計画どおりのペースです。' : '') },
     '<div class="mfill" data-w="' + (pace * 100) + '"></div><span>今月 ' + day + ' / ' + N + '日</span>'));
   var ji = get('入会実績'), plj = ji ? num(ji[7]) : null;
   var lt = {
