@@ -56,6 +56,66 @@
   .sel:focus { outline: none; border-color: #fff; }
   .periods b { color: var(--hi); font-weight: 700; }
   .periods .hint { margin-left: auto; }
+  .card h2 > span { text-transform: uppercase; }
+  .dwrap { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
+  .dn .seg { transition: stroke-dasharray .9s cubic-bezier(.2,.8,.2,1); cursor: default; }
+  .dn .seg:hover { filter: brightness(1.3); }
+  svg .dnv { font-family: var(--serif); font-size: 26px; font-weight: 700; fill: #fff; }
+  svg .dnl { font-size: 9px; letter-spacing: .18em; fill: var(--mut); }
+  .dlg { display: grid; grid-template-columns: 10px minmax(80px, auto) auto auto; gap: 6px 10px; align-items: center; font-size: var(--fs-s); font-variant-numeric: tabular-nums; flex: 1; min-width: 180px; max-width: 380px; }
+  .dlg > div { display: contents; }
+  .dlg i { width: 10px; height: 10px; display: inline-block; }
+  .dlg .nm { color: var(--tx); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dlg b { color: var(--hi); text-align: right; }
+  .dlg em { font-style: normal; color: var(--mut); text-align: right; }
+  .dpair { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
+  .cwrap { display: flex; justify-content: center; margin-bottom: 10px; }
+  .clk path { transform-origin: 140px 140px; animation: pop .6s cubic-bezier(.2,.8,.2,1) both; }
+  .clk text { font-size: 10px; }
+  .scroll-x { overflow-x: auto; }
+  .cal .cc { animation: fade .5s both; }
+  .cal text { font-size: 9px; letter-spacing: .1em; }
+  .burn .bl { font-size: 10px; fill: var(--mut); letter-spacing: .05em; }
+  .burn .bl.hi { fill: #fff; font-weight: 700; font-size: 11px; }
+  .burn .pulse { animation: pulse 1.8s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+  .mbar { position: relative; height: 22px; border: 1px solid var(--line2); margin-bottom: 14px; }
+  .mbar .mfill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: repeating-linear-gradient(90deg, #fff 0 2px, transparent 2px 6px); opacity: .5; transition: width 1.2s cubic-bezier(.2,.8,.2,1); }
+  .mbar span { position: absolute; right: 8px; top: 3px; font-size: 11px; letter-spacing: .16em; color: var(--hi); }
+  .tline { display: grid; grid-template-columns: repeat(24, 1fr); gap: 3px; height: 70px; }
+  .th { position: relative; border-bottom: 1px solid #333; }
+  .th b, .th s { position: absolute; bottom: 0; display: block; transition: height .6s; }
+  .th b { left: 20%; right: 20%; background: #fff; z-index: 1; }
+  .th s { left: 0; right: 0; background: #262626; }
+  .th span { position: absolute; bottom: -16px; left: 0; font-size: 9px; color: var(--mut); }
+  .th.fut { opacity: .35; }
+  .th em { position: absolute; top: -14px; left: 0; right: 0; text-align: center; font-style: normal; font-size: 10px; color: #fff; font-weight: 700; }
+  .live .kpis { grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 8px; }
+  .live .kpi { padding: 9px 12px 6px; }
+  .live .kpi .s { display: none; }
+  .live .tline { height: 52px; margin-top: 18px; }
+  .th.now { border-bottom: 2px solid #fff; }
+  .tline { margin-bottom: 18px; }
+  .rings { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+  .rc { display: flex; gap: 16px; align-items: center; border: 1px solid var(--line); border-top: 1px solid #fff; padding: 12px; }
+  .rs { flex: 1; min-width: 0; }
+  .rn { font-family: var(--serif); font-size: 16px; font-weight: 700; color: var(--hi); margin-bottom: 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .tag { font-family: 'Segoe UI', Meiryo, sans-serif; font-style: normal; font-size: 10px; letter-spacing: .14em; border: 1px solid var(--line2); color: var(--mut); padding: 1px 6px; }
+  .tag.ok { background: #fff; color: #000; border-color: #fff; font-weight: 700; }
+  .rl { display: flex; justify-content: space-between; font-size: var(--fs-s); padding: 3px 0; border-bottom: 1px solid #161616; font-variant-numeric: tabular-nums; }
+  .rl span { color: var(--mut); letter-spacing: .12em; font-size: 10px; }
+  .rl b { color: var(--hi); }
+  .rg .rgf { transition: stroke-dasharray 1.1s cubic-bezier(.2,.8,.2,1); }
+  svg .rgv { font-family: var(--serif); font-size: 28px; font-weight: 700; fill: #fff; }
+  svg .rgu { font-size: 12px; fill: var(--mut); }
+  .pg { display: grid; grid-template-columns: minmax(110px, 30%) 1fr 70px 44px; gap: 9px 12px; align-items: center; font-size: var(--fs); font-variant-numeric: tabular-nums; }
+  .pg .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pg .tr { position: relative; height: 10px; background: #141414; }
+  .pg .pf { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: #fff; transition: width .9s cubic-bezier(.2,.8,.2,1); }
+  .pg .tr i { position: absolute; top: -4px; bottom: -4px; width: 1px; background: #8a8a8a; }
+  .pg .va { text-align: right; color: var(--hi); } .pg .va small { color: var(--mut); }
+  .pg .vb { text-align: right; color: var(--mut); font-size: var(--fs-s); }
+  @keyframes pop { from { opacity: 0; transform: scale(.6); } }
+  @keyframes pulse { from { transform: scale(1); opacity: .9; } to { transform: scale(4); opacity: 0; } }
   .kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
   .kpi { border: 1px solid var(--line); border-top: 1px solid #fff; padding: 12px 14px 14px; transition: background .15s; }
   .kpi:hover { background: #0e0e0e; }
@@ -110,26 +170,27 @@
 <body>
 <div class="app">
   <nav>
-    <div class="brand"><b>分析ダッシュボード</b><div id="at">読み込み中</div></div><div class="navlbl">項目</div>
+    <div class="brand"><b>KYODO ANALYTICS</b><div id="at">LOADING</div></div><div class="navlbl">ITEMS</div>
     <div id="items"></div>
-    <div class="navfoot"><button class="btn" id="reload">最新のデータにする</button></div>
+    <div class="navfoot"><button class="btn" id="reload">REFRESH</button></div>
   </nav>
-  <main><div class="ph" id="ph"></div><div id="main"><div class="loading">項目を選択</div></div></main>
+  <main><div class="ph" id="ph"></div><div id="main"><div class="loading">SELECT</div></div></main>
 </div>
 <div id="tip"></div>
 <script>
 var ITEMS = [
-  { id: 'jl', name: '入会・退会', sub: '日・曜日・時間帯' },
-  { id: 'visit', name: '見学・体験', sub: '申し込みから入会まで' },
-  { id: 'op', name: 'オプション', sub: '自動付与・契約追加・停止' },
-  { id: 'hq', name: '会員動向', sub: '計画・実績・前年' },
-  { id: 'master', name: '経堂マスタ', sub: '5ヶ月の数字と今月の読み' },
-  { id: 'member', name: '会員分析', sub: '継続率・プラン・退会理由' },
-  { id: 'unpaid', name: '未納', sub: '件数・金額・回収率' }
+  { id: 'master', name: '経堂マスタ', sub: 'LIVE · TARGET · PACE' },
+  { id: 'jl', name: '入会・退会', sub: 'DAY · WEEKDAY · HOUR' },
+  { id: 'visit', name: '見学・体験', sub: 'APPLY → JOIN' },
+  { id: 'op', name: 'オプション', sub: 'START · STOP · SHARE' },
+  { id: 'hq', name: '会員動向', sub: 'PLAN · ACTUAL · LAST YEAR' },
+  { id: 'member', name: '会員分析', sub: 'RETENTION · PLAN · CHURN' },
+  { id: 'unpaid', name: '未納', sub: 'COUNT · AMOUNT · RECOVERY' }
 ];
 var DATA = {}, CUR = null, FIRST = true, KEYNAV = null;
 var A_C = '#ffffff', RED = '#6e6e6e', GRAY = '#2b2b2b', PREV = '#3d3d3d', FUT = '#9a9a9a', PLAN = '#cfcfcf';
-var WD = ['日', '月', '火', '水', '木', '金', '土'];
+var WD = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+var MON3 = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 
 /* ---------- 共通 ---------- */
 function $(id) { return document.getElementById(id); }
@@ -191,7 +252,7 @@ function countUp(root) {
 function kpi(t, v, u, d, s) {
   var val = v == null || isNaN(v) ? '—' : '<span data-v="' + v + '" data-d="' + (d || 0) + '">' + fmt(v, d || 0) + '</span>';
   var m = String(s || '').match(/<span class="(up|down)">[^<]*<\/span>/), dl = '';
-  if (m && String(s).indexOf('今日') < 0) { dl = '<em class="dl ' + m[1] + '">' + m[0].replace(/<[^>]+>/g, '') + '</em>'; s = s.replace(m[0], '').replace(/[\s　]+$/, ''); }
+  if (m && String(s).indexOf('TODAY') < 0) { dl = '<em class="dl ' + m[1] + '">' + m[0].replace(/<[^>]+>/g, '') + '</em>'; s = s.replace(m[0], '').replace(/[\s　]+$/, ''); }
   return '<div class="kpi"><div class="t">' + t + '</div><div class="v">' + val + (u ? '<small>' + u + '</small>' : '') + dl + '</div><div class="s">' + (s || '&nbsp;') + '</div></div>';
 }
 /** 目盛りが切りのいい数字になるよう最大値と間隔を決める（4〜5本） */
@@ -276,13 +337,115 @@ function hbars(el, rows, hasB, f) {
   var g = h('div', { class: 'hb' });
   rows.forEach(function (r) {
     g.appendChild(h('div', { class: 'nm', title: r.label }, esc(r.label)));
-    var tr = h('div', { class: 'tr' }, '<div class="fa" data-w="' + (r.a / max * 100) + '" data-t="' + esc(r.label + '　選んだ期間　' + f(r.a)) + '"></div>' + (hasB ? '<div class="fb" data-w="' + ((r.b || 0) / max * 100) + '" data-t="' + esc(r.label + '　比較期間　' + f(r.b || 0)) + '"></div>' : ''));
+    var tr = h('div', { class: 'tr' }, '<div class="fa" data-w="' + (r.a / max * 100) + '" data-t="' + esc(r.label + '　SELECTED　' + f(r.a)) + '"></div>' + (hasB ? '<div class="fb" data-w="' + ((r.b || 0) / max * 100) + '" data-t="' + esc(r.label + '　COMPARE　' + f(r.b || 0)) + '"></div>' : ''));
     g.appendChild(tr);
     g.appendChild(h('div', { class: 'va' }, f(r.a)));
     g.appendChild(h('div', { class: 'vb' }, hasB ? f(r.b || 0) : ''));
   });
   el.appendChild(g);
   requestAnimationFrame(function () { requestAnimationFrame(function () { g.querySelectorAll('[data-w]').forEach(function (x) { x.style.width = x.getAttribute('data-w') + '%'; }); }); });
+}
+var SHADES = ['#ffffff', '#c4c4c4', '#929292', '#6a6a6a', '#4a4a4a', '#333333', '#242424'];
+function later(fn) { requestAnimationFrame(function () { requestAnimationFrame(fn); }); }
+/** ドーナツ。rows: [{label, v}]。7件目以降は OTHER にまとめる */
+function donut(el, rows, o) {
+  o = o || {};
+  rows = rows.filter(function (r) { return r.v > 0; }).sort(function (p, q) { return q.v - p.v; });
+  if (rows.length > 7) { var rest = rows.slice(6).reduce(function (p, r) { return p + r.v; }, 0); rows = rows.slice(0, 6).concat([{ label: 'OTHER', v: rest }]); }
+  var tot = rows.reduce(function (p, r) { return p + r.v; }, 0);
+  var S = o.size || 170, rr = S / 2 - 12, sw = o.sw || 14, C = 2 * Math.PI * rr, off = 0;
+  var s = '<svg class="dn" width="' + S + '" height="' + S + '" viewBox="0 0 ' + S + ' ' + S + '"><circle cx="' + S / 2 + '" cy="' + S / 2 + '" r="' + rr + '" fill="none" stroke="#141414" stroke-width="' + sw + '"/>';
+  rows.forEach(function (r, i) {
+    var len = Math.max(0, r.v / tot * C - (rows.length > 1 ? 2 : 0));
+    s += '<circle class="seg" cx="' + S / 2 + '" cy="' + S / 2 + '" r="' + rr + '" fill="none" stroke="' + SHADES[i % SHADES.length] + '" stroke-width="' + sw + '" stroke-dasharray="0 ' + C + '" data-len="' + len + '" data-c="' + C + '" stroke-dashoffset="' + (-off) + '" transform="rotate(-90 ' + S / 2 + ' ' + S / 2 + ')" style="transition-delay:' + (i * 90) + 'ms" data-t="' + esc(r.label + '　' + fmt(r.v) + '　' + fmt(r.v / tot * 100, 1) + '%') + '"/>';
+    off += r.v / tot * C;
+  });
+  s += '<text x="' + S / 2 + '" y="' + (S / 2 + 4) + '" text-anchor="middle" class="dnv">' + fmt(tot) + '</text><text x="' + S / 2 + '" y="' + (S / 2 + 22) + '" text-anchor="middle" class="dnl">' + esc(o.unit || 'TOTAL') + '</text></svg>';
+  var lg = '<div class="dlg">';
+  rows.forEach(function (r, i) { lg += '<div><i style="background:' + SHADES[i % SHADES.length] + '"></i><span class="nm">' + esc(r.label) + '</span><b>' + fmt(r.v) + '</b><em>' + fmt(r.v / tot * 100, 0) + '%</em></div>'; });
+  var w = h('div', { class: 'dwrap' }, tot ? s + lg + '</div>' : '<div class="hint">NO DATA</div>');
+  el.appendChild(w);
+  later(function () { w.querySelectorAll('.seg').forEach(function (c) { c.setAttribute('stroke-dasharray', c.getAttribute('data-len') + ' ' + c.getAttribute('data-c')); }); });
+}
+/** 24時間の放射状グラフ。a, b: 24個の値 */
+function clock(el, a, b, o) {
+  o = o || {};
+  var S = o.size || 280, cx = S / 2, r0 = 46, R = S / 2 - 26, max = 1;
+  a.concat(b || []).forEach(function (v) { if (v > max) max = v; });
+  var pt = function (ang, r) { var t = (ang - 90) * Math.PI / 180; return [cx + r * Math.cos(t), cx + r * Math.sin(t)]; };
+  var wedge = function (i, v, w, cls, col) {
+    var r1 = r0 + (R - r0) * v / max, a0 = i * 15 - w / 2, a1 = i * 15 + w / 2;
+    var p0 = pt(a0, r0), p1 = pt(a0, r1), p2 = pt(a1, r1), p3 = pt(a1, r0);
+    return '<path class="' + cls + '" style="animation-delay:' + (i * 25) + 'ms" d="M' + p0 + 'L' + p1 + 'A' + r1 + ',' + r1 + ' 0 0 1 ' + p2 + 'L' + p3 + 'A' + r0 + ',' + r0 + ' 0 0 0 ' + p0 + 'Z" fill="' + col + '" data-t="' + esc(i + ':00　' + (cls === 'wb' ? 'COMPARE' : 'SELECTED') + '　' + fmt(v)) + '"/>';
+  };
+  var s = '<svg class="clk" width="' + S + '" height="' + S + '">';
+  [0.25, 0.5, 0.75, 1].forEach(function (f) { s += '<circle cx="' + cx + '" cy="' + cx + '" r="' + (r0 + (R - r0) * f) + '" fill="none" stroke="#1a1a1a"/>'; });
+  for (var i = 0; i < 24; i++) {
+    var q = pt(i * 15, R + 12);
+    if (i % 3 === 0) s += '<text x="' + q[0] + '" y="' + (q[1] + 3) + '" text-anchor="middle">' + i + '</text>';
+    if (b && b[i]) s += wedge(i, b[i], 13, 'wb', '#3a3a3a');
+    if (a[i]) s += wedge(i, a[i], 7, 'wa', '#fff');
+  }
+  var pk = a.indexOf(Math.max.apply(null, a));
+  s += '<text x="' + cx + '" y="' + (cx - 4) + '" text-anchor="middle" class="dnl">PEAK</text><text x="' + cx + '" y="' + (cx + 16) + '" text-anchor="middle" class="dnv" style="font-size:20px">' + pk + ':00</text></svg>';
+  el.appendChild(h('div', { class: 'cwrap' }, s));
+}
+/** カレンダー型のヒートマップ（週×曜日）。cnt(a, b) は日番号の範囲の件数 */
+function calHeat(el, from, to, cnt) {
+  var start = from - ((wd(from) + 6) % 7), weeks = Math.ceil((to - start + 1) / 7), gp = 3, pl = 34, pt = 18;
+  var cs = Math.max(9, Math.min(20, Math.floor(((el.clientWidth || 800) - 40 - pl) / weeks) - gp));
+  var max = 1, x, v;
+  for (x = from; x <= to; x++) { v = cnt(x, x); if (v > max) max = v; }
+  var W = pl + weeks * (cs + gp), H = pt + 7 * (cs + gp);
+  var s = '<svg class="cal" width="' + W + '" height="' + H + '">', lastM = -1;
+  ['MON', 'WED', 'FRI', 'SUN'].forEach(function (d, i) { s += '<text x="0" y="' + (pt + [0, 2, 4, 6][i] * (cs + gp) + 10) + '">' + d + '</text>'; });
+  for (var w = 0; w < weeks; w++) {
+    var m = dd(start + w * 7).getUTCMonth();
+    if (m !== lastM) { s += '<text x="' + (pl + w * (cs + gp)) + '" y="10">' + MON3[m] + '</text>'; lastM = m; }
+    for (var d = 0; d < 7; d++) {
+      x = start + w * 7 + d;
+      if (x < from || x > to) continue;
+      v = cnt(x, x);
+      var al = v ? 0.12 + 0.88 * v / max : 0;
+      s += '<rect class="cc" style="animation-delay:' + (w * 12) + 'ms" x="' + (pl + w * (cs + gp)) + '" y="' + (pt + d * (cs + gp)) + '" width="' + cs + '" height="' + cs + '" fill="' + (v ? 'rgba(255,255,255,' + al.toFixed(2) + ')' : '#111') + '" data-t="' + esc(ds(x) + ' ' + WD[wd(x)] + '　' + v) + '"/>';
+    }
+  }
+  el.appendChild(h('div', { class: 'scroll-x' }, s + '</svg>'));
+}
+/** 月内の積み上げ（実績・計画・前月・着地の見込み）。cur/prev: 日ごとの累計 */
+function burn(el, o) {
+  var W = el.clientWidth || 700, H = o.height || 230, pl = 40, pr = 54, pt = 14, pb = 24, N = o.days;
+  var top = Math.max(o.plan || 0, o.fc || 0, o.prev ? o.prev[o.prev.length - 1] || 0 : 0, o.cur[o.cur.length - 1] || 0, 1);
+  var tk = ticks(top); top = tk.max;
+  var X = function (d) { return pl + (W - pl - pr) * d / N; }, Y = function (v) { return pt + (H - pt - pb) * (1 - v / top); };
+  var s = '<svg class="burn" width="' + W + '" height="' + H + '">';
+  for (var g = 0; g <= tk.n; g++) s += '<line class="gl" x1="' + pl + '" x2="' + (W - pr) + '" y1="' + Y(tk.step * g) + '" y2="' + Y(tk.step * g) + '"/><text x="' + (pl - 6) + '" y="' + (Y(tk.step * g) + 3) + '" text-anchor="end">' + fmt(tk.step * g) + '</text>';
+  for (var d = 1; d <= N; d++) if (d === 1 || d % 5 === 0) s += '<text x="' + X(d) + '" y="' + (H - 6) + '" text-anchor="middle">' + d + '</text>';
+  var line = function (arr, cls, col, dash) { var p = ['' + X(0) + ',' + Y(0)]; arr.forEach(function (v, i) { if (v != null) p.push(X(i + 1) + ',' + Y(v)); }); return '<polyline class="' + cls + '" points="' + p.join(' ') + '" fill="none" stroke="' + col + '" stroke-width="' + (cls === 'bc' ? 2.2 : 1.4) + '"' + (dash ? ' stroke-dasharray="' + dash + '"' : '') + '/>'; };
+  if (o.plan) s += '<line x1="' + X(0) + '" y1="' + Y(0) + '" x2="' + X(N) + '" y2="' + Y(o.plan) + '" stroke="#5a5a5a" stroke-dasharray="4 4"/><text x="' + (X(N) + 6) + '" y="' + (Y(o.plan) + 3) + '" class="bl">PLAN ' + fmt(o.plan) + '</text>';
+  if (o.prev) s += line(o.prev, 'bp', '#5a5a5a', '1 0');
+  var d0 = o.cur.length, c0 = o.cur[d0 - 1] || 0;
+  var area = 'M' + X(0) + ',' + Y(0) + ' ' + o.cur.map(function (v, i) { return 'L' + X(i + 1) + ',' + Y(v); }).join(' ') + ' L' + X(d0) + ',' + Y(0) + 'Z';
+  s += '<path d="' + area + '" fill="rgba(255,255,255,.07)" class="ba"/>';
+  if (o.fc != null) s += '<line x1="' + X(d0) + '" y1="' + Y(c0) + '" x2="' + X(N) + '" y2="' + Y(o.fc) + '" stroke="#fff" stroke-width="1.2" stroke-dasharray="2 4"/><text x="' + (X(N) + 6) + '" y="' + (Y(o.fc) + 3) + '" class="bl hi">' + fmt(o.fc) + '</text>';
+  s += line(o.cur, 'bc', '#fff');
+  s += '<circle cx="' + X(d0) + '" cy="' + Y(c0) + '" r="4" fill="#fff"/><circle class="pulse" cx="' + X(d0) + '" cy="' + Y(c0) + '" r="4" fill="none" stroke="#fff"/>';
+  s += '<text x="' + X(d0) + '" y="' + (Y(c0) - 10) + '" text-anchor="middle" class="bl hi">' + fmt(c0) + '</text>';
+  o.cur.forEach(function (v, i) { s += '<rect x="' + (X(i + 0.5)) + '" y="' + pt + '" width="' + (X(1) - X(0)) + '" height="' + (H - pt - pb) + '" fill="transparent" data-t="' + esc('DAY ' + (i + 1) + '　' + fmt(v) + (o.prev && o.prev[i] != null ? '　LAST MONTH ' + fmt(o.prev[i]) : '')) + '"/>'; });
+  el.innerHTML = s + '</svg>';
+  el.appendChild(h('div', { class: 'lgd' }, '<span><i style="background:#fff"></i>THIS MONTH</span><span><i style="background:#5a5a5a"></i>LAST MONTH</span><span>- - PLAN PACE</span><span>⋯ FORECAST</span>'));
+  var pl2 = el.querySelector('.bc'); if (pl2 && pl2.getTotalLength) { var L = pl2.getTotalLength(); pl2.style.strokeDasharray = L; pl2.style.strokeDashoffset = L; later(function () { pl2.style.transition = 'stroke-dashoffset 1.1s cubic-bezier(.2,.8,.2,1)'; pl2.style.strokeDashoffset = 0; }); }
+}
+/** 進捗リング */
+function ring(act, plan, pace, inv) {
+  var S = 128, r = 52, C = 2 * Math.PI * r, p = plan ? act / plan : 0, f = Math.min(1, p);
+  var s = '<svg width="' + S + '" height="' + S + '" class="rg"><circle cx="64" cy="64" r="' + r + '" fill="none" stroke="#161616" stroke-width="9"/>';
+  s += '<circle class="rgf" cx="64" cy="64" r="' + r + '" fill="none" stroke="#fff" stroke-width="9" stroke-dasharray="0 ' + C + '" data-len="' + (f * C) + '" data-c="' + C + '" transform="rotate(-90 64 64)"/>';
+  if (p > 1) s += '<circle class="rgf" cx="64" cy="64" r="' + (r - 9) + '" fill="none" stroke="#8a8a8a" stroke-width="3" stroke-dasharray="0 ' + C + '" data-len="' + (Math.min(1, p - 1) * 2 * Math.PI * (r - 9)) + '" data-c="' + C + '" transform="rotate(-90 64 64)"/>';
+  var t = (pace * 360 - 90) * Math.PI / 180;
+  s += '<line x1="' + (64 + (r - 8) * Math.cos(t)) + '" y1="' + (64 + (r - 8) * Math.sin(t)) + '" x2="' + (64 + (r + 8) * Math.cos(t)) + '" y2="' + (64 + (r + 8) * Math.sin(t)) + '" stroke="#fff" stroke-width="2"/>';
+  s += '<text x="64" y="68" text-anchor="middle" class="rgv">' + (plan ? fmt(p * 100) : '—') + '<tspan class="rgu">%</tspan></text><text x="64" y="86" text-anchor="middle" class="dnl">' + (inv ? 'OF LIMIT' : 'OF TARGET') + '</text></svg>';
+  return s;
 }
 
 /**
@@ -333,10 +496,10 @@ function periodBar(host, st, unit, rerender) {
   var td = DATA[CUR].today, T = unit === 'day' ? dn(td) : mi(td);
   var fy0 = T - ((T % 12) + 9) % 12;
   var quick = unit === 'day'
-    ? [['直近7日', [T - 6, T]], ['直近4週', [T - 27, T]], ['今月', [dn(td.slice(0, 8) + '01'), T]],
-       ['先月', (function () { var d = dd(T); return [Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1) / 864e5, Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1) / 864e5 - 1]; })()],
-       ['直近90日', [T - 89, T]], ['直近1年', [T - 364, T]]]
-    : [['直近6ヶ月', [T - 6, T - 1]], ['直近12ヶ月', [T - 12, T - 1]], ['今年度', [fy0, T]], ['昨年度', [fy0 - 12, fy0 - 1]], ['直近2年', [T - 24, T - 1]]];
+    ? [['LAST 7 DAYS', [T - 6, T]], ['LAST 4 WEEKS', [T - 27, T]], ['THIS MONTH', [dn(td.slice(0, 8) + '01'), T]],
+       ['LAST MONTH', (function () { var d = dd(T); return [Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1) / 864e5, Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1) / 864e5 - 1]; })()],
+       ['LAST 90 DAYS', [T - 89, T]], ['LAST 365 DAYS', [T - 364, T]]]
+    : [['LAST 6 MONTHS', [T - 6, T - 1]], ['LAST 12 MONTHS', [T - 12, T - 1]], ['THIS FY', [fy0, T]], ['LAST FY', [fy0 - 12, fy0 - 1]], ['LAST 2 YEARS', [T - 24, T - 1]]];
   var cur = 'custom';
   quick.forEach(function (x) { if (st.A && x[1][0] === st.A[0] && x[1][1] === st.A[1]) cur = x[0]; });
   var apply = function () { st.B = cmpRange(st, unit); st.anim = true; fitView(st, unit, T); rerender(); };
@@ -345,10 +508,10 @@ function periodBar(host, st, unit, rerender) {
 
   var box = h('div', { class: 'pbox' });
   var r1 = h('div', { class: 'prow' });
-  r1.appendChild(h('span', { class: 'plbl' }, '期間'));
+  r1.appendChild(h('span', { class: 'plbl' }, 'PERIOD'));
   var sel = h('select', { class: 'sel' });
   quick.forEach(function (x) { sel.appendChild(h('option', { value: x[0] }, x[0])); });
-  sel.appendChild(h('option', { value: 'custom' }, 'カレンダーで指定'));
+  sel.appendChild(h('option', { value: 'custom' }, 'CUSTOM'));
   sel.value = cur;
   sel.onchange = function () { var x = quick.filter(function (q) { return q[0] === sel.value; })[0]; if (x) { st.A = x[1].slice(); apply(); } else { inp.style.display = ''; } };
   r1.appendChild(sel);
@@ -360,19 +523,19 @@ function periodBar(host, st, unit, rerender) {
   inp.appendChild(i0); inp.appendChild(h('span', { class: 'plbl' }, '〜')); inp.appendChild(i1);
   if (cur !== 'custom') inp.style.display = 'none';
   r1.appendChild(inp);
-  r1.appendChild(h('span', { class: 'plbl', style: 'margin-left:18px' }, '比較'));
+  r1.appendChild(h('span', { class: 'plbl', style: 'margin-left:18px' }, 'VS'));
   var sc = h('select', { class: 'sel' });
-  [['prev', '直前の同じ長さ'], ['yoy', '前年の同じ期間'], ['none', '比較しない']].forEach(function (x) { sc.appendChild(h('option', { value: x[0] }, x[1])); });
+  [['prev', 'PREVIOUS PERIOD'], ['yoy', 'SAME PERIOD LAST YEAR'], ['none', 'NONE']].forEach(function (x) { sc.appendChild(h('option', { value: x[0] }, x[1])); });
   sc.value = st.cmp === 'free' ? 'prev' : st.cmp;
   sc.onchange = function () { st.cmp = sc.value; apply(); };
   r1.appendChild(sc);
   box.appendChild(r1);
 
-  var lab = function (r) { return unit === 'day' ? ds(r[0]) + ' 〜 ' + ds(r[1]) + '（' + (r[1] - r[0] + 1) + '日）' : ms(r[0]) + ' 〜 ' + ms(r[1]) + '（' + (r[1] - r[0] + 1) + 'ヶ月）'; };
+  var lab = function (r) { return unit === 'day' ? ds(r[0]) + ' — ' + ds(r[1]) + '　' + (r[1] - r[0] + 1) + 'D' : ms(r[0]) + ' — ' + ms(r[1]) + '　' + (r[1] - r[0] + 1) + 'M'; };
   var p = h('div', { class: 'periods' });
   p.appendChild(h('span', { class: 'pa' }, '<b>' + lab(st.A) + '</b>'));
-  if (st.B) p.appendChild(h('span', { class: 'pb' }, 'と ' + lab(st.B) + ' を比較'));
-  p.appendChild(h('span', { class: 'hint' }, 'グラフをドラッグ・クリックでも選べます　← → キーでとなりの期間へ'));
+  if (st.B) p.appendChild(h('span', { class: 'pb' }, 'VS　' + lab(st.B)));
+  p.appendChild(h('span', { class: 'hint' }, 'DRAG / CLICK THE CHART　·　← → SHIFT'));
   box.appendChild(p);
   host.appendChild(box);
 }
@@ -427,13 +590,13 @@ function onBrush(st, unit, rerender) {
 }
 function dayBuckets(from, to, gran, countFn) {
   var out = [];
-  if (gran === 'day') for (var i = from; i <= to; i++) out.push({ s: i, e: i, label: ds(i) + '（' + WD[wd(i)] + '）' });
-  else if (gran === 'week') { var s = from - ((wd(from) + 6) % 7); for (; s <= to; s += 7) out.push({ s: s, e: s + 6, label: ds(s) + ' の週' }); }
+  if (gran === 'day') for (var i = from; i <= to; i++) out.push({ s: i, e: i, label: ds(i) + ' ' + WD[wd(i)] });
+  else if (gran === 'week') { var s = from - ((wd(from) + 6) % 7); for (; s <= to; s += 7) out.push({ s: s, e: s + 6, label: ds(s) + ' WEEK' }); }
   else { var d = dd(from), y = d.getUTCFullYear(), m = d.getUTCMonth(); while (Date.UTC(y, m, 1) / 864e5 <= to) { out.push({ s: Date.UTC(y, m, 1) / 864e5, e: Date.UTC(y, m + 1, 1) / 864e5 - 1, label: y + '/' + (m + 1) }); m++; if (m > 11) { m = 0; y++; } } }
   out.forEach(function (b) { b.v = countFn(b.s, b.e); });
   return out;
 }
-function dayTick(gran) { return function (b) { var d = dd(b.s); return gran === 'month' ? (d.getUTCMonth() === 0 ? String(d.getUTCFullYear()) : '') : (d.getUTCMonth() + 1) + '月'; }; }
+function dayTick(gran) { return function (b) { var d = dd(b.s); return gran === 'month' ? (d.getUTCMonth() === 0 ? String(d.getUTCFullYear()) : '') : MON3[d.getUTCMonth()]; }; }
 function prefix(dates, from, to) {
   var c = new Array(to - from + 2).fill(0);
   dates.forEach(function (n) { if (n >= from && n <= to) c[n - from + 1]++; });
@@ -442,16 +605,16 @@ function prefix(dates, from, to) {
 }
 function viewCtl(top, st, rr, grans) {
   var c1 = h('div', { class: 'ctl' });
-  c1.appendChild(h('span', { class: 'lbl' }, '表示範囲'));
-  chips(c1, [['90', '3ヶ月'], ['180', '6ヶ月'], ['365', '1年'], ['all', '全期間']], st.view, function (v) { st.view = v; st.anim = true; keepInView(st, 'day'); rr(); });
+  c1.appendChild(h('span', { class: 'lbl' }, 'RANGE'));
+  chips(c1, [['90', '3M'], ['180', '6M'], ['365', '1Y'], ['all', 'ALL']], st.view, function (v) { st.view = v; st.anim = true; keepInView(st, 'day'); rr(); });
   if (grans !== false) {
     c1.appendChild(h('span', { class: 'sep' }));
-    c1.appendChild(h('span', { class: 'lbl' }, '棒の単位'));
-    chips(c1, [['day', '日'], ['week', '週'], ['month', '月']], st.gran, function (v) { st.gran = v; st.anim = true; rr(); });
+    c1.appendChild(h('span', { class: 'lbl' }, 'BAR'));
+    chips(c1, [['day', 'D'], ['week', 'W'], ['month', 'M']], st.gran, function (v) { st.gran = v; st.anim = true; rr(); });
   }
   return c1;
 }
-function AB(B, a, b, nameA, nameB) { return B ? [{ name: nameA || '選んだ期間', color: A_C, vals: a }, { name: nameB || '比較期間', color: RED, vals: b }] : [{ name: nameA || '選んだ期間', color: A_C, vals: a }]; }
+function AB(B, a, b, nameA, nameB) { return B ? [{ name: nameA || 'SELECTED', color: A_C, vals: a }, { name: nameB || 'COMPARE', color: RED, vals: b }] : [{ name: nameA || 'SELECTED', color: A_C, vals: a }]; }
 
 /* ---------- 入会・退会 ---------- */
 var JL = { kind: 'join', view: '180', gran: 'day', mode: 'A', cmp: 'prev', A: null, B: null, anim: true };
@@ -463,7 +626,7 @@ function renderJl(main) {
   var cnt = prefix(ev.map(function (e) { return e.n; }), first, T);
   var name = st.kind === 'join' ? '入会' : '退会';
   main.innerHTML = '';
-  var top = card(name + 'の推移', 'グラフをドラッグすると、下の分析がすべて切り替わります');
+  var top = card(name + '　TREND', 'EVERYTHING BELOW FOLLOWS THE SELECTED PERIOD');
   var c0 = h('div', { class: 'ctl' });
   chips(c0, [['join', '入会'], ['leave', '退会']], st.kind, function (v) { st.kind = v; st.anim = true; rr(); });
   c0.appendChild(h('span', { class: 'sep' }));
@@ -471,7 +634,7 @@ function renderJl(main) {
   top.appendChild(c0);
   periodBar(top, st, 'day', rr);
   var bel = h('div'); top.appendChild(bel);
-  if (st.kind === 'leave') top.appendChild(h('div', { class: 'hint' }, '退会は、退会の申し出メールが届いた日で数えています（退会キャンセルは除く）'));
+  if (st.kind === 'leave') top.appendChild(h('div', { class: 'hint' }, 'COUNTED BY RESIGNATION MAIL DATE · CANCELLATIONS EXCLUDED'));
   main.appendChild(top);
   var from = st.view === 'all' ? first : Math.max(first, T - (+st.view) + 1);
   brush(bel, dayBuckets(from, T, st.gran, cnt), st, onBrush(st, 'day', rr), dayTick(st.gran));
@@ -484,13 +647,16 @@ function renderJl(main) {
   var sameWd = [], x;
   for (x = Math.min(A[1], T - 1); x >= A[0]; x--) if (wd(x) === wd(T)) sameWd.push(cnt(x, x));
   var avgWd = sameWd.length ? sameWd.reduce(function (p, q) { return p + q; }, 0) / sameWd.length : null;
-  var k = card('まとめ');
-  kpis(k, kpi('選んだ期間の' + name, a, '名', 0, B ? '比較期間 ' + fmt(b) + '名　' + chg(a, b) : '') +
-    kpi('1日あたり', a / days(A), '名', 1, B ? '比較期間 ' + fmt(b / days(B), 1) + '名　' + chg(a / days(A), b / days(B)) : '') +
-    kpi('今日（' + WD[wd(T)] + '）' + nowH + '時台まで', todayN, '名', 0, '先週の' + WD[wd(T)] + '曜日の同じ時刻まで ' + fmt(lw) + '名　' + chg(todayN, lw)) +
-    kpi('選んだ期間の' + WD[wd(T)] + '曜日の平均', avgWd, '名', 1, sameWd.length + '回分（1日分）　今日 ' + chg(todayN, avgWd)) +
-    kpi('先週の' + WD[wd(T)] + '曜日（1日分）', cnt(T - 7, T - 7), '名', 0, ''));
+  var k = card('SUMMARY');
+  kpis(k, kpi(name + '　SELECTED', a, '', 0, B ? 'VS ' + fmt(b) + '　' + chg(a, b) : '') +
+    kpi('PER DAY', a / days(A), '', 1, B ? 'VS ' + fmt(b / days(B), 1) + '　' + chg(a / days(A), b / days(B)) : '') +
+    kpi('TODAY ' + WD[wd(T)] + '　TO ' + nowH + ':59', todayN, '', 0, 'LAST ' + WD[wd(T)] + ' SAME TIME ' + fmt(lw) + '　' + chg(todayN, lw)) +
+    kpi(WD[wd(T)] + ' AVERAGE', avgWd, '', 1, sameWd.length + ' DAYS　TODAY ' + chg(todayN, avgWd)) +
+    kpi('LAST ' + WD[wd(T)], cnt(T - 7, T - 7), '', 0, ''));
   main.appendChild(k);
+  var cal = card('CALENDAR', 'DAILY COUNT · BRIGHTER = MORE');
+  main.appendChild(cal);
+  calHeat(cal, Math.max(from, T - 364), T, cnt);
 
   var row = h('div', { class: 'row' });
   var wdA = [0, 0, 0, 0, 0, 0, 0], wdB = wdA.slice(), nA = wdA.slice(), nB = wdA.slice();
@@ -498,31 +664,31 @@ function renderJl(main) {
   if (B) for (x = B[0]; x <= Math.min(B[1], T); x++) { nB[wd(x)]++; wdB[wd(x)] += cnt(x, x); }
   var ord = [1, 2, 3, 4, 5, 6, 0];
   var avA = ord.map(function (i) { return nA[i] ? wdA[i] / nA[i] : null; }), avB = ord.map(function (i) { return nB[i] ? wdB[i] / nB[i] : null; });
-  var c2 = card('曜日別の平均', '1日あたり（名）');
+  var c2 = card('BY WEEKDAY', 'AVERAGE PER DAY');
   var g2 = h('div'); c2.appendChild(g2);
-  var t2 = '<table><tr><th>曜日</th><th>選んだ期間</th><th>日数</th>' + (B ? '<th>比較期間</th><th>増減</th>' : '') + '</tr>';
+  var t2 = '<table><tr><th>DAY</th><th>SELECTED</th><th>DAYS</th>' + (B ? '<th>COMPARE</th><th>CHANGE</th>' : '') + '</tr>';
   ord.forEach(function (i, j) { t2 += '<tr><td>' + WD[i] + '</td><td>' + fmt(avA[j], 1) + '</td><td>' + nA[i] + '</td>' + (B ? '<td>' + fmt(avB[j], 1) + '</td><td>' + chg(avA[j], avB[j]) + '</td>' : '') + '</tr>'; });
   c2.appendChild(h('div', null, t2 + '</table>'));
   row.appendChild(c2);
-  var c3 = card('時間帯別', '期間中の合計（名）');
+  var c3 = card('BY HOUR', '24H CLOCK · WHITE = SELECTED　GRAY = COMPARE');
   var g3 = h('div'); c3.appendChild(g3);
   var hA = new Array(24).fill(0), hB = new Array(24).fill(0);
   ev.forEach(function (e) { if (e.h == null) return; if (e.n >= A[0] && e.n <= A[1]) hA[e.h]++; if (B && e.n >= B[0] && e.n <= B[1]) hB[e.h]++; });
   var g3b = h('div'); c3.appendChild(g3b);
   row.appendChild(c3);
   main.appendChild(row);
-  var c4 = card('区分別');
+  var c4 = card('BY TYPE');
   var kA = {}, kB = {};
   ev.forEach(function (e) { if (e.n >= A[0] && e.n <= A[1]) kA[e.k] = (kA[e.k] || 0) + 1; if (B && e.n >= B[0] && e.n <= B[1]) kB[e.k] = (kB[e.k] || 0) + 1; });
   main.appendChild(c4);
-  hbars(c4, D.kinds.map(function (kn, i) { return { label: kn, a: kA[i] || 0, b: kB[i] || 0 }; }).filter(function (r) { return r.a || r.b; }).sort(function (p, q) { return q.a - p.a; }), !!B);
+  donut(c4, D.kinds.map(function (kn, i) { return { label: kn, v: kA[i] || 0 }; }), { unit: 'SELECTED' });
 
   bars(g2, ord.map(function (i) { return WD[i]; }), AB(B, avA, avB), { dec: 1 });
   var hrs = []; for (x = 0; x < 24; x++) hrs.push(String(x));
-  bars(g3, hrs, AB(B, hA, hB));
-  var band = [['朝（6〜11時）', 6, 11], ['昼（12〜16時）', 12, 16], ['夕方（17〜20時）', 17, 20], ['夜（21〜5時）', 21, 29]];
+  clock(g3, hA, B ? hB : null);
+  var band = [['MORNING 6–11', 6, 11], ['DAY 12–16', 12, 16], ['EVENING 17–20', 17, 20], ['NIGHT 21–5', 21, 29]];
   var sumH = function (arr, s, e) { var t = 0; for (var i = s; i <= e; i++) t += arr[i % 24]; return t; };
-  t2 = '<table><tr><th>時間帯</th><th>選んだ期間</th><th>割合</th>' + (B ? '<th>比較期間</th><th>割合</th>' : '') + '</tr>';
+  t2 = '<table><tr><th>SLOT</th><th>SELECTED</th><th>SHARE</th>' + (B ? '<th>COMPARE</th><th>SHARE</th>' : '') + '</tr>';
   var totA = hA.reduce(function (p, q) { return p + q; }, 0) || 1, totB = hB.reduce(function (p, q) { return p + q; }, 0) || 1;
   band.forEach(function (bd) { var va = sumH(hA, bd[1], bd[2]), vb = sumH(hB, bd[1], bd[2]); t2 += '<tr><td>' + bd[0] + '</td><td>' + va + '</td><td>' + fmt(va / totA * 100) + '%</td>' + (B ? '<td>' + vb + '</td><td>' + fmt(vb / totB * 100) + '%</td>' : '') + '</tr>'; });
   g3b.innerHTML = t2 + '</table>';
@@ -537,7 +703,7 @@ function renderVisit(main) {
   var first = ev.reduce(function (m, e) { return Math.min(m, e.n); }, T);
   var cnt = prefix(ev.map(function (e) { return e.n; }), first, T);
   main.innerHTML = '';
-  var top = card('見学・体験の申し込み', '申し込みの日で数えています。入会は受付メールとメールアドレス・氏名で照合（180日以内）');
+  var top = card('見学・体験　APPLICATIONS', 'BY APPLY DATE · JOIN MATCHED BY EMAIL / NAME WITHIN 180 DAYS');
   top.appendChild(viewCtl(top, st, rr));
   periodBar(top, st, 'day', rr);
   var bel = h('div'); top.appendChild(bel);
@@ -549,14 +715,20 @@ function renderVisit(main) {
   var sA = ev.filter(inA), sB = ev.filter(inB);
   var jn = function (l) { return l.filter(function (e) { return e.j; }).length; };
   var rate = function (l) { return l.length ? jn(l) / l.length * 100 : null; };
-  var k = card('まとめ', '最近の申し込みは、まだ入会前の人も含みます');
-  kpis(k, kpi('申し込み（選んだ期間）', sA.length, '件', 0, B ? '比較期間 ' + sB.length + '件　' + chg(sA.length, sB.length) : '') +
-    kpi('入会した人', jn(sA), '名', 0, B ? '比較期間 ' + jn(sB) + '名' : '') +
-    kpi('入会した割合', rate(sA), '%', 1, B ? '比較期間 ' + fmt(rate(sB), 1) + '%' : '') +
-    kpi('入会までの日数（中央値）', (function () { var x = sA.filter(function (e) { return e.j; }).map(function (e) { return e.dj; }).sort(function (p, q) { return p - q; }); return x.length ? x[Math.floor(x.length / 2)] : null; })(), '日', 0, '当日の入会 ' + sA.filter(function (e) { return e.j && e.dj === 0; }).length + '名') +
-    kpi('見学', sA.filter(function (e) { return D.kinds[e.k] === '見学'; }).length, '件', 0, '入会 ' + fmt(rate(sA.filter(function (e) { return D.kinds[e.k] === '見学'; })), 1) + '%') +
-    kpi('体験', sA.filter(function (e) { return D.kinds[e.k] === '体験'; }).length, '件', 0, '入会 ' + fmt(rate(sA.filter(function (e) { return D.kinds[e.k] === '体験'; })), 1) + '%'));
+  var k = card('SUMMARY', 'RECENT APPLICANTS MAY STILL JOIN');
+  kpis(k, kpi('APPLICATIONS', sA.length, '', 0, B ? 'VS ' + sB.length + '　' + chg(sA.length, sB.length) : '') +
+    kpi('JOINED', jn(sA), '', 0, B ? 'VS ' + jn(sB) + '　' + chg(jn(sA), jn(sB)) : '') +
+    kpi('JOIN RATE', rate(sA), '%', 1, B ? 'VS ' + fmt(rate(sB), 1) + '%' : '') +
+    kpi('DAYS TO JOIN · MEDIAN', (function () { var x = sA.filter(function (e) { return e.j; }).map(function (e) { return e.dj; }).sort(function (p, q) { return p - q; }); return x.length ? x[Math.floor(x.length / 2)] : null; })(), 'D', 0, 'SAME DAY ' + sA.filter(function (e) { return e.j && e.dj === 0; }).length) +
+    kpi('見学', sA.filter(function (e) { return D.kinds[e.k] === '見学'; }).length, '', 0, 'JOIN ' + fmt(rate(sA.filter(function (e) { return D.kinds[e.k] === '見学'; })), 1) + '%') +
+    kpi('体験', sA.filter(function (e) { return D.kinds[e.k] === '体験'; }).length, '', 0, 'JOIN ' + fmt(rate(sA.filter(function (e) { return D.kinds[e.k] === '体験'; })), 1) + '%'));
   main.appendChild(k);
+  var mix = card('MIX', 'SELECTED PERIOD');
+  var mr = h('div', { class: 'dpair' }); mix.appendChild(mr); main.appendChild(mix);
+  var mx = [h('div'), h('div'), h('div')]; mx.forEach(function (x) { mr.appendChild(x); });
+  donut(mx[0], D.kinds.map(function (kn, i) { return { label: kn, v: sA.filter(function (e) { return e.k === i; }).length }; }), { unit: 'TYPE', size: 150, sw: 12 });
+  donut(mx[1], D.sexes.map(function (sx, i) { return { label: sx, v: sA.filter(function (e) { return e.sx === i; }).length }; }), { unit: 'SEX', size: 150, sw: 12 });
+  donut(mx[2], [{ label: 'JOINED', v: jn(sA) }, { label: 'NOT YET', v: sA.length - jn(sA) }], { unit: 'RESULT', size: 150, sw: 12 });
   var by = function (key, labels) {
     return labels.map(function (lb, i) {
       var a = sA.filter(function (e) { return key(e) === i; }), b = sB.filter(function (e) { return key(e) === i; });
@@ -566,16 +738,16 @@ function renderVisit(main) {
   var row = h('div', { class: 'row' });
   var ageOrder = D.ages.map(function (x, i) { return [x, i]; }).sort(function (p, q) { return (parseInt(p[0]) || 99) - (parseInt(q[0]) || 99); });
   var ag = ageOrder.map(function (p) { var r = by(function (e) { return e.ag; }, D.ages)[p[1]]; return r; });
-  var c1 = card('年代別', '申し込み件数と入会した割合');
+  var c1 = card('BY AGE', 'JOIN RATE');
   var g1 = h('div'); c1.appendChild(g1); row.appendChild(c1);
-  var c2 = card('希望日の曜日・時刻', '申し込み件数');
+  var c2 = card('REQUESTED DAY / TIME', 'APPLICATIONS');
   var g2 = h('div'); c2.appendChild(g2); var g2b = h('div'); c2.appendChild(g2b); row.appendChild(c2);
   main.appendChild(row);
-  var t = '<table><tr><th>年代</th><th>申し込み</th><th>入会</th><th>割合</th>' + (B ? '<th>比較期間 割合</th>' : '') + '</tr>';
+  var t = '<table><tr><th>AGE</th><th>APPLY</th><th>JOIN</th><th>RATE</th>' + (B ? '<th>VS RATE</th>' : '') + '</tr>';
   ag.forEach(function (r) { if (!r.n && !r.nb) return; t += '<tr><td>' + esc(r.label) + '</td><td>' + r.n + '</td><td>' + r.j + '</td><td>' + fmt(r.r, 0) + '%</td>' + (B ? '<td>' + fmt(r.rb, 0) + '%</td>' : '') + '</tr>'; });
   var sx = by(function (e) { return e.sx; }, D.sexes);
   sx.forEach(function (r) { t += '<tr><td>' + esc(r.label) + '</td><td>' + r.n + '</td><td>' + r.j + '</td><td>' + fmt(r.r, 0) + '%</td>' + (B ? '<td>' + fmt(r.rb, 0) + '%</td>' : '') + '</tr>'; });
-  bars(g1, ag.map(function (r) { return r.label; }), AB(B, ag.map(function (r) { return r.r; }), ag.map(function (r) { return r.rb; }), '入会した割合（選んだ期間）', '入会した割合（比較期間）'), { fmt: function (v) { return fmt(v) + '%'; }, height: 180 });
+  bars(g1, ag.map(function (r) { return r.label; }), AB(B, ag.map(function (r) { return r.r; }), ag.map(function (r) { return r.rb; }), 'JOIN RATE · SELECTED', 'JOIN RATE · COMPARE'), { fmt: function (v) { return fmt(v) + '%'; }, height: 180 });
   g1.appendChild(h('div', null, t + '</table>'));
   var ord = [1, 2, 3, 4, 5, 6, 0];
   var wA = ord.map(function (d) { return sA.filter(function (e) { return e.w != null && wd(e.w) === d; }).length; });
@@ -584,12 +756,12 @@ function renderVisit(main) {
   var hl = [], hA = [], hB = [];
   for (var x = 7; x <= 23; x++) { hl.push(String(x)); hA.push(sA.filter(function (e) { return e.h === x; }).length); hB.push(sB.filter(function (e) { return e.h === x; }).length); }
   bars(g2b, hl, AB(B, hA, hB), { height: 170 });
-  var c3 = card('月ごとの入会した割合', '申し込みがあった月');
+  var c3 = card('JOIN RATE BY MONTH', 'BY APPLY MONTH');
   var g3 = h('div'); c3.appendChild(g3); main.appendChild(c3);
   var d0 = dd(first), m0 = d0.getUTCFullYear() * 12 + d0.getUTCMonth(), m1 = mi(D.today), lab = [], vn = [], vr = [];
   for (var m = m0; m <= m1; m++) { var l = ev.filter(function (e) { var d = dd(e.n); return d.getUTCFullYear() * 12 + d.getUTCMonth() === m; }); lab.push(ms(m)); vn.push(l.length); vr.push(rate(l)); }
-  bars(g3, lab, [{ name: '入会した割合', color: function (i) { return i === lab.length - 1 ? FUT : A_C; }, lc: A_C, vals: vr }], { height: 200, fmt: function (v) { return fmt(v) + '%'; } });
-  var tt = '<table><tr><th>月</th>' + lab.map(function (x) { return '<th>' + x + '</th>'; }).join('') + '</tr><tr><td>申し込み</td>' + vn.map(function (x) { return '<td>' + x + '</td>'; }).join('') + '</tr><tr><td>入会した割合</td>' + vr.map(function (x) { return '<td>' + fmt(x, 0) + '%</td>'; }).join('') + '</tr></table>';
+  bars(g3, lab, [{ name: 'JOIN RATE', color: function (i) { return i === lab.length - 1 ? FUT : A_C; }, lc: A_C, vals: vr }], { height: 200, fmt: function (v) { return fmt(v) + '%'; } });
+  var tt = '<table><tr><th>MONTH</th>' + lab.map(function (x) { return '<th>' + x + '</th>'; }).join('') + '</tr><tr><td>APPLY</td>' + vn.map(function (x) { return '<td>' + x + '</td>'; }).join('') + '</tr><tr><td>JOIN RATE</td>' + vr.map(function (x) { return '<td>' + fmt(x, 0) + '%</td>'; }).join('') + '</tr></table>';
   c3.appendChild(h('div', { class: 'scroll' }, tt));
 }
 
@@ -603,9 +775,9 @@ function renderOp(main) {
   var first = ev.reduce(function (m, e) { return Math.min(m, e.n); }, T);
   var cnt = prefix(ev.filter(pick).map(function (e) { return e.n; }), first, T);
   main.innerHTML = '';
-  var top = card('オプションの推移', '受付メールから数えています（2026年1月より前は件数が少なめ）');
+  var top = card('オプション　TREND', 'FROM RECEIPT MAILS · SPARSE BEFORE 2026/1');
   var c1 = h('div', { class: 'ctl' });
-  chips(c1, [['start', '始めた（自動付与＋契約追加）'], ['auto', '自動付与'], ['add', '契約追加'], ['stop', '利用停止']], st.type, function (v) { st.type = v; st.anim = true; rr(); });
+  chips(c1, [['start', 'STARTED · AUTO + ADDED'], ['auto', 'AUTO'], ['add', 'ADDED'], ['stop', 'STOPPED']], st.type, function (v) { st.type = v; st.anim = true; rr(); });
   top.appendChild(c1);
   top.appendChild(viewCtl(top, st, rr));
   periodBar(top, st, 'day', rr);
@@ -618,18 +790,18 @@ function renderOp(main) {
   var mA = tally(A), mB = tally(B);
   var g = function (m, o, c) { return m[o + '_' + c] || 0; };
   var sum = function (m, c) { var s = 0; D.opts.forEach(function (o, i) { s += g(m, i, c); }); return s; };
-  var k = card('まとめ');
-  kpis(k, ['自動付与', '契約追加', '利用停止'].map(function (nm, c) { return kpi(nm, sum(mA, c), '件', 0, B ? '比較期間 ' + fmt(sum(mB, c)) + '件　' + chg(sum(mA, c), sum(mB, c)) : ''); }).join('') +
-    kpi('始めた − 停止', sum(mA, 0) + sum(mA, 1) - sum(mA, 2), '件', 0, B ? '比較期間 ' + fmt(sum(mB, 0) + sum(mB, 1) - sum(mB, 2)) + '件' : ''));
+  var k = card('SUMMARY');
+  kpis(k, ['AUTO', 'ADDED', 'STOPPED'].map(function (nm, c) { return kpi(nm, sum(mA, c), '', 0, B ? 'VS ' + fmt(sum(mB, c)) + '　' + chg(sum(mA, c), sum(mB, c)) : ''); }).join('') +
+    kpi('NET · START − STOP', sum(mA, 0) + sum(mA, 1) - sum(mA, 2), '', 0, B ? 'VS ' + fmt(sum(mB, 0) + sum(mB, 1) - sum(mB, 2)) : ''));
   main.appendChild(k);
   var rows = D.opts.map(function (o, i) {
     return { o: o, a0: g(mA, i, 0), a1: g(mA, i, 1), a2: g(mA, i, 2), as: g(mA, i, 0) + g(mA, i, 1), bs: g(mB, i, 0) + g(mB, i, 1), b2: g(mB, i, 2) };
   }).filter(function (r) { return r.as || r.a2 || r.bs || r.b2; }).sort(function (p, q) { return Math.abs(q.as - q.bs) - Math.abs(p.as - p.bs); });
   var row = h('div', { class: 'row' });
-  var c3 = card('始めた件数', 'オプション別　白＝選んだ期間　グレー＝比較期間');
+  var c3 = card('STARTED BY OPTION', 'WHITE = SELECTED　GRAY = COMPARE');
   row.appendChild(c3);
-  var c2 = card('オプション別の内訳', '比較期間との差が大きい順');
-  var t = '<table><tr><th>オプション</th><th>自動付与</th><th>契約追加</th><th>始めた</th>' + (B ? '<th>B</th><th>差</th><th>増減</th>' : '') + '<th>停止</th>' + (B ? '<th>B</th>' : '') + '</tr>';
+  var c2 = card('BREAKDOWN', 'SORTED BY CHANGE');
+  var t = '<table><tr><th>OPTION</th><th>AUTO</th><th>ADDED</th><th>STARTED</th>' + (B ? '<th>VS</th><th>DIFF</th><th>CHANGE</th>' : '') + '<th>STOPPED</th>' + (B ? '<th>VS</th>' : '') + '</tr>';
   rows.forEach(function (r) {
     t += '<tr><td>' + esc(r.o) + '</td><td>' + r.a0 + '</td><td>' + r.a1 + '</td><td>' + r.as + '</td>' +
       (B ? '<td>' + r.bs + '</td><td>' + (r.as - r.bs >= 0 ? '+' : '') + (r.as - r.bs) + '</td><td>' + chg(r.as, r.bs) + '</td>' : '') + '<td>' + r.a2 + '</td>' + (B ? '<td>' + r.b2 + '</td>' : '') + '</tr>';
@@ -638,6 +810,9 @@ function renderOp(main) {
   row.appendChild(c2);
   main.appendChild(row);
   hbars(c3, rows.slice().sort(function (p, q) { return q.as - p.as; }).map(function (r) { return { label: r.o, a: r.as, b: r.bs }; }), !!B);
+  var c5 = card('SHARE', 'STARTED · SELECTED PERIOD');
+  main.insertBefore(c5, row);
+  donut(c5, rows.map(function (r) { return { label: r.o, v: r.as }; }), { unit: 'STARTED' });
 }
 
 /* ---------- 会員動向 ---------- */
@@ -660,16 +835,16 @@ function renderHq(main) {
   var plans = {};
   R.forEach(function (r) { if (r[0] >= 73 && r[0] <= 92 && hqNorm(r[1])) plans[optNorm(r[1])] = r.slice(2, 14).map(num); });
   R.forEach(function (r) { if (r[0] >= 31 && r[0] <= 46 && hqNorm(r[1])) metrics.push({ n: hqNorm(r[1]).replace(/\d+円$/, ''), opt: true, act: r.slice(2, 14).map(num), plan: plans[optNorm(r[1])] || null }); });
-  var mons = R[0].slice(2, 14).map(function (v) { return v + '月'; });
+  var mons = R[0].slice(2, 14).map(function (v) { return MON3[(+v - 1 + 12) % 12] || v; });
   var curIdx = (new Date().getMonth() + 9) % 12;
   main.innerHTML = '';
-  var top = card('会員動向　' + D.fy + '年度', '本部の会員動向シート。今月以降の実績は見込み');
+  var top = card('会員動向　FY' + D.fy, 'HQ SHEET · FROM THIS MONTH = FORECAST');
   var c1 = h('div', { class: 'ctl' });
-  c1.appendChild(h('span', { class: 'lbl' }, '会員'));
+  c1.appendChild(h('span', { class: 'lbl' }, 'MEMBERS'));
   chips(c1, metrics.filter(function (m) { return !m.opt; }).map(function (m) { return [m.n, m.n]; }), HQ.m, function (v) { HQ.m = v; renderHq(main); });
   top.appendChild(c1);
   var c1b = h('div', { class: 'ctl' });
-  c1b.appendChild(h('span', { class: 'lbl' }, 'オプション（月初の契約数）'));
+  c1b.appendChild(h('span', { class: 'lbl' }, 'OPTIONS · START-OF-MONTH'));
   chips(c1b, metrics.filter(function (m) { return m.opt; }).map(function (m) { return [m.n, m.n]; }), HQ.m, function (v) { HQ.m = v; renderHq(main); });
   top.appendChild(c1b);
   var m = metrics.filter(function (x) { return x.n === HQ.m; })[0] || metrics[0];
@@ -677,58 +852,147 @@ function renderHq(main) {
   main.appendChild(top);
   var f = m.u === '%' ? function (v) { return fmt(v, 2) + '%'; } : m.u === '¥' ? function (v) { return '¥' + fmt(v); } : null;
   var vals = m.act.filter(function (v, i) { return v != null && i < curIdx; });
-  var series = [{ name: '実績（今月以降は見込み）', color: function (i) { return i >= curIdx ? FUT : A_C; }, lc: A_C, vals: m.act }];
-  if (m.prev) series.push({ name: '前年', color: PREV, vals: m.prev });
-  var k = card('まとめ', '今年度の確定した月');
+  var series = [{ name: 'ACTUAL / FORECAST', color: function (i) { return i >= curIdx ? FUT : A_C; }, lc: A_C, vals: m.act }];
+  if (m.prev) series.push({ name: 'LAST YEAR', color: PREV, vals: m.prev });
+  var k = card('SUMMARY', 'CLOSED MONTHS THIS FY');
   var tot = function (arr) { return arr.reduce(function (p, q) { return p + (q || 0); }, 0); };
   var avgOrSum = /会員数|率|単価/.test(m.n) || m.opt;
   var aVal = avgOrSum ? tot(vals) / (vals.length || 1) : tot(vals);
   var pVal = m.prev ? (function () { var p = m.prev.filter(function (v, i) { return v != null && i < curIdx; }); return avgOrSum ? tot(p) / (p.length || 1) : tot(p); })() : null;
   var plVal = m.plan ? (function () { var p = m.plan.filter(function (v, i) { return v != null && i < curIdx; }); return avgOrSum ? tot(p) / (p.length || 1) : tot(p); })() : null;
-  var u = m.u === '%' ? '%' : m.u === '¥' ? '円' : (m.opt ? '件' : '名'), dec = m.u === '%' ? 2 : 0;
-  kpis(k, kpi(m.n + (avgOrSum ? '（月平均）' : '（合計）'), aVal, u, dec, vals.length + 'ヶ月分') +
-    (m.plan ? kpi('計画', plVal, u, dec, '計画比 ' + chg(aVal, plVal)) : '') +
-    (m.prev ? kpi('前年の同じ月', pVal, u, dec, '前年比 ' + chg(aVal, pVal)) : '') +
-    kpi('今月（見込み）', m.act[curIdx], u, dec, m.plan ? '計画 ' + fmt(m.plan[curIdx], dec) : ''));
+  var u = m.u === '%' ? '%' : m.u === '¥' ? 'JPY' : '', dec = m.u === '%' ? 2 : 0;
+  kpis(k, kpi(m.n + (avgOrSum ? '　MONTHLY AVG' : '　TOTAL'), aVal, u, dec, vals.length + ' MONTHS') +
+    (m.plan ? kpi('PLAN', plVal, u, dec, 'VS PLAN ' + chg(aVal, plVal)) : '') +
+    (m.prev ? kpi('LAST YEAR', pVal, u, dec, 'YOY ' + chg(aVal, pVal)) : '') +
+    kpi('THIS MONTH · FORECAST', m.act[curIdx], u, dec, m.plan ? 'PLAN ' + fmt(m.plan[curIdx], dec) : ''));
   main.appendChild(k);
-  bars(g, mons, series, { height: 240, fmt: f, lines: m.plan ? [{ name: '計画', color: PLAN, vals: m.plan, dash: '4 3' }] : [] });
-  var c2 = card(m.n + '　月ごとの数字');
+  bars(g, mons, series, { height: 240, fmt: f, lines: m.plan ? [{ name: 'PLAN', color: PLAN, vals: m.plan, dash: '4 3' }] : [] });
+  var c2 = card(m.n + '　BY MONTH');
   var t = '<table><tr><th></th>' + mons.map(function (x) { return '<th>' + x + '</th>'; }).join('') + '</tr>';
   var line = function (nm, v) { return v ? '<tr><td>' + nm + '</td>' + v.map(function (x) { return '<td>' + (x == null ? '' : f ? f(x) : fmt(x)) + '</td>'; }).join('') + '</tr>' : ''; };
-  t += line('実績・見込み', m.act) + line('計画', m.plan) + line('前年', m.prev);
-  if (m.plan) t += '<tr><td>計画との差</td>' + m.act.map(function (x, i) { return '<td>' + (x == null || m.plan[i] == null ? '' : (x - m.plan[i] >= 0 ? '+' : '') + fmt(x - m.plan[i], dec)) + '</td>'; }).join('') + '</tr>';
-  if (m.prev) t += '<tr><td>前年比</td>' + m.act.map(function (x, i) { return '<td>' + chg(x, m.prev[i]) + '</td>'; }).join('') + '</tr>';
+  t += line('ACTUAL', m.act) + line('PLAN', m.plan) + line('LAST YEAR', m.prev);
+  if (m.plan) t += '<tr><td>VS PLAN</td>' + m.act.map(function (x, i) { return '<td>' + (x == null || m.plan[i] == null ? '' : (x - m.plan[i] >= 0 ? '+' : '') + fmt(x - m.plan[i], dec)) + '</td>'; }).join('') + '</tr>';
+  if (m.prev) t += '<tr><td>YOY</td>' + m.act.map(function (x, i) { return '<td>' + chg(x, m.prev[i]) + '</td>'; }).join('') + '</tr>';
   c2.appendChild(h('div', { class: 'scroll' }, t + '</table>'));
   main.appendChild(c2);
 }
 
 /* ---------- 経堂マスタ ---------- */
-var MS = { r: null };
+var MS = { r: null, burn: 'join' };
 function renderMaster(main) {
   var D = DATA.master, R = D.rows, head = R[0];
+  if (!DATA.jl) load('jl').then(function () { if (CUR === 'master') render('master'); }, function () {});
+  var get = function (n) { return R.filter(function (r) { return r[0] === n; })[0]; };
+  var T = dn(D.today), d0 = dd(T), Y = d0.getUTCFullYear(), M = d0.getUTCMonth();
+  var N = new Date(Date.UTC(Y, M + 1, 0)).getUTCDate(), day = d0.getUTCDate(), pace = day / N, left = N - day + 1;
+  var m1 = Date.UTC(Y, M, 1) / 864e5;
   main.innerHTML = '';
+
+  /* LIVE */
+  var hd = {}; (D.head || []).forEach(function (x) { hd[x[0]] = num(x[1]); });
+  var live = card('LIVE', D.at + '　DAY ' + day + ' / ' + N);
+  live.classList.add('live');
+  live.appendChild(h('div', { class: 'mbar' }, '<div class="mfill" data-w="' + (pace * 100) + '"></div><span>' + fmt(pace * 100) + '% OF MONTH</span>'));
+  var lk = '';
+  (D.head || []).forEach(function (x) { lk += kpi(esc(x[0]), hd[x[0]], '', 0, ''); });
+  kpis(live, lk);
+  if (DATA.jl) {
+    var hrs = new Array(24).fill(0), lhrs = new Array(24).fill(0), nowH = new Date().getHours();
+    DATA.jl.join.forEach(function (r) { if (r[1] == null) return; var n = dn(r[0]); if (n === T) hrs[r[1]]++; if (n === T - 7) lhrs[r[1]]++; });
+    var tl = '<div class="tline">', hm = Math.max(2, Math.max.apply(null, hrs), Math.max.apply(null, lhrs));
+    for (var i = 0; i < 24; i++) tl += '<div class="th' + (i > nowH ? ' fut' : '') + (i === nowH ? ' now' : '') + '" data-t="' + i + ':00　TODAY ' + hrs[i] + '　LAST ' + WD[wd(T)] + ' ' + lhrs[i] + '"><b style="height:' + (hrs[i] / hm * 100) + '%"></b><s style="height:' + (lhrs[i] / hm * 100) + '%"></s>' + (hrs[i] ? '<em>' + hrs[i] + '</em>' : '') + '<span>' + (i % 3 === 0 ? i : '') + '</span></div>';
+    live.appendChild(h('div', null, '<div class="hint" style="margin:14px 0 6px">入会　TODAY BY HOUR　·　WHITE = TODAY　GRAY = LAST ' + WD[wd(T)] + '</div>' + tl + '</div>'));
+  }
+  main.appendChild(live);
+
+  /* TARGETS */
+  var tg = card('TARGETS', 'THIS MONTH　·　TICK = WHERE YOU SHOULD BE TODAY');
+  var grid = h('div', { class: 'rings' });
+  [['入会実績', '入会'], ['解除実績', '退会（解除）', 1], ['純増', '純増'], ['月末実績', '月末会員'], ['休会', '休会', 1], ['OP合計', 'オプション合計']].forEach(function (x) {
+    var r = get(x[0]); if (!r) return;
+    var act = num(r[5]), fc = num(r[6]), plan = num(r[7]), inv = !!x[2];
+    var gap = plan != null && act != null ? plan - act : null;
+    var exp = plan != null ? plan * pace : null;
+    var st = plan == null || act == null ? '' : inv ? (act <= exp ? 'UNDER PACE' : 'OVER PACE') : (act >= exp ? 'AHEAD' : 'BEHIND');
+    var good = inv ? act <= exp : act >= exp;
+    var lines = inv
+      ? [['ACTUAL', fmt(act)], ['LIMIT', fmt(plan)], ['ROOM', gap == null ? '—' : fmt(gap)], ['FORECAST', fmt(fc)]]
+      : [['ACTUAL', fmt(act)], ['TARGET', fmt(plan)], ['TO GO', gap == null ? '—' : gap > 0 ? fmt(gap) : 'DONE'], ['PER DAY', gap > 0 ? fmt(gap / left, 1) : '—'], ['FORECAST', fmt(fc)]];
+    var b = h('div', { class: 'rc' }, ring(act || 0, plan, pace, inv) + '<div class="rs"><div class="rn">' + esc(x[1]) + (st ? '<em class="tag' + (good ? ' ok' : '') + '">' + st + '</em>' : '') + '</div>' + lines.map(function (l) { return '<div class="rl"><span>' + l[0] + '</span><b>' + l[1] + '</b></div>'; }).join('') + '</div>');
+    grid.appendChild(b);
+  });
+  tg.appendChild(grid);
+  main.appendChild(tg);
+  later(function () { tg.querySelectorAll('.rgf').forEach(function (c) { c.setAttribute('stroke-dasharray', c.getAttribute('data-len') + ' ' + c.getAttribute('data-c')); }); live.querySelectorAll('[data-w]').forEach(function (x) { x.style.width = x.getAttribute('data-w') + '%'; }); });
+
+  /* PACE */
+  var pc = card('PACE', 'CUMULATIVE THIS MONTH vs PLAN vs LAST MONTH');
+  var cb = h('div', { class: 'ctl' });
+  chips(cb, [['join', '入会'], ['leave', '退会']], MS.burn, function (v) { MS.burn = v; renderMaster(main); });
+  pc.appendChild(cb);
+  var bg = h('div'); pc.appendChild(bg);
+  main.appendChild(pc);
+  if (DATA.jl) {
+    var evs = DATA.jl[MS.burn].map(function (r) { return dn(r[0]); });
+    var pm0 = Date.UTC(Y, M - 1, 1) / 864e5, pN = new Date(Date.UTC(Y, M, 0)).getUTCDate();
+    var cur = [], prev = [], c = 0, p = 0, dd2;
+    for (dd2 = 1; dd2 <= day; dd2++) { c += evs.filter(function (n) { return n === m1 + dd2 - 1; }).length; cur.push(c); }
+    for (dd2 = 1; dd2 <= Math.min(N, pN); dd2++) { p += evs.filter(function (n) { return n === pm0 + dd2 - 1; }).length; prev.push(p); }
+    var rr = get(MS.burn === 'join' ? '入会実績' : '解除実績');
+    burn(bg, { days: N, cur: cur, prev: prev, plan: rr ? num(rr[7]) : null, fc: Math.round(c / day * N) });
+    pc.appendChild(h('div', { class: 'hint', style: 'margin-top:4px' }, 'COUNTED FROM RECEIPT MAILS　·　FORECAST = CURRENT PACE × ' + N + ' DAYS'));
+  } else bg.innerHTML = '<div class="loading">LOADING</div>';
+
+  /* OPTIONS + SOURCES */
+  var row = h('div', { class: 'row' });
+  var oc = card('OPTIONS', 'ACTUAL / TARGET　·　TICK = TODAY\'S PACE');
+  var i0 = R.findIndex(function (r) { return r[0] === '安心サポート'; }), i1 = R.findIndex(function (r) { return r[0] === 'OP合計'; });
+  var ops = (i0 > 0 && i1 > i0 ? R.slice(i0, i1) : []).map(function (r) { return { n: r[0], a: num(r[5]), p: num(r[7]), fc: num(r[6]) }; }).filter(function (x) { return x.p > 0 || x.a > 0; })
+    .sort(function (p, q) { return (q.p ? q.a / q.p : 9) - (p.p ? p.a / p.p : 9); });
+  var pg = '<div class="pg">';
+  ops.forEach(function (x) {
+    var r = x.p ? x.a / x.p : 0, gap = x.p - x.a;
+    pg += '<div class="nm">' + esc(x.n) + '</div><div class="tr" data-t="' + esc(x.n + '　' + x.a + ' / ' + x.p + '　FORECAST ' + x.fc) + '"><div class="pf" data-w="' + Math.min(100, r * 100) + '"></div><i style="left:' + (pace * 100) + '%"></i></div><div class="va">' + x.a + '<small> / ' + (x.p || '—') + '</small></div><div class="vb">' + (gap > 0 ? '−' + gap : '✓') + '</div>';
+  });
+  oc.appendChild(h('div', null, pg + '</div>'));
+  row.appendChild(oc);
+  var sc = card('SOURCES', '入会経路　THIS MONTH');
+  var src = (i1 > 0 ? R.slice(i1 + 1) : []).map(function (r) { return { label: r[0], v: num(r[5]) || 0 }; });
+  donut(sc, src, { unit: 'THIS MONTH' });
+  var sc2 = h('div', { style: 'margin-top:18px' });
+  sc.appendChild(h('div', { class: 'hint', style: 'margin-top:16px' }, 'LAST MONTH'));
+  sc.appendChild(sc2);
+  donut(sc2, (i1 > 0 ? R.slice(i1 + 1) : []).map(function (r) { return { label: r[0], v: num(r[4]) || 0 }; }), { unit: 'LAST MONTH', size: 130, sw: 10 });
+  row.appendChild(sc);
+  main.appendChild(row);
+  later(function () { oc.querySelectorAll('[data-w]').forEach(function (x) { x.style.width = x.getAttribute('data-w') + '%'; }); });
+
+  /* BRIEFING */
   if (D.reading && D.reading.length) {
-    var title = String(D.reading[0][0] || '今月の読み').split('　');
-    var c0 = card(title[0], esc(title.slice(1).join('　')));
+    var c0 = card('BRIEFING', esc(String(D.reading[0][0] || '').split('　').slice(1).join('　')));
     var t0 = '<table class="reading">';
     D.reading.slice(1).forEach(function (r) { t0 += r[1] ? '<tr><td>' + esc(r[0]) + '</td><td>' + esc(r[1]) + '</td></tr>' : '<tr><td colspan="2" class="hint">' + esc(r[0]) + '</td></tr>'; });
     c0.appendChild(h('div', null, t0 + '</table>'));
     main.appendChild(c0);
   }
+
+  /* 5 MONTHS */
   if (!MS.r) MS.r = R[2] ? R[2][0] : null;
-  var row = R.filter(function (r) { return r[0] === MS.r; })[0] || R[1];
-  var c1 = card(row[0] + '　推移', '下の表の行をクリックで切り替え');
+  var row5 = R.filter(function (r) { return r[0] === MS.r; })[0] || R[1];
+  var c1 = card(row5[0] + '　5 MONTHS', 'CLICK A ROW BELOW TO SWITCH');
   var g = h('div'); c1.appendChild(g); main.appendChild(c1);
-  var c2 = card('経堂マスタの数字');
-  var t = '<table><tr>' + head.map(function (x) { return '<th>' + esc(x) + '</th>'; }).join('') + '<th>前月比</th></tr>';
+  var mlab = head.slice(1, 6).map(function (x) { var m = String(x).match(/(\d{4})年(\d{1,2})月/); return m ? MON3[+m[2] - 1] + ' ' + m[1].slice(2) : x; });
+  var c2 = card('MASTER TABLE');
+  var t = '<table><tr><th></th>' + mlab.map(function (x) { return '<th>' + esc(x) + '</th>'; }).join('') + '<th>FORECAST</th><th>TARGET</th><th>PROGRESS</th><th>MOM</th><th>MOM %</th></tr>';
   R.slice(1).forEach(function (r) {
     t += '<tr class="click' + (r[0] === MS.r ? ' sel' : '') + '" data-k="' + esc(r[0]) + '">' + r.map(function (x) { return '<td>' + esc(x) + '</td>'; }).join('') + '<td>' + chg(num(r[5]), num(r[4])) + '</td></tr>';
   });
   c2.appendChild(h('div', { class: 'scroll' }, t + '</table>'));
   main.appendChild(c2);
-  c2.querySelectorAll('tr.click').forEach(function (tr) { tr.onclick = function () { MS.r = tr.getAttribute('data-k'); renderMaster(main); window.scrollTo({ top: 0, behavior: 'smooth' }); }; });
-  var plan = num(row[7]);
-  bars(g, head.slice(1, 6), [{ name: '実績（今月は途中）', color: function (i) { return i === 4 ? FUT : A_C; }, lc: A_C, vals: row.slice(1, 6).map(num) }], { height: 220, lines: plan != null ? [{ name: '今月の計画', color: PLAN, vals: [null, null, null, null, plan] }] : [] });
+  c2.querySelectorAll('tr.click').forEach(function (tr) { tr.onclick = function () { MS.r = tr.getAttribute('data-k'); MS.jump = true; renderMaster(main); }; });
+  var plan = num(row5[7]);
+  bars(g, mlab, [{ name: 'ACTUAL · THIS MONTH IN PROGRESS', color: function (i) { return i === 4 ? FUT : A_C; }, lc: A_C, vals: row5.slice(1, 6).map(num) }], { height: 220, lines: plan != null ? [{ name: 'TARGET', color: PLAN, vals: [null, null, null, null, plan] }] : [] });
+  if (MS.jump) { MS.jump = false; c1.scrollIntoView(); }
 }
 
 /* ---------- 会員分析 ---------- */
@@ -745,12 +1009,12 @@ function renderMember(main) {
   var from = st.view === 'all' ? first : Math.max(first, T - (+st.view));
   var buckets = []; for (var i = from; i <= T; i++) buckets.push({ s: i, e: i, label: ms(i), v: cntM[i] || 0 });
   main.innerHTML = '';
-  var top = card('会員の推移（月）', '累計入会・累計退会データ　ドラッグで月の範囲を選択');
+  var top = card('MEMBERS　MONTHLY', '累計入会 / 累計退会');
   var c1 = h('div', { class: 'ctl' });
   chips(c1, [['join', '入会'], ['leave', '退会']], st.kind, function (v) { st.kind = v; st.anim = true; rr(); });
   c1.appendChild(h('span', { class: 'sep' }));
-  c1.appendChild(h('span', { class: 'lbl' }, '表示範囲'));
-  chips(c1, [['24', '2年'], ['60', '5年'], ['all', '全期間']], st.view, function (v) { st.view = v; st.anim = true; keepInView(st, 'month'); rr(); });
+  c1.appendChild(h('span', { class: 'lbl' }, 'RANGE'));
+  chips(c1, [['24', '2Y'], ['60', '5Y'], ['all', 'ALL']], st.view, function (v) { st.view = v; st.anim = true; keepInView(st, 'month'); rr(); });
   top.appendChild(c1);
   periodBar(top, st, 'month', rr);
   var bel = h('div'); top.appendChild(bel);
@@ -766,15 +1030,15 @@ function renderMember(main) {
   };
   var jA = mem.filter(function (e) { return inR(e.j, A); }).length, jB = mem.filter(function (e) { return inR(e.j, B); }).length;
   var lA = lv.filter(function (e) { return inR(e.m, A); }).length, lB = lv.filter(function (e) { return inR(e.m, B); }).length;
-  var k = card('まとめ', '入会は入会月、退会は退会年月で数えています');
-  kpis(k, kpi('入会', jA, '名', 0, B ? '比較期間 ' + fmt(jB) + '名　' + chg(jA, jB) : '') +
-    kpi('退会', lA, '名', 0, B ? '比較期間 ' + fmt(lB) + '名　' + chg(lA, lB) : '') +
-    [1, 3, 6, 12].map(function (kk) { var a = ret(A, kk), b = B && ret(B, kk); return kpi(kk + 'ヶ月後も続いている', a ? a.r : null, '%', 1, (a ? a.n + '名中' : kk + 'ヶ月たっていません') + (b ? '　比較期間 ' + fmt(b.r, 1) + '%' : '')); }).join(''));
+  var k = card('SUMMARY', 'BY JOIN MONTH / LEAVE MONTH');
+  kpis(k, kpi('入会', jA, '', 0, B ? 'VS ' + fmt(jB) + '　' + chg(jA, jB) : '') +
+    kpi('退会', lA, '', 0, B ? 'VS ' + fmt(lB) + '　' + chg(lA, lB) : '') +
+    [1, 3, 6, 12].map(function (kk) { var a = ret(A, kk), b = B && ret(B, kk); return kpi(kk + 'M RETENTION', a ? a.r : null, '%', 1, (a ? 'OF ' + a.n : 'NOT YET ' + kk + 'M') + (b ? '　VS ' + fmt(b.r, 1) + '%' : '')); }).join(''));
   main.appendChild(k);
 
-  var c2 = card('入会した月ごとの継続率', '何ヶ月後も会員でいる割合（%）　選んだ期間の月（最大24ヶ月）');
-  var t = '<table class="heat"><tr><th>入会した月</th><th>人数</th>';
-  for (var kk = 1; kk <= 12; kk++) t += '<th>' + kk + 'ヶ月後</th>';
+  var c2 = card('COHORT RETENTION', '% STILL ACTIVE · UP TO 24 COHORTS');
+  var t = '<table class="heat"><tr><th>COHORT</th><th>SIZE</th>';
+  for (var kk = 1; kk <= 12; kk++) t += '<th>M' + kk + '</th>';
   t += '</tr>';
   for (var j = Math.max(A[0], A[1] - 23); j <= A[1]; j++) {
     var co = mem.filter(function (e) { return e.j === j; });
@@ -784,7 +1048,7 @@ function renderMember(main) {
       if (j + kk > T) { t += '<td></td>'; continue; }
       var stay = co.filter(function (e) { return e.l == null || e.l - e.j > kk; }).length / co.length;
       var al = Math.max(0.04, Math.pow(stay, 2) * 0.9);
-      t += '<td style="background:rgba(236,236,236,' + al.toFixed(2) + ');color:' + (al > .45 ? '#000' : '#bbb') + '" data-t="' + ms(j) + ' 入会　' + kk + 'ヶ月後　' + Math.round(stay * 100) + '%">' + Math.round(stay * 100) + '</td>';
+      t += '<td style="background:rgba(236,236,236,' + al.toFixed(2) + ');color:' + (al > .45 ? '#000' : '#bbb') + '" data-t="' + ms(j) + ' COHORT　M' + kk + '　' + Math.round(stay * 100) + '%">' + Math.round(stay * 100) + '</td>';
     }
     t += '</tr>';
   }
@@ -792,35 +1056,36 @@ function renderMember(main) {
   main.appendChild(c2);
 
   var row = h('div', { class: 'row' });
-  var c3 = card('プラン別', '入会した人数と6ヶ月後も続いている割合');
+  var c3 = card('BY PLAN', 'JOINS · 6M RETENTION');
   var pr = D.plans.map(function (p, i) {
     var f = function (e) { return e.p === i; };
     return { p: p, a: mem.filter(function (e) { return inR(e.j, A) && f(e); }).length, b: mem.filter(function (e) { return inR(e.j, B) && f(e); }).length, ra: ret(A, 6, f), rb: B && ret(B, 6, f) };
   }).filter(function (x) { return x.a || x.b; }).sort(function (p, q) { return q.a - p.a; });
-  var t3 = '<table><tr><th>プラン</th><th>入会A</th>' + (B ? '<th>入会B</th>' : '') + '<th>6ヶ月後A</th>' + (B ? '<th>6ヶ月後B</th>' : '') + '</tr>';
+  var t3 = '<table><tr><th>PLAN</th><th>JOIN</th>' + (B ? '<th>VS</th>' : '') + '<th>6M</th>' + (B ? '<th>VS</th>' : '') + '</tr>';
   pr.forEach(function (x) { t3 += '<tr><td>' + esc(x.p) + '</td><td>' + x.a + '</td>' + (B ? '<td>' + x.b + '</td>' : '') + '<td>' + (x.ra ? fmt(x.ra.r, 0) + '%' : '—') + '</td>' + (B ? '<td>' + (x.rb ? fmt(x.rb.r, 0) + '%' : '—') + '</td>' : '') + '</tr>'; });
-  c3.appendChild(h('div', { class: 'scroll' }, t3 + '</table>'));
+  donut(c3, pr.map(function (x) { return { label: x.p, v: x.a }; }), { unit: 'JOINED', size: 150, sw: 12 });
+  c3.appendChild(h('div', { class: 'scroll', style: 'margin-top:12px' }, t3 + '</table>'));
   row.appendChild(c3);
-  var c4 = card('年齢・性別', '入会した人（名）');
+  var c4 = card('AGE · SEX', 'JOINED');
   var ga = h('div'); c4.appendChild(ga);
   var gs = h('div'); c4.appendChild(gs);
   row.appendChild(c4);
   main.appendChild(row);
 
-  var c6 = card('退会理由', '退会アンケート（退会月で数えています）');
+  var c6 = card('LEAVE REASONS', '退会アンケート');
   var rA = {}, rB = {};
   sv.forEach(function (e) { if (inR(e.m, A)) rA[e.r] = (rA[e.r] || 0) + 1; if (inR(e.m, B)) rB[e.r] = (rB[e.r] || 0) + 1; });
   var nAs = sv.filter(function (e) { return inR(e.m, A); }).length, nBs = sv.filter(function (e) { return inR(e.m, B); }).length;
-  c6.appendChild(h('div', { class: 'hint', style: 'margin-bottom:8px' }, '回答 選んだ期間 ' + nAs + '件' + (B ? '　比較期間 ' + nBs + '件' : '')));
+  c6.appendChild(h('div', { class: 'hint', style: 'margin-bottom:8px' }, 'RESPONSES ' + nAs + (B ? '　VS ' + nBs : '')));
   main.appendChild(c6);
   hbars(c6, D.sreasons.map(function (r, i) { return { label: r, a: rA[i] || 0, b: rB[i] || 0 }; }).filter(function (x) { return (x.a || x.b) && x.label !== '（なし）'; }).sort(function (p, q) { return q.a - p.a; }), !!B);
 
   var row2 = h('div', { class: 'row' });
-  var c5 = card('退会した人の在籍期間', '選んだ期間に退会した人（名）');
+  var c5 = card('TENURE AT LEAVE', 'LEFT IN SELECTED PERIOD');
   var g5 = h('div'); c5.appendChild(g5); row2.appendChild(c5);
-  var c7 = card('退会した人の利用頻度', '退会アンケート');
+  var c7 = card('VISIT FREQUENCY', '退会アンケート');
   row2.appendChild(c7);
-  var c8 = card('退会した人の利用時間帯', '退会アンケート（複数回答）');
+  var c8 = card('USUAL TIME SLOTS', '退会アンケート · MULTIPLE ANSWERS');
   row2.appendChild(c8);
   main.appendChild(row2);
   var fA = {}, fB = {};
@@ -833,13 +1098,14 @@ function renderMember(main) {
   });
   hbars(c8, Object.keys(Object.assign({}, slots, slotsB)).sort().map(function (s) { return { label: s, a: slots[s] || 0, b: slotsB[s] || 0 }; }), !!B);
 
-  var bands = ['〜19', '20代', '30代', '40代', '50代', '60代〜'];
+  var bands = ['<20', '20s', '30s', '40s', '50s', '60+'];
   var band = function (a) { return a < 20 ? 0 : a >= 60 ? 5 : Math.floor(a / 10) - 1; };
   var cntBy = function (list, inF, key, n) { var c = new Array(n).fill(0); list.forEach(function (e) { if (inF(e)) { var b = key(e); if (b >= 0 && b < n) c[b]++; } }); return c; };
   bars(ga, bands, AB(B, cntBy(mem, function (e) { return inR(e.j, A) && e.age > 0; }, function (e) { return band(e.age); }, 6), B && cntBy(mem, function (e) { return inR(e.j, B) && e.age > 0; }, function (e) { return band(e.age); }, 6)), { height: 180 });
   var sx = ['男', '女'];
-  bars(gs, sx, AB(B, sx.map(function (s) { return mem.filter(function (e) { return inR(e.j, A) && e.sex === s; }).length; }), B && sx.map(function (s) { return mem.filter(function (e) { return inR(e.j, B) && e.sex === s; }).length; })), { height: 140, legend: false });
-  var tb = ['〜2ヶ月', '3〜5ヶ月', '6〜11ヶ月', '1〜2年', '2年〜'];
+  gs.style.marginTop = '14px';
+  donut(gs, sx.map(function (s) { return { label: s === '男' ? 'MALE' : 'FEMALE', v: mem.filter(function (e) { return inR(e.j, A) && e.sex === s; }).length }; }), { unit: 'SEX', size: 140, sw: 11 });
+  var tb = ['<3M', '3–5M', '6–11M', '1–2Y', '2Y+'];
   var tband = function (m) { return m < 3 ? 0 : m < 6 ? 1 : m < 12 ? 2 : m < 24 ? 3 : 4; };
   bars(g5, tb, AB(B, cntBy(lv, function (e) { return inR(e.m, A); }, function (e) { return tband(e.ten); }, 5), B && cntBy(lv, function (e) { return inR(e.m, B); }, function (e) { return tband(e.ten); }, 5)), { height: 200 });
 }
@@ -849,8 +1115,8 @@ var UP = { m: 2 };
 function renderUnpaid(main) {
   var D = DATA.unpaid, R = D.rows, head = D.head;
   main.innerHTML = '';
-  var cols = [[1, '未納件数', '件'], [2, '未納の総額', '円'], [3, '回収額', '円'], [4, '回収率', '%'], [6, '未回収額', '円'], [8, '1ヶ月未納の回収率', '%'], [9, '2ヶ月未納の回収率', '%'], [10, '貸倒候補の回収率', '%']];
-  var top = card('未納の推移', '未納管理の月ごとのまとめ（各月のその時点の数字）');
+  var cols = [[1, 'COUNT', ''], [2, 'TOTAL', 'JPY'], [3, 'COLLECTED', 'JPY'], [4, 'RECOVERY', '%'], [6, 'OUTSTANDING', 'JPY'], [8, '1M RECOVERY', '%'], [9, '2M RECOVERY', '%'], [10, 'BAD-DEBT RECOVERY', '%']];
+  var top = card('未納　TREND', '未納管理 · MONTHLY SNAPSHOT');
   var c1 = h('div', { class: 'ctl' });
   chips(c1, cols.map(function (c) { return [c[0], c[1]]; }), UP.m, function (v) { UP.m = v; renderUnpaid(main); });
   top.appendChild(c1);
@@ -860,14 +1126,14 @@ function renderUnpaid(main) {
   var labels = R.map(function (r) { return r[0]; }), vals = R.map(function (r) { return num(r[col[0]]); });
   var last = vals[vals.length - 1], prev = vals[vals.length - 2], yo = vals.length > 12 ? vals[vals.length - 13] : null;
   var dec = col[2] === '%' ? 1 : 0;
-  var k = card('まとめ', labels[labels.length - 1] + ' 時点');
-  kpis(k, kpi(col[1], last, col[2], dec, '前の月 ' + fmt(prev, dec) + col[2] + '　' + chg(last, prev)) +
-    kpi('12ヶ月の平均', vals.slice(-12).reduce(function (p, q) { return p + (q || 0); }, 0) / Math.min(12, vals.length), col[2], dec, '') +
-    (yo != null ? kpi('前年の同じ月', yo, col[2], dec, '前年比 ' + chg(last, yo)) : '') +
-    kpi('未納件数', num(R[R.length - 1][1]), '件', 0, '') + kpi('回収率', num(R[R.length - 1][4]), '%', 1, ''));
+  var k = card('SUMMARY', 'AS OF ' + labels[labels.length - 1]);
+  kpis(k, kpi(col[1], last, col[2], dec, 'PREV ' + fmt(prev, dec) + '　' + chg(last, prev)) +
+    kpi('12M AVERAGE', vals.slice(-12).reduce(function (p, q) { return p + (q || 0); }, 0) / Math.min(12, vals.length), col[2], dec, '') +
+    (yo != null ? kpi('LAST YEAR', yo, col[2], dec, 'YOY ' + chg(last, yo)) : '') +
+    kpi('COUNT', num(R[R.length - 1][1]), '', 0, '') + kpi('RECOVERY', num(R[R.length - 1][4]), '%', 1, ''));
   main.insertBefore(k, top.nextSibling);
-  bars(g, labels, [{ name: col[1], color: function (i) { return i === labels.length - 1 ? FUT : A_C; }, lc: A_C, vals: vals }], { height: 240, fmt: function (v) { return col[2] === '円' ? '¥' + fmt(v / 1000) + '千' : fmt(v, dec) + (col[2] === '%' ? '%' : ''); } });
-  var c2 = card('月ごとの数字');
+  bars(g, labels, [{ name: col[1], color: function (i) { return i === labels.length - 1 ? FUT : A_C; }, lc: A_C, vals: vals }], { height: 240, fmt: function (v) { return col[2] === 'JPY' ? '¥' + fmt(v / 1000) + 'K' : fmt(v, dec) + (col[2] === '%' ? '%' : ''); } });
+  var c2 = card('MONTHLY TABLE');
   var t = '<table><tr>' + [0, 1, 2, 3, 4, 6, 7, 8, 9, 10].map(function (i) { return '<th>' + esc(head[i]) + '</th>'; }).join('') + '</tr>';
   R.slice().reverse().forEach(function (r) { t += '<tr>' + [0, 1, 2, 3, 4, 6, 7, 8, 9, 10].map(function (i) { return '<td>' + esc(r[i]) + '</td>'; }).join('') + '</tr>'; });
   c2.appendChild(h('div', { class: 'scroll' }, t + '</table>'));
@@ -893,13 +1159,13 @@ function open(id, force) {
   $('ph').innerHTML = '<h1>' + it.name + '</h1><div>' + it.sub + '</div>';
   try { if (location.hash !== '#' + id) history.replaceState(null, '', '#' + id); } catch (e) {}
   var main = $('main');
-  main.innerHTML = '<div class="loading">読み込み中</div>';
+  main.innerHTML = '<div class="loading">LOADING</div>';
   load(id, force).then(function (d) {
     if (CUR !== id) return;
     $('at').textContent = d.at;
     [JL, VS, OP, MB].forEach(function (s) { s.anim = true; });
     render(id);
-  }, function (err) { main.innerHTML = '<div class="loading">読み込めませんでした　' + esc((err && err.message) || err) + '</div>'; });
+  }, function (err) { main.innerHTML = '<div class="loading">LOAD ERROR　' + esc((err && err.message) || err) + '</div>'; });
 }
 $('reload').onclick = function () { if (CUR) open(CUR, true); };
 var rt; window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(function () { if (CUR && DATA[CUR]) render(CUR); }, 200); });
@@ -913,7 +1179,7 @@ document.addEventListener('keydown', function (e) {
 window.addEventListener('hashchange', function () { var id = location.hash.slice(1); if (RENDER[id] && id !== CUR) open(id); });
 drawItems();
 var start = (location.hash || '').slice(1);
-open(RENDER[start] ? start : 'jl');
+open(RENDER[start] ? start : 'master');
 </script>
 </body>
 </html>

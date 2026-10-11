@@ -13,7 +13,7 @@ function dashPage_() {
 function dashData(item, force) {
   if (DASH_ITEMS_.indexOf(item) < 0) return { ok: false, message: 'unknown item' };
   var cache = CacheService.getScriptCache();
-  var key = 'dash3_' + item;
+  var key = 'dash4_' + item;
   if (!force) {
     var hit = dashCacheGet_(cache, key);
     if (hit) return hit;
@@ -132,7 +132,14 @@ function dashMaster_(ss) {
   var sh = ss.getSheetByName('経堂マスタ');
   if (!sh) return { rows: [] };
   var reading = sh.getRange('F7:G14').getDisplayValues().filter(function (r) { return r[0] || r[1]; });
-  return { rows: sh.getRange('A16:J60').getDisplayValues().filter(function (r) { return String(r[0]).trim(); }), reading: reading };
+  var top = sh.getRange('A1:Q6').getDisplayValues(), head = [];
+  for (var i = 0; i < top.length - 1; i++) {
+    for (var j = 0; j < top[i].length; j++) {
+      var lb = String(top[i][j]).trim();
+      if (/^当(日|月)/.test(lb) && lb.length <= 8) head.push([lb, String(top[i + 1][j]).trim()]);
+    }
+  }
+  return { rows: sh.getRange('A16:J60').getDisplayValues().filter(function (r) { return String(r[0]).trim(); }), reading: reading, head: head };
 }
 
 /** 会員分析：累計入会データ（入会月・退会月・プラン・年齢・性別）と累計退会データ（退会月・理由・在籍） */
