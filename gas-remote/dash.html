@@ -110,7 +110,7 @@
     <div id="items"></div>
     <div class="navfoot"><button class="btn" id="reload">最新のデータにする</button></div>
   </nav>
-  <main id="main"><div class="loading">項目を選択</div></main>
+  <main><div class="ph" id="ph"></div><div id="main"><div class="loading">項目を選択</div></div></main>
 </div>
 <div id="tip"></div>
 <script>
@@ -123,7 +123,7 @@ var ITEMS = [
   { id: 'member', name: '会員分析', sub: '継続率・プラン・退会理由' },
   { id: 'unpaid', name: '未納', sub: '件数・金額・回収率' }
 ];
-var DATA = {}, CUR = null, FIRST = true;
+var DATA = {}, CUR = null, FIRST = true, KEYNAV = null;
 var A_C = '#e6e6e6', RED = '#6b6b6b', GRAY = '#3a3a3a', PREV = '#474747', FUT = '#9a9a9a', PLAN = '#bdbdbd';
 var WD = ['日', '月', '火', '水', '木', '金', '土'];
 
@@ -204,8 +204,10 @@ document.addEventListener('mousemove', function (e) {
   var t = e.target && e.target.getAttribute && e.target.getAttribute('data-t'), tip = $('tip');
   if (!t) { tip.className = ''; return; }
   tip.textContent = t; tip.className = 'on';
-  tip.style.left = Math.min(window.innerWidth - tip.offsetWidth - 8, e.clientX + 12) + 'px';
-  tip.style.top = (e.clientY - 30) + 'px';
+  var vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight, w = tip.offsetWidth, hh = tip.offsetHeight;
+  var x = e.clientX + 14 + w > vw - 8 ? e.clientX - w - 14 : e.clientX + 14;
+  tip.style.left = Math.max(8, Math.min(vw - w - 8, x)) + 'px';
+  tip.style.top = Math.max(8, Math.min(vh - hh - 8, e.clientY - hh - 10)) + 'px';
 });
 
 /* ---------- グラフ ---------- */
@@ -320,15 +322,7 @@ function periodBar(host, st, unit, rerender) {
     : [['直近6ヶ月', [T - 6, T - 1]], ['直近12ヶ月', [T - 12, T - 1]], ['今年度', [fy0, T]], ['昨年度', [fy0 - 12, fy0 - 1]], ['直近2年', [T - 24, T - 1]]];
   var cur = 'custom';
   quick.forEach(function (x) { if (st.A && x[1][0] === st.A[0] && x[1][1] === st.A[1]) cur = x[0]; });
-  var apply = function () {
-    st.B = cmpRange(st, unit); st.anim = true;
-    if (st.view !== 'all') {
-      var lo = Math.min(st.A[0], st.B ? st.B[0] : st.A[0]), need = T - lo + (unit === 'day' ? 1 : 0);
-      var vs = unit === 'day' ? [90, 180, 365] : [24, 60];
-      if (need > +st.view) st.view = String(vs.filter(function (v) { return v >= need; })[0] || 'all');
-    }
-    rerender();
-  };
+  var apply = function () { st.B = cmpRange(st, unit); st.anim = true; fitView(st, unit, T); rerender(); };
   var iso = function (n) { return unit === 'day' ? dd(n).toISOString().slice(0, 10) : Math.floor(n / 12) + '-' + ('0' + (n % 12 + 1)).slice(-2); };
   var parse = function (s) { return unit === 'day' ? dn(s) : mi(s); };
 
@@ -361,7 +355,7 @@ function periodBar(host, st, unit, rerender) {
   var p = h('div', { class: 'periods' });
   p.appendChild(h('span', { class: 'pa' }, '<b>' + lab(st.A) + '</b>'));
   if (st.B) p.appendChild(h('span', { class: 'pb' }, 'と ' + lab(st.B) + ' を比較'));
-  p.appendChild(h('span', { class: 'hint' }, 'グラフをドラッグ、または棒をクリックしても期間を選べます'));
+  p.appendChild(h('span', { class: 'hint' }, 'グラフをドラッグ・クリックでも選べます　← → キーでとなりの期間へ'));
   box.appendChild(p);
   host.appendChild(box);
 }
@@ -376,7 +370,34 @@ function cmpRange(st, unit) {
   }
   return [st.A[0] - L, st.A[0] - 1];
 }
-function onBrush(st, unit, rerender) { return function (t, r) { st.A = r; st.B = cmpRange(st, unit); rerender(); }; }
+function fitView(st, unit, T) {
+  if (st.view === 'all') return;
+  var lo = Math.min(st.A[0], st.B ? st.B[0] : st.A[0]), need = T - lo + (unit === 'day' ? 1 : 0);
+  var vs = unit === 'day' ? [90, 180, 365] : [24, 60];
+  if (need > +st.view) st.view = String(vs.filter(function (v) { return v >= need; })[0] || 'all');
+}
+function shiftRange(A, dir, unit, T) {
+  var L = A[1] - A[0] + 1;
+  if (unit === 'day') {
+    var d0 = dd(A[0]), d1 = dd(A[1] + 1);
+    var mEnd = d1.getUTCDate() === 1 || A[1] === T;
+    if (d0.getUTCDate() === 1 && mEnd) {
+      var y = d0.getUTCFullYear(), m = d0.getUTCMonth(), last = dd(A[1]);
+      var k = (last.getUTCFullYear() - y) * 12 + last.getUTCMonth() - m + 1;
+      var s = Date.UTC(y, m + dir * k, 1) / 864e5, e = Date.UTC(y, m + dir * k + k, 1) / 864e5 - 1;
+      return s > T ? null : [s, Math.min(e, T)];
+    }
+  }
+  var r = [A[0] + dir * L, A[1] + dir * L];
+  if (r[0] > T) return null;
+  if (r[1] > T) r = [T - L + 1, T];
+  return r[0] === A[0] ? null : r;
+}
+function onBrush(st, unit, rerender) {
+  var T = unit === 'day' ? dn(DATA[CUR].today) : mi(DATA[CUR].today);
+  KEYNAV = function (dir) { var r = shiftRange(st.A, dir, unit, T); if (!r) return; st.A = r; st.B = cmpRange(st, unit); fitView(st, unit, T); rerender(); };
+  return function (t, r) { st.A = r; st.B = cmpRange(st, unit); rerender(); };
+}
 function dayBuckets(from, to, gran, countFn) {
   var out = [];
   if (gran === 'day') for (var i = from; i <= to; i++) out.push({ s: i, e: i, label: ds(i) + '（' + WD[wd(i)] + '）' });
@@ -837,12 +858,12 @@ function drawItems() {
   });
 }
 function render(id) {
-  CARD_I = 0; FIRST = true; RENDER[id]($('main')); FIRST = false;
-  var it = ITEMS.filter(function (x) { return x.id === id; })[0];
-  $('main').insertBefore(h('div', { class: 'ph' }, '<h1>' + it.name + '</h1><div>' + it.sub + '</div>'), $('main').firstChild);
+  CARD_I = 0; FIRST = true; KEYNAV = null; RENDER[id]($('main')); FIRST = false;
 }
 function open(id, force) {
   CUR = id; drawItems();
+  var it = ITEMS.filter(function (x) { return x.id === id; })[0];
+  $('ph').innerHTML = '<h1>' + it.name + '</h1><div>' + it.sub + '</div>';
   try { if (location.hash !== '#' + id) history.replaceState(null, '', '#' + id); } catch (e) {}
   var main = $('main');
   main.innerHTML = '<div class="loading">読み込み中</div>';
@@ -854,7 +875,14 @@ function open(id, force) {
   }, function (err) { main.innerHTML = '<div class="loading">読み込めませんでした　' + esc((err && err.message) || err) + '</div>'; });
 }
 $('reload').onclick = function () { if (CUR) open(CUR, true); };
-var rt; window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(function () { if (CUR && DATA[CUR]) RENDER[CUR]($('main')); }, 200); });
+var rt; window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(function () { if (CUR && DATA[CUR]) render(CUR); }, 200); });
+document.addEventListener('keydown', function (e) {
+  if (!KEYNAV || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') || e.altKey || e.ctrlKey || e.metaKey) return;
+  var tg = (e.target && e.target.tagName) || '';
+  if (/^(INPUT|SELECT|TEXTAREA)$/.test(tg)) return;
+  e.preventDefault();
+  KEYNAV(e.key === 'ArrowRight' ? 1 : -1);
+});
 window.addEventListener('hashchange', function () { var id = location.hash.slice(1); if (RENDER[id] && id !== CUR) open(id); });
 drawItems();
 var start = (location.hash || '').slice(1);
