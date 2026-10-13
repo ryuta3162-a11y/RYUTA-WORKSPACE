@@ -294,19 +294,50 @@
   .clk path { transform-box: view-box; transform-origin: 50% 50%; }
   .clk .peak { transform-box: view-box; transform-origin: 50% 50%; }
   .loading { padding: 60px; }
-  .loading.full { position: fixed; left: 236px; right: 0; top: 0; bottom: 0; padding: 0 0 10vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; font-size: 13px; letter-spacing: .4em; color: #9a9a9a; z-index: 40; animation: fade .3s both; }
-  .loading.full::before { content: ''; width: 64px; height: 64px; border-radius: 50%; border: 1.5px solid #222; border-top-color: #fff; box-shadow: 0 0 24px rgba(255,255,255,.08); filter: drop-shadow(0 0 6px rgba(255,255,255,.6)); animation: rspin .8s linear infinite; }
-  @media (max-width: 900px) { .app { grid-template-columns: 1fr; } nav { position: static; height: auto; } .navfoot { position: static; margin: 10px; } main { padding: 20px; } .loading.full { left: 0; } }
+  .loading { position: relative; font-size: 0; padding: 0; height: 120px; }
+  .loading::before, .loading::after { content: ''; position: absolute; left: 50%; top: 50%; border-radius: 50%; }
+  .loading::before { width: 34px; height: 34px; margin: -17px 0 0 -17px; border: 1px solid #1e1e1e; border-top-color: #fff; filter: drop-shadow(0 0 5px #fff); animation: rspin .9s cubic-bezier(.6,.1,.4,.9) infinite; }
+  .loading::after { width: 20px; height: 20px; margin: -10px 0 0 -10px; border: 1px solid transparent; border-bottom-color: #777; animation: rspin 1.4s linear infinite reverse; }
+  .loading.full { position: fixed; left: var(--navw); right: 0; top: 0; bottom: 0; height: auto; z-index: 40; animation: fade .3s both; }
+  .loading.full::before { width: 72px; height: 72px; margin: -36px 0 0 -36px; top: 44%; border-width: 1.5px; box-shadow: 0 0 40px rgba(255,255,255,.06); filter: drop-shadow(0 0 6px #fff) drop-shadow(0 0 16px rgba(255,255,255,.5)); }
+  .loading.full::after { width: 46px; height: 46px; margin: -23px 0 0 -23px; top: 44%; border-width: 1px; border-bottom-color: #8a8a8a; border-top-color: #2a2a2a; }
+  .loading.err { font-size: 14px; height: auto; padding: 80px; text-align: center; letter-spacing: .1em; }
+  .loading.err::before, .loading.err::after { display: none; }
+  /* 左メニュー・上部ヘッダー */
+  :root { --navw: 166px; }
+  .app { grid-template-columns: var(--navw) 1fr; }
+  nav { padding: 0; }
+  .brand { height: 64px; display: flex; align-items: center; padding: 0 18px; margin: 0 0 14px; box-shadow: 0 1px 0 #161616; }
+  .brand b { font-size: 15px; letter-spacing: .2em; }
+  .nv { padding: 11px 18px; font-size: 13.5px; letter-spacing: .12em; }
+  .nv:hover { letter-spacing: .16em; }
+  .topbar { position: sticky; top: 0; z-index: 30; height: 64px; display: flex; align-items: center; gap: 16px; margin: 0 -52px 34px; padding: 0 52px; background: rgba(0,0,0,.72); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+  .topbar::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: linear-gradient(90deg, rgba(255,255,255,.5), rgba(255,255,255,.08) 40%, transparent); }
+  .topbar .crumb { font-size: 11px; color: var(--dim); letter-spacing: .24em; }
+  .topbar .crumb::after { content: '/'; margin-left: 14px; color: #333; }
+  .topbar h1 { margin: 0; font-family: var(--serif); font-size: 22px; font-weight: 700; color: #fff; letter-spacing: .16em; text-shadow: 0 0 16px rgba(255,255,255,.25); animation: fade .4s both; }
+  .topbar .sp { flex: 1; }
+  .topbar .upd { font-size: 11px; color: var(--dim); letter-spacing: .2em; font-variant-numeric: tabular-nums; }
+  .topbar .upd b { color: #cfcfcf; font-weight: 600; letter-spacing: .08em; margin-left: 8px; font-size: 13px; }
+  .topbar .rld { width: 34px; height: 34px; }
+  .topbar .rld svg { width: 34px; height: 34px; }
+  main { padding-top: 0; }
+  .card h2 { align-items: center; }
+  .card h2::after { content: ''; flex: 1; height: 1px; min-width: 40px; background: linear-gradient(90deg, #2c2c2c, transparent); order: 99; }
+  .live h2::after { display: none; }
+  @media (max-width: 900px) { .app { grid-template-columns: 1fr; } nav { position: static; height: auto; } .navfoot { position: static; margin: 10px; } main { padding: 20px; } .loading.full { left: 0; } .topbar { margin: 0 -20px 20px; padding: 0 20px; } .topbar .crumb { display: none; } }
 </style>
 </head>
 <body>
 <div class="app">
   <nav>
-    <div class="brand"><b>Work Space</b><div id="at">読み込み中</div></div>
+    <div class="brand"><b>Work Space</b></div>
     <div id="items"></div>
-    <div class="navfoot"><button class="rld" id="reload" aria-label="最新にする"><svg viewBox="0 0 40 40" width="40" height="40"><circle class="rt" cx="20" cy="20" r="17"/><circle class="ra" cx="20" cy="20" r="17"/><circle class="rd" cx="20" cy="3" r="2.2"/></svg></button></div>
   </nav>
-  <main><div class="ph" id="ph"></div><div id="main"><div class="loading full">読み込み中</div></div></main>
+  <main>
+    <header class="topbar"><span class="crumb">経堂</span><h1 id="ttl"></h1><span class="sp"></span><span class="upd">更新<b id="at">—</b></span><button class="rld" id="reload" aria-label="最新にする"><svg viewBox="0 0 40 40" width="40" height="40"><circle class="rt" cx="20" cy="20" r="17"/><circle class="ra" cx="20" cy="20" r="17"/><circle class="rd" cx="20" cy="3" r="2.2"/></svg></button></header>
+    <div id="main"><div class="loading full"></div></div>
+  </main>
 </div>
 <div id="tip"></div>
 <script>
@@ -1396,8 +1427,8 @@ function render(id) {
 function open(id, force) {
   CUR = id; drawItems();
   var it = ITEMS.filter(function (x) { return x.id === id; })[0];
-  $('ph').innerHTML = id === 'master' ? '' : '<h1>' + it.name + '</h1>';
-  $('ph').style.display = id === 'master' ? 'none' : '';
+  $('ttl').textContent = it.name;
+  $('ttl').style.animation = 'none'; void $('ttl').offsetWidth; $('ttl').style.animation = '';
   try { if (location.hash !== '#' + id) history.replaceState(null, '', '#' + id); } catch (e) {}
   var main = $('main');
   main.innerHTML = '<div class="loading full">読み込み中</div>';
@@ -1405,10 +1436,10 @@ function open(id, force) {
   load(id, force).then(function (d) {
     rb.classList.remove('spin');
     if (CUR !== id) return;
-    $('at').textContent = d.at;
+    $('at').textContent = String(d.at || '').replace(/^\d{4}\/(\d+)\/(\d+)/, function (m, a, b) { return +a + '/' + +b; });
     [JL, VS, OP, MB].forEach(function (s) { s.anim = true; });
     render(id);
-  }, function (err) { rb.classList.remove('spin'); main.innerHTML = '<div class="loading">読み込めませんでした　' + esc((err && err.message) || err) + '</div>'; });
+  }, function (err) { rb.classList.remove('spin'); main.innerHTML = '<div class="loading err">読み込めませんでした　' + esc((err && err.message) || err) + '</div>'; });
 }
 $('reload').onclick = function () { if (CUR) open(CUR, true); };
 var rt; window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(function () { if (CUR && DATA[CUR]) render(CUR); }, 200); });
