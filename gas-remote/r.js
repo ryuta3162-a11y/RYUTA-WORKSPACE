@@ -58,6 +58,7 @@ function onOpen() {
   .addToUi();
   ui.createMenu('分析')
   .addItem('今月の読みを更新（経堂マスタ）', 'masterReadingNow')
+  .addItem('馬事移籍｜提出用シートを生成', 'generateBajiTransferReport')
   .addToUi();
   try { hideGesshoSideSheets_(); } catch (eHideSide) { Logger.log(eHideSide); }
   try { ensureNippoMirror_(); } catch (eMirror) { Logger.log(eMirror); }
