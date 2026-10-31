@@ -4347,7 +4347,8 @@ function ensureKengakuFollowSheet_(ss, force) {
 
   sh.clearConditionalFormatRules();
   try { if (sh.getFilter()) sh.getFilter().remove(); } catch (eFilt0) {}
-  sh.getRange(1, 1, end, 16).breakApart().clearContent().clearDataValidations().clearFormat();
+  var wipeTo = Math.max(sh.getMaxRows(), sh.getLastRow(), end, 500);
+  sh.getRange(1, 1, wipeTo, 16).breakApart().clearContent().clearDataValidations().clearFormat();
   sh.showColumns(1, 16);
 
   // —— 1行目：今月の進捗 ——
