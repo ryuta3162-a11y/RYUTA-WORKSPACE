@@ -4407,9 +4407,10 @@ function ensureKengakuFollowSheet_(ss, force) {
   for (var i = 0; i < nData; i++) {
     if (String(names[i][0] || '').trim() || String(mails[i][0] || '').trim()) lastData = i + 1;
   }
-  // データ行以外の入力規則・ゴミを消す
-  if (lastData < nData) {
-    sh.getRange(data + lastData, 1, nData - lastData, 16).clearContent().clearDataValidations().clearFormat();
+  // データ行以外の入力規則・ゴミを消す（以前の500行分の残骸も含む）
+  var clearTo = Math.max(sh.getLastRow(), end, 500);
+  if (data + lastData <= clearTo) {
+    sh.getRange(data + lastData, 1, clearTo - (data + lastData) + 1, 16).clearContent().clearDataValidations().clearFormat();
   }
   var useN = Math.max(1, lastData);
   var restore = [];
@@ -4534,8 +4535,9 @@ function refreshKengakuJoinStatus_(ss) {
   }
   if (last > 0) sh.getRange(data, 12, last, 1).setValues(out.slice(0, last));
   // 下のゴミ（入会日だけ残る・チェックだけ残る）を消す
-  if (last < n) {
-    sh.getRange(data + last, 11, n - last, 6).clearContent().clearDataValidations().clearFormat();
+  var clearTo = Math.max(sh.getLastRow(), end, 500);
+  if (data + last <= clearTo) {
+    sh.getRange(data + last, 11, clearTo - (data + last) + 1, 6).clearContent().clearDataValidations().clearFormat();
   }
   return { joined: joined, open: open, rows: last };
 }
