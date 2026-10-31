@@ -4627,10 +4627,11 @@ function kengakuFollowHtml_(o) {
     '</div></div>';
 }
 
-function kengakuFollowSubject_(kind, when, name) {
+/** 本番件名：【店舗】本日／先日は見学／体験ありがとうございました */
+function kengakuFollowSubject_(kind, when) {
   var k = kind === '体験' ? '体験' : '見学';
-  if (when === '3日後') return '先日は' + k + 'ありがとうございました｜JOYFIT24経堂';
-  return '本日は' + k + 'ありがとうございました｜JOYFIT24経堂';
+  var whenWord = when === '3日後' ? '先日は' : '本日は';
+  return '【JOYFIT24経堂】' + whenWord + k + 'ありがとうございました';
 }
 
 /** 見学／体験フォローのHTMLたたき台を自分宛に送る（本番送信はまだしない） */
@@ -4640,19 +4641,32 @@ function sendKengakuTestMail_(to) {
   var from = '';
   try { from = Session.getEffectiveUser().getEmail() || Session.getActiveUser().getEmail() || ''; } catch (eU) {}
   var stamp = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm:ss');
-  var subject = '【テスト ' + stamp + '】本日は見学ありがとうございました｜JOYFIT24経堂';
-  var html = kengakuFollowHtml_({
+  // 本番件名の先頭に【テスト】だけ付けて受信確認しやすくする
+  var subjectProd = kengakuFollowSubject_('見学', '当日');
+  var subject = '【テスト】' + subjectProd;
+  var subjectList =
+    kengakuFollowSubject_('見学', '当日') + '<br>' +
+    kengakuFollowSubject_('体験', '当日') + '<br>' +
+    kengakuFollowSubject_('見学', '3日後') + '<br>' +
+    kengakuFollowSubject_('体験', '3日後');
+  var html = '' +
+    '<div style="max-width:420px;margin:0 auto 18px;padding:14px 18px;background:#fff;border:1px solid #ddd;font-family:\'Hiragino Sans\',Meiryo,sans-serif;font-size:12px;line-height:1.8;color:#444;">' +
+    '<div style="font-size:10px;letter-spacing:.12em;color:#999;margin-bottom:6px;">本番件名（4種）</div>' +
+    subjectList +
+    '<div style="margin-top:10px;font-size:10px;color:#bbb;">テスト送信 ' + stamp + '</div></div>';
+  html += kengakuFollowHtml_({
     kind: '見学',
     when: '当日',
     name: 'テスト太郎',
     testNote: '※Workspaceテスト送信 ' + stamp + ' / from ' + (from || '不明')
   });
-  // 参考用に体験・3日後も続けて載せる
   html += '<div style="max-width:420px;margin:18px auto 0;font-size:11px;color:#888;font-family:sans-serif;letter-spacing:.1em;">以下は参考（体験／3日後）</div>';
   html += kengakuFollowHtml_({ kind: '体験', when: '当日', name: 'テスト花子' });
   html += kengakuFollowHtml_({ kind: '見学', when: '3日後', name: 'テスト太郎' });
   html += kengakuFollowHtml_({ kind: '体験', when: '3日後', name: 'テスト花子' });
-  var plain = '本日は見学ありがとうございました\nテスト太郎 様\n\nJOYFIT24経堂です。\n本日はご来店いただき、ありがとうございました。\n短時間でしたが、当店を少しでも気に入っていただけたら幸いです。\n\n—— 3日後サンプル ——\n先日は見学ありがとうございました\n現在もお得なキャンペーンを実施中です。ご検討の参考になれば幸いです。\n' + KENGAKU_CAMPAIGN_URL_ + '\n\nJOYFIT24経堂\n※このメールは自動送信です。返信は受け付けておりません。';
+  var plain = subjectProd + '\nテスト太郎 様\n\nJOYFIT24経堂です。\n本日はご来店いただき、ありがとうございました。\n短時間でしたが、当店を少しでも気に入っていただけたら幸いです。\n\n—— 3日後サンプル ——\n' +
+    kengakuFollowSubject_('見学', '3日後') + '\n現在もお得なキャンペーンを実施中です。ご検討の参考になれば幸いです。\n' +
+    KENGAKU_CAMPAIGN_URL_ + '\n\nJOYFIT24経堂\n※このメールは自動送信です。返信は受け付けておりません。';
   var via = '';
   var draftId = '';
   try {
