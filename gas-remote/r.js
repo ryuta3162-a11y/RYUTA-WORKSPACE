@@ -4659,10 +4659,8 @@ function kengakuFollowHtml_(o) {
     '<div style="margin:0;padding:28px 14px;background:#f4f2ef;font-family:' + KENGAKU_FONT_ + ';">' +
     '<div style="max-width:560px;margin:0 auto;background:#fff;border:1px solid #e6e2dc;overflow:hidden;">' +
     '<div style="height:5px;background:' + KENGAKU_RED_ + ';line-height:5px;font-size:0;">&nbsp;</div>' +
-    '<div style="padding:22px 28px 0;">' +
-    '<div style="font-size:11px;font-weight:800;letter-spacing:.28em;color:' + KENGAKU_RED_ + ';' + textCss + '">' +
-    c.kind + '　' + c.day + 'フォロー</div>' +
-    '<div style="margin-top:12px;font-size:22px;line-height:1.45;color:#111;font-weight:900;letter-spacing:.02em;' + textCss + '">' +
+    '<div style="padding:26px 28px 0;">' +
+    '<div style="font-size:22px;line-height:1.45;color:#111;font-weight:900;letter-spacing:.02em;' + textCss + '">' +
     kengakuLinesHtml_(c.title) + '</div>' +
     '<div style="margin-top:14px;font-size:15px;color:#111;font-weight:800;' + textCss + '">' + name + '　様</div>' +
     '<div style="margin:18px 0 0;border-top:1px solid #ece8e2;"></div>' +
