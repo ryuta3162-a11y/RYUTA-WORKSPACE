@@ -58,6 +58,8 @@ function onOpen() {
   .addToUi();
   ui.createMenu('分析')
   .addItem('今月の読みを更新（経堂マスタ）', 'masterReadingNow')
+  .addItem('見学体験シートを整える（フォロー用）', 'setupKengakuFollowFromMenu')
+  .addItem('見学体験の入会判定を更新', 'refreshKengakuJoinFromMenu')
   .addToUi();
   try { hideGesshoSideSheets_(); } catch (eHideSide) { Logger.log(eHideSide); }
   try { ensureNippoMirror_(); } catch (eMirror) { Logger.log(eMirror); }
@@ -1092,6 +1094,12 @@ function handleApiGet_(e) {
     }
     if (api === 'diagnoseImports') {
       return jsonOutput_(diagnoseImportsHealth_());
+    }
+    if (api === 'setupKengakuFollow') {
+      return jsonOutput_(ensureKengakuFollowSheet_(openWorkspaceSpreadsheet_(), true));
+    }
+    if (api === 'refreshKengakuJoin') {
+      return jsonOutput_(refreshKengakuJoinStatus_(openWorkspaceSpreadsheet_()));
     }
     if (api === 'inspectSheet') {
       return jsonOutput_(
@@ -4191,14 +4199,286 @@ function ensureMemberCalcColumns_(ss) {
   try { leave.hideColumns(20, 2); } catch (eL) {}
 }
 
+/** 見学体験申請：フォロー管理用に整理（状態・入会判定・当日/3日後チェック）。種別は非表示のまま残す（会員分析の参照用） */
+var KENGAKU_SHEET_ = '見学体験申請';
+var KENGAKU_HDR_ROW_ = 2;
+var KENGAKU_DATA_ROW_ = 3;
+var KENGAKU_END_ = 500;
 function ensureVisitKind_(ss) {
-  var sh = ss.getSheetByName('見学体験申請');
-  if (!sh) return;
-  sh.getRange(1, 11).setValue('種別').setFontColor('#757575');
-  setFormulaIfChanged_(sh.getRange(2, 11),
-    '=MAP(B2:B400,E2:E400,LAMBDA(k,p,IF(k="","",IF(OR(p="",AND(COUNTIFS(E$2:E$400,p,B$2:B$400,"見学")=0,COUNTIFS(E$2:E$400,p,B$2:B$400,"体験")=0)),k,IF(AND(COUNTIFS(E$2:E$400,p,B$2:B$400,"見学")>0,COUNTIFS(E$2:E$400,p,B$2:B$400,"体験")>0),"両方",k)))))'
+  ensureKengakuFollowSheet_(ss, false);
+}
+
+function setupKengakuFollowFromMenu() {
+  var r = ensureKengakuFollowSheet_(openWorkspaceSpreadsheet_(), true);
+  SpreadsheetApp.getActiveSpreadsheet().toast(
+    r && r.ok ? '見学体験シートを整えました（入会 ' + (r.joined || 0) + ' / 未入会 ' + (r.open || 0) + '）' : (r && r.message) || '失敗',
+    '見学体験',
+    8
   );
-  try { sh.hideColumns(11, 1); } catch (eK) {}
+  return r;
+}
+function refreshKengakuJoinFromMenu() {
+  var r = refreshKengakuJoinStatus_(openWorkspaceSpreadsheet_());
+  SpreadsheetApp.getActiveSpreadsheet().toast('入会 ' + r.joined + ' ／ 未入会 ' + r.open, '見学体験', 6);
+  return r;
+}
+
+function ensureKengakuFollowSheet_(ss, force) {
+  var sh = ss.getSheetByName(KENGAKU_SHEET_);
+  if (!sh) return { ok: false, message: '見学体験申請がありません' };
+  var ink = '#1A1210', paper = '#FBF6EA';
+  var hdr = KENGAKU_HDR_ROW_, data = KENGAKU_DATA_ROW_, end = KENGAKU_END_;
+  var nData = end - data + 1;
+  var already = false;
+  try {
+    var h2 = sh.getRange(hdr, 1, 1, 16).getDisplayValues()[0];
+    already = h2.indexOf('当日フォロー') >= 0 && h2.indexOf('3日後フォロー') >= 0 && /IMPORTRANGE/i.test(sh.getRange(data, 1).getFormula() || '');
+  } catch (eAl) {}
+  if (already && !force) {
+    var soft = refreshKengakuJoinStatus_(ss);
+    return { ok: true, skipped: true, joined: soft.joined, open: soft.open };
+  }
+
+  // 既存の送信チェックを退避（再構築しても消さない）
+  var keep = {};
+  try {
+    var oldH = sh.getRange(1, 1, Math.min(5, sh.getLastRow() || 1), Math.min(20, sh.getLastColumn() || 1)).getDisplayValues();
+    var oldHdr = null, oldStart = 0;
+    for (var ri = 0; ri < oldH.length; ri++) {
+      if (String(oldH[ri][0]).indexOf('タイムスタンプ') >= 0 || String(oldH[ri][0]).indexOf('申込日時') >= 0) {
+        oldHdr = oldH[ri]; oldStart = ri + 2; break;
+      }
+    }
+    if (oldHdr) {
+      var ixMail = oldHdr.indexOf('メール'), ixDay = -1, ixDayAt = -1, ixD3 = -1, ixD3At = -1;
+      for (var hi = 0; hi < oldHdr.length; hi++) {
+        var h = String(oldHdr[hi]);
+        if (/当日フォロー/.test(h) && !/送信/.test(h)) ixDay = hi;
+        if (/当日.*送信|当日送信/.test(h)) ixDayAt = hi;
+        if (/3日|未入会フォロー|三日/.test(h) && !/送信/.test(h)) ixD3 = hi;
+        if (/3日.*送信|未入会.*送信|三日.*送信/.test(h)) ixD3At = hi;
+      }
+      if (ixMail >= 0 && (ixDay >= 0 || ixD3 >= 0) && sh.getLastRow() >= oldStart) {
+        var body = sh.getRange(oldStart, 1, sh.getLastRow() - oldStart + 1, Math.max(ixDayAt, ixD3At, ixMail) + 1).getValues();
+        body.forEach(function (r) {
+          var m = String(r[ixMail] || '').trim().toLowerCase();
+          if (!m) return;
+          keep[m] = {
+            day: ixDay >= 0 ? !!r[ixDay] : false,
+            dayAt: ixDayAt >= 0 ? r[ixDayAt] : '',
+            d3: ixD3 >= 0 ? !!r[ixD3] : false,
+            d3At: ixD3At >= 0 ? r[ixD3At] : ''
+          };
+        });
+      }
+    }
+  } catch (eKeep) {}
+
+  // 列数確保
+  if (sh.getMaxColumns() < 18) sh.insertColumnsAfter(sh.getMaxColumns(), 18 - sh.getMaxColumns());
+  if (sh.getMaxRows() < end) sh.insertRowsAfter(sh.getMaxRows(), end - sh.getMaxRows());
+
+  // いったん管理列をクリア（A〜JのIMPORTRANGE以外）
+  sh.clearConditionalFormatRules();
+  sh.getRange(1, 1, end, 18).breakApart();
+  sh.showColumns(1, 18);
+
+  // —— 1行目：サマリー ——
+  sh.setRowHeight(1, 52);
+  sh.getRange('A1:P1').setBackground(ink).setFontColor('#ffffff').setFontFamily('Yu Gothic').setVerticalAlignment('middle');
+  sh.getRange('A1').setValue('見学・体験フォロー').setFontSize(16).setFontWeight('bold').setFontFamily('Yu Mincho');
+  sh.getRange('B1').setFormula('=HYPERLINK("https://docs.google.com/spreadsheets/d/' + KENGAKU_SOURCE_ID_ + '/edit","元の申込フォームを開く ↗")').setFontSize(10).setFontWeight('normal');
+  sh.getRange('C1').setValue('');
+  var hope = 'IFERROR(DATEVALUE(TEXT(H' + data + ':H' + end + ',"yyyy-mm-dd")),0)';
+  var alive = '(C' + data + ':C' + end + '<>"")*(J' + data + ':J' + end + '<>"キャンセル")';
+  sh.getRange('D1').setValue('本日の予定').setFontSize(9).setFontColor('#C9B896');
+  sh.getRange('E1').setFormula('=SUMPRODUCT((' + hope + '=TODAY())*' + alive + ')').setFontSize(18).setFontWeight('bold').setNumberFormat('0');
+  sh.getRange('F1').setValue('当日フォロー待ち').setFontSize(9).setFontColor('#C9B896');
+  sh.getRange('G1').setFormula(
+    '=SUMPRODUCT((' + hope + '<=TODAY())*(' + hope + '>0)*' + alive + '*(M' + data + ':M' + end + '=FALSE))'
+  ).setFontSize(18).setFontWeight('bold').setNumberFormat('0');
+  sh.getRange('H1').setValue('3日後フォロー待ち').setFontSize(9).setFontColor('#C9B896');
+  sh.getRange('I1').setFormula(
+    '=SUMPRODUCT((' + hope + '<=TODAY()-3)*(' + hope + '>0)*' + alive + '*(K' + data + ':K' + end + '="未入会")*(O' + data + ':O' + end + '=FALSE))'
+  ).setFontSize(18).setFontWeight('bold').setNumberFormat('0');
+  sh.getRange('J1').setValue('未入会').setFontSize(9).setFontColor('#C9B896');
+  sh.getRange('K1').setFormula(
+    '=SUMPRODUCT((K' + data + ':K' + end + '="未入会")*' + alive + ')'
+  ).setFontSize(18).setFontWeight('bold').setNumberFormat('0').setFontColor('#FFB4B4');
+  sh.getRange('L1').setValue('入会').setFontSize(9).setFontColor('#C9B896');
+  sh.getRange('M1').setFormula(
+    '=COUNTIF(K' + data + ':K' + end + ',"入会")'
+  ).setFontSize(18).setFontWeight('bold').setNumberFormat('0');
+  sh.getRange('N1').setValue('');
+  sh.getRange('O1').setValue('');
+  sh.getRange('P1').setValue('当日＝希望時刻の2時間後　／　未入会＝希望日の3日後').setFontSize(9).setFontColor('#C9B896').setHorizontalAlignment('right');
+
+  // —— 2行目：見出し ——
+  var heads = [
+    '申込日時', '区分', '名前', 'メール', '電話', '性別', '年代', '希望日', '時刻', '状態',
+    '入会', '入会日', '当日フォロー', '当日送信', '3日後フォロー', '3日後送信', '種別', 'メモ'
+  ];
+  sh.getRange(hdr, 1, 1, heads.length).setValues([heads])
+    .setBackground('#2A1C18').setFontColor('#F4ECD9').setFontWeight('bold').setFontSize(10)
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
+  sh.setRowHeight(hdr, 28);
+  sh.setFrozenRows(hdr);
+
+  // —— データ：元フォーム A〜I + 状態(K) ——
+  var importF =
+    '=IFERROR(QUERY(IMPORTRANGE("' + KENGAKU_SOURCE_ID_ + '","\'見学体験申請\'!A2:L"),' +
+    '"select Col1,Col2,Col3,Col4,Col5,Col6,Col7,Col8,Col9,Col11 where Col2<>\'\'",0),"元シートの読み込み待ち（アクセス許可が必要な場合あり）")';
+  sh.getRange(data, 1, nData, 18).clearContent().clearDataValidations().clearFormat();
+  sh.getRange(data, 1).setFormula(importF);
+  sh.getRange(data, 1, nData, 1).setNumberFormat('yyyy/mm/dd hh:mm');
+  sh.getRange(data, 8, nData, 1).setNumberFormat('yyyy/mm/dd');
+  sh.getRange(data, 9, nData, 1).setNumberFormat('hh:mm');
+
+  // 入会ラベル（L列の入会日を見る）／入会日は refresh で書く（空なら未入会）
+  sh.getRange(data, 11, nData, 1).setFormulaR1C1(
+    '=IF(RC[-8]="","",IF(RC[1]<>"","入会","未入会"))'
+  );
+  sh.getRange(data, 12, nData, 1).setNumberFormat('yyyy/mm/dd');
+
+  sh.getRange(data, 14, nData, 1).setNumberFormat('yyyy/mm/dd hh:mm');
+  sh.getRange(data, 16, nData, 1).setNumberFormat('yyyy/mm/dd hh:mm');
+
+  // 種別（会員分析の「両方」用・非表示）
+  sh.getRange(hdr, 17).setValue('種別').setFontColor('#757575');
+  sh.getRange(data, 17).setFormula(
+    '=MAP(B' + data + ':B' + end + ',E' + data + ':E' + end + ',LAMBDA(k,p,IF(k="","",IF(OR(p="",AND(COUNTIFS(E$' + data + ':E$' + end + ',p,B$' + data + ':B$' + end + ',"見学")=0,COUNTIFS(E$' + data + ':E$' + end + ',p,B$' + data + ':B$' + end + ',"体験")=0)),k,IF(AND(COUNTIFS(E$' + data + ':E$' + end + ',p,B$' + data + ':B$' + end + ',"見学")>0,COUNTIFS(E$' + data + ':E$' + end + ',p,B$' + data + ':B$' + end + ',"体験")>0),"両方",k)))))'
+  );
+
+  // 退避したチェックを戻す（メールキー）。QUERY展開を待つ
+  SpreadsheetApp.flush();
+  Utilities.sleep(1500);
+  var mails = sh.getRange(data, 4, nData, 1).getDisplayValues();
+  var restore = [];
+  for (var i = 0; i < nData; i++) {
+    var key = String(mails[i][0] || '').trim().toLowerCase();
+    var k = keep[key] || {};
+    restore.push([k.day === true, k.dayAt || '', k.d3 === true, k.d3At || '']);
+  }
+  sh.getRange(data, 13, nData, 1).insertCheckboxes();
+  sh.getRange(data, 15, nData, 1).insertCheckboxes();
+  sh.getRange(data, 13, nData, 4).setValues(restore);
+
+  // 見た目
+  sh.getRange(data, 1, nData, 16).setBackground(paper).setFontColor(ink).setFontSize(10).setVerticalAlignment('middle');
+  sh.getRange(data, 2, nData, 1).setHorizontalAlignment('center').setFontWeight('bold');
+  sh.getRange(data, 6, nData, 2).setHorizontalAlignment('center');
+  sh.getRange(data, 10, nData, 2).setHorizontalAlignment('center').setFontWeight('bold');
+  sh.getRange(data, 13, nData, 4).setHorizontalAlignment('center');
+  for (var c = 1; c <= 16; c++) {
+    var w = [110, 52, 100, 180, 110, 48, 64, 90, 52, 72, 56, 90, 72, 110, 72, 110][c - 1];
+    sh.setColumnWidth(c, w);
+  }
+  sh.setColumnWidth(17, 60);
+  sh.setColumnWidth(18, 120);
+  try { sh.hideColumns(17, 2); } catch (eHide) {}
+
+  // 条件付き書式
+  var rng = sh.getRange(data, 1, nData, 16);
+  var rules = [];
+  rules.push(SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=$J' + data + '="キャンセル"').setBackground('#EDE6DC').setFontColor('#9A8B7A').setRanges([rng]).build());
+  rules.push(SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=AND($K' + data + '="未入会",$J' + data + '<>"キャンセル")').setBackground('#F8E8E4').setRanges([rng]).build());
+  rules.push(SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=$K' + data + '="入会"').setBackground('#EAF2EA').setRanges([rng]).build());
+  rules.push(SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=AND($B' + data + '="体験",$C' + data + '<>"")').setFontColor('#5A2A12').setRanges([sh.getRange(data, 2, nData, 1)]).build());
+  sh.setConditionalFormatRules(rules);
+
+  try { if (sh.getFilter()) sh.getFilter().remove(); } catch (eFilt) {}
+  sh.getRange(hdr, 1, end - hdr + 1, 16).createFilter();
+  sh.setTabColor('#6B3A1F');
+
+  // 会員分析の参照列を K→Q(17=種別) に更新
+  try { patchMemberVisitKindRefs_(ss); } catch (ePatch) {}
+
+  var joined = refreshKengakuJoinStatus_(ss);
+  return { ok: true, joined: joined.joined, open: joined.open, restored: Object.keys(keep).length };
+}
+
+/** 会員分析の見学参照を、新レイアウト（データ3行目〜・種別=Q列）に合わせる */
+function patchMemberVisitKindRefs_(ss) {
+  var sh = ss.getSheetByName('会員分析');
+  if (!sh) return;
+  var range = sh.getRange(1, 1, Math.min(40, sh.getLastRow()), Math.min(40, sh.getLastColumn()));
+  var f = range.getFormulas();
+  var changed = false;
+  for (var r = 0; r < f.length; r++) {
+    for (var c = 0; c < f[r].length; c++) {
+      var s = f[r][c];
+      if (!s || s.indexOf('見学体験申請') < 0) continue;
+      var n = s;
+      n = n.split("見学体験申請'!K$").join("見学体験申請'!Q$");
+      n = n.split("見学体験申請'!B$2:").join("見学体験申請'!B$3:");
+      n = n.split("見学体験申請'!E$2:").join("見学体験申請'!E$3:");
+      n = n.split("見学体験申請'!F$2:").join("見学体験申請'!F$3:");
+      n = n.split("見学体験申請'!G$2:").join("見学体験申請'!G$3:");
+      n = n.split("見学体験申請'!H$2:").join("見学体験申請'!H$3:");
+      n = n.split("見学体験申請'!Q$2:").join("見学体験申請'!Q$3:");
+      n = n.split('$400)').join('$500)');
+      n = n.split('$400"').join('$500"');
+      if (n !== s) { f[r][c] = n; changed = true; }
+    }
+  }
+  if (changed) range.setFormulas(f);
+}
+
+/** 経堂_入会と照合して入会日を書く。戻り値 {joined, open} */
+function refreshKengakuJoinStatus_(ss) {
+  var sh = ss.getSheetByName(KENGAKU_SHEET_);
+  var js = ss.getSheetByName('経堂_入会');
+  if (!sh || !js) return { joined: 0, open: 0 };
+  var data = KENGAKU_DATA_ROW_, end = KENGAKU_END_, n = end - data + 1;
+  var norm = function (s) { return String(s || '').replace(/[\s\u3000]/g, '').toLowerCase(); };
+  var joins = {};
+  var jLast = js.getLastRow();
+  if (jLast > 1) {
+    js.getRange(2, 1, jLast - 1, 6).getValues().forEach(function (r) {
+      var t = dashDate_(r[0]);
+      if (!t) return;
+      var day = t.d;
+      [norm(r[1]), norm(r[5])].forEach(function (k) {
+        if (!k) return;
+        (joins[k] = joins[k] || []).push(day);
+      });
+    });
+  }
+  var dayN = function (d) {
+    if (!d) return null;
+    if (d instanceof Date) return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 864e5;
+    var s = String(d);
+    var m = s.match(/(\d{4})[\/\-年](\d{1,2})[\/\-月]?(\d{1,2})?/);
+    if (!m) return null;
+    return Date.UTC(+m[1], +m[2] - 1, +(m[3] || 1)) / 864e5;
+  };
+  var rows = sh.getRange(data, 1, n, 4).getValues(); // A申込 C名前 Dメール — wait cols: A,B,C,D = 申込,区分,名前,メール; H=希望日 col 8
+  var hope = sh.getRange(data, 8, n, 1).getValues();
+  var out = [];
+  var joined = 0, open = 0;
+  for (var i = 0; i < n; i++) {
+    var name = rows[i][2], mail = rows[i][3];
+    if (!String(name || '').trim() && !String(mail || '').trim()) { out.push(['']); continue; }
+    var base = dayN(hope[i][0]) != null ? dayN(hope[i][0]) : dayN(rows[i][0]);
+    var best = null, bestD = '';
+    [norm(name), norm(mail)].forEach(function (k) {
+      (joins[k] || []).forEach(function (d) {
+        var x = dayN(d) - base;
+        if (base == null || x < -1 || x > KENGAKU_JOIN_WINDOW_DAYS_) return;
+        if (best === null || x < best) { best = Math.max(0, x); bestD = d; }
+      });
+    });
+    if (bestD) {
+      joined++;
+      var p = String(bestD).split('-');
+      out.push([p.length === 3 ? new Date(+p[0], +p[1] - 1, +p[2]) : bestD]);
+    } else {
+      open++;
+      out.push(['']);
+    }
+  }
+  sh.getRange(data, 12, n, 1).setValues(out);
+  return { joined: joined, open: open };
 }
 
 function memberSliceFormula_(monthCell, gender, ageMin, ageMax) {
@@ -4398,7 +4678,7 @@ function buildMemberAnalysis_(ss) {
       if (kind === '学割') {
         formula = '=IF(' + cell + '="","",SUMPRODUCT((\'学割\'!A$2:A$400<>"")*(TEXT(\'学割\'!A$2:A$400,"yyyy-m")=TEXT(' + cell + ',"yyyy-m"))))';
       } else {
-        formula = '=IF(' + cell + '="","",SUMPRODUCT((\'見学体験申請\'!K$2:K$400="' + kind + '")*(TEXT(\'見学体験申請\'!H$2:H$400,"yyyy-m")=TEXT(' + cell + ',"yyyy-m"))))';
+        formula = '=IF(' + cell + '="","",SUMPRODUCT((\'見学体験申請\'!Q$3:Q$500="' + kind + '")*(TEXT(\'見学体験申請\'!H$3:H$500,"yyyy-m")=TEXT(' + cell + ',"yyyy-m"))))';
       }
       sh.getRange(row, side + 1 + sk).setFormula(formula).setNumberFormat('#,##0').setHorizontalAlignment('center');
     }
@@ -4419,7 +4699,7 @@ function buildMemberAnalysis_(ss) {
   sh.getRange(15, attr).setValue('男').setFontWeight('bold').setBackground('#fafafa');
   sh.getRange(16, attr).setValue('女').setFontWeight('bold').setBackground('#fafafa');
   function sexFormula(label) {
-    return '=IF($AA$1="","",SUMPRODUCT((\'見学体験申請\'!B$2:B$400<>"")*(TEXT(\'見学体験申請\'!H$2:H$400,"yyyy-m")=TEXT($AA$1,"yyyy-m"))*((\'見学体験申請\'!F$2:F$400="' + label + '")+(\'見学体験申請\'!F$2:F$400="' + label + '性"))))';
+    return '=IF($AA$1="","",SUMPRODUCT((\'見学体験申請\'!B$3:B$500<>"")*(TEXT(\'見学体験申請\'!H$3:H$500,"yyyy-m")=TEXT($AA$1,"yyyy-m"))*((\'見学体験申請\'!F$3:F$500="' + label + '")+(\'見学体験申請\'!F$3:F$500="' + label + '性"))))';
   }
   sh.getRange(15, attr + 1).setFormula(sexFormula('男')).setNumberFormat('#,##0');
   sh.getRange(16, attr + 1).setFormula(sexFormula('女')).setNumberFormat('#,##0');
@@ -4428,10 +4708,10 @@ function buildMemberAnalysis_(ss) {
   for (var ai = 0; ai < ageLabels.length; ai++) {
     sh.getRange(19 + ai, attr).setValue(ageLabels[ai]).setFontWeight('bold').setBackground('#fafafa');
     var ageMatch = ageLabels[ai] === '70代以上'
-      ? '((\'見学体験申請\'!G$2:G$400="70代")+(\'見学体験申請\'!G$2:G$400="70代以上"))'
-      : '(\'見学体験申請\'!G$2:G$400="' + ageLabels[ai] + '")';
+      ? '((\'見学体験申請\'!G$3:G$500="70代")+(\'見学体験申請\'!G$3:G$500="70代以上"))'
+      : '(\'見学体験申請\'!G$3:G$500="' + ageLabels[ai] + '")';
     sh.getRange(19 + ai, attr + 1).setFormula(
-      '=IF($AA$1="","",SUMPRODUCT((\'見学体験申請\'!B$2:B$400<>"")*(TEXT(\'見学体験申請\'!H$2:H$400,"yyyy-m")=TEXT($AA$1,"yyyy-m"))*' + ageMatch + '))'
+      '=IF($AA$1="","",SUMPRODUCT((\'見学体験申請\'!B$3:B$500<>"")*(TEXT(\'見学体験申請\'!H$3:H$500,"yyyy-m")=TEXT($AA$1,"yyyy-m"))*' + ageMatch + '))'
     ).setNumberFormat('#,##0');
   }
   sh.getRange(15, attr, 2, 2).setBorder(true, true, true, true, true, true, '#eeeeee', SpreadsheetApp.BorderStyle.SOLID);
