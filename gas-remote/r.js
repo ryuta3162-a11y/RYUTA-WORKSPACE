@@ -1103,7 +1103,12 @@ function handleApiGet_(e) {
       return jsonOutput_(refreshKengakuJoinStatus_(openWorkspaceSpreadsheet_()));
     }
     if (api === 'kengakuTestMail') {
-      return jsonOutput_(sendKengakuTestMail_(String(e.parameter.to || 'r-kusaka@okamoto-group.co.jp')));
+      return jsonOutput_(sendKengakuTestMail_({
+        to: String(e.parameter.to || 'r-kusaka@okamoto-group.co.jp'),
+        kind: String(e.parameter.kind || ''),
+        when: String(e.parameter.when || ''),
+        all: String(e.parameter.all || '') === '1'
+      }));
     }
     if (api === 'inspectSheet') {
       return jsonOutput_(
@@ -4586,8 +4591,8 @@ var KENGAKU_RED_ = '#b21e35';
 var KENGAKU_FONT_ = '\'Hiragino Sans\',\'Hiragino Kaku Gothic ProN\',Meiryo,sans-serif';
 
 /**
- * 見学／体験フォローHTML（キャンペーン赤黒・太字・短文）。
- * 当日＝ジャブ／3日後＝フル幅バナーで取りこぼし防止。住所・メールアドレスは載せない。
+ * 見学／体験フォローHTML（赤アクセント・白カード・太字）。
+ * 当日＝お礼のジャブ／3日後＝キャンペーン案内＋フル幅バナー。住所・メールは載せない。
  * o: { kind:'見学'|'体験', when:'当日'|'3日後', name }
  */
 function kengakuFollowHtml_(o) {
@@ -4595,31 +4600,60 @@ function kengakuFollowHtml_(o) {
   var day = o.when === '3日後' ? '3日後' : '当日';
   var name = String(o.name || '').trim() || '会員';
   var title = day === '当日' ? ('本日は' + kind + 'ありがとうございました') : ('先日は' + kind + 'ありがとうございました');
-  var care = day === '当日'
-    ? '当店を気に入っていただけたら幸いです。'
-    : 'いまもお得なキャンペーン実施中です。';
+  var body = day === '当日'
+    ? ('本日は' + kind + 'にお越しいただき、ありがとうございました。<br>' +
+      '短時間でしたが、JOYFIT24経堂を少しでも気に入っていただけたら幸いです。')
+    : ('先日は' + kind + 'にお越しいただき、ありがとうございました。<br>' +
+      '現在もお得なキャンペーンを実施しております。<br>' +
+      'ご検討の参考になりましたら、下記もご覧ください。');
   var campaign = '';
   if (day === '3日後') {
     campaign =
+      '<div style="padding:8px 0 0;line-height:0;">' +
       '<a href="' + KENGAKU_CAMPAIGN_URL_ + '" style="display:block;line-height:0;text-decoration:none;" target="_blank">' +
-      '<img src="' + KENGAKU_CAMPAIGN_BANNER_ + '" alt="' + KENGAKU_CAMPAIGN_LABEL_ + '" width="600" border="0" ' +
-      'style="display:block;width:100%;max-width:600px;height:auto;border:0;margin:0;padding:0;">' +
-      '</a>';
+      '<img src="' + KENGAKU_CAMPAIGN_BANNER_ + '" alt="' + KENGAKU_CAMPAIGN_LABEL_ + '" width="560" border="0" ' +
+      'style="display:block;width:100%;max-width:560px;height:auto;border:0;margin:0;padding:0;">' +
+      '</a></div>';
   }
   return '' +
-    '<div style="margin:0;padding:0;background:#111;font-family:' + KENGAKU_FONT_ + ';">' +
-    '<div style="max-width:600px;margin:0 auto;background:#fff;">' +
-    '<div style="height:8px;background:' + KENGAKU_RED_ + ';line-height:8px;font-size:0;">&nbsp;</div>' +
-    '<div style="padding:18px 22px 0;font-size:11px;font-weight:800;letter-spacing:.22em;color:#fff;background:#111;">' +
+    '<div style="margin:0;padding:28px 14px;background:#f4f2ef;font-family:' + KENGAKU_FONT_ + ';">' +
+    '<div style="max-width:560px;margin:0 auto;background:#fff;border:1px solid #e6e2dc;overflow:hidden;">' +
+    '<div style="height:5px;background:' + KENGAKU_RED_ + ';line-height:5px;font-size:0;">&nbsp;</div>' +
+    '<div style="padding:22px 28px 0;">' +
+    '<div style="font-size:11px;font-weight:800;letter-spacing:.28em;color:' + KENGAKU_RED_ + ';">' +
     kind + '　' + day + 'フォロー</div>' +
-    '<div style="padding:14px 22px 0;background:#111;">' +
-    '<div style="font-size:22px;line-height:1.35;color:#fff;font-weight:900;letter-spacing:.02em;">' + title + '</div>' +
-    '<div style="padding:12px 0 18px;font-size:15px;color:#fff;font-weight:800;">' + name + '　様</div></div>' +
-    '<div style="padding:20px 22px 8px;font-size:15px;line-height:1.7;color:#111;font-weight:800;">' + care + '</div>' +
+    '<div style="margin-top:12px;font-size:22px;line-height:1.4;color:#111;font-weight:900;letter-spacing:.02em;">' +
+    title + '</div>' +
+    '<div style="margin-top:14px;font-size:15px;color:#111;font-weight:800;">' + name + '　様</div>' +
+    '<div style="margin:18px 0 0;border-top:1px solid #ece8e2;"></div>' +
+    '<div style="padding:18px 0 6px;font-size:14px;line-height:1.95;color:#222;font-weight:700;">' +
+    body + '</div></div>' +
     campaign +
-    '<div style="padding:16px 22px 22px;font-size:11px;line-height:1.6;color:#888;font-weight:700;background:#f7f7f7;">' +
-    '※自動送信です。返信は受け付けておりません。</div>' +
-    '</div></div>';
+    '<div style="padding:18px 28px 24px;">' +
+    '<div style="font-size:13px;font-weight:800;letter-spacing:.14em;color:#111;">JOYFIT24経堂</div>' +
+    '<div style="margin-top:8px;font-size:11px;line-height:1.7;color:#999;font-weight:700;">' +
+    '※このメールは自動送信です。返信は受け付けておりません。</div>' +
+    '</div></div></div>';
+}
+
+function kengakuFollowPlain_(o) {
+  var kind = o.kind === '体験' ? '体験' : '見学';
+  var day = o.when === '3日後' ? '3日後' : '当日';
+  var name = String(o.name || '').trim() || '会員';
+  var title = day === '当日' ? ('本日は' + kind + 'ありがとうございました') : ('先日は' + kind + 'ありがとうございました');
+  var lines = [title, name + '　様', ''];
+  if (day === '当日') {
+    lines.push('本日は' + kind + 'にお越しいただき、ありがとうございました。');
+    lines.push('短時間でしたが、JOYFIT24経堂を少しでも気に入っていただけたら幸いです。');
+  } else {
+    lines.push('先日は' + kind + 'にお越しいただき、ありがとうございました。');
+    lines.push('現在もお得なキャンペーンを実施しております。');
+    lines.push('ご検討の参考になりましたら、下記もご覧ください。');
+    lines.push(KENGAKU_CAMPAIGN_URL_);
+  }
+  lines.push('', 'JOYFIT24経堂');
+  lines.push('※このメールは自動送信です。返信は受け付けておりません。');
+  return lines.join('\n');
 }
 
 /** 本番件名：【店舗】本日／先日は見学／体験ありがとうございました */
@@ -4675,33 +4709,73 @@ function kengakuSendMail_(to, subject, plain, html) {
   return { ok: true, via: via, fromUsed: fromUsed, draftId: draftId };
 }
 
-/** 見学／体験フォローのHTMLたたき台を自分宛に送る（本番送信はまだしない） */
-function sendKengakuTestMail_(to) {
-  to = String(to || 'r-kusaka@okamoto-group.co.jp').trim();
+/** 1通分のフォローメールを組み立てて送る */
+function kengakuSendOneFollow_(to, kind, when, name, testPrefix) {
+  var subjectProd = kengakuFollowSubject_(kind, when);
+  var subject = testPrefix ? (String(testPrefix) + subjectProd) : subjectProd;
+  var payload = { kind: kind, when: when, name: name };
+  var html = kengakuFollowHtml_(payload);
+  var plain = kengakuFollowPlain_(payload);
+  var sent = kengakuSendMail_(to, subject, plain, html);
+  if (!sent.ok) {
+    return { ok: false, kind: kind, when: when, subject: subject, message: sent.message, prev: sent.prev };
+  }
+  return {
+    ok: true,
+    kind: kind,
+    when: when,
+    subject: subject,
+    from: sent.fromUsed,
+    via: sent.via,
+    draftId: sent.draftId
+  };
+}
+
+/**
+ * テスト送信。all=1 なら4通を1件ずつ。kind/when 指定ならその1通だけ。
+ * opt: { to, kind?, when?, all? } または旧形式の宛先文字列
+ */
+function sendKengakuTestMail_(opt) {
+  if (typeof opt === 'string' || opt == null) opt = { to: opt, all: true };
+  var to = String(opt.to || 'r-kusaka@okamoto-group.co.jp').trim();
   if (!to) return { ok: false, message: '宛先なし' };
   var actor = '';
   try { actor = Session.getEffectiveUser().getEmail() || Session.getActiveUser().getEmail() || ''; } catch (eU) {}
   var stamp = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm:ss');
-  var subjectProd = kengakuFollowSubject_('見学', '当日');
-  var subject = '【テスト】' + subjectProd;
-  var html = '' +
-    '<div style="max-width:600px;margin:0 auto 12px;padding:12px 16px;background:#111;color:#fff;font-family:' + KENGAKU_FONT_ + ';font-size:12px;font-weight:700;line-height:1.7;">' +
-    '本番件名<br>' +
-    kengakuFollowSubject_('見学', '当日') + '<br>' +
-    kengakuFollowSubject_('体験', '当日') + '<br>' +
-    kengakuFollowSubject_('見学', '3日後') + '<br>' +
-    kengakuFollowSubject_('体験', '3日後') +
-    '<div style="margin-top:8px;font-size:10px;color:#888;">テスト ' + stamp + '</div></div>';
-  html += kengakuFollowHtml_({ kind: '見学', when: '当日', name: 'テスト太郎' });
-  html += '<div style="max-width:600px;margin:14px auto 6px;font-size:11px;color:#ccc;font-family:' + KENGAKU_FONT_ + ';font-weight:700;letter-spacing:.1em;">参考（体験／3日後）</div>';
-  html += kengakuFollowHtml_({ kind: '体験', when: '当日', name: 'テスト花子' });
-  html += kengakuFollowHtml_({ kind: '見学', when: '3日後', name: 'テスト太郎' });
-  html += kengakuFollowHtml_({ kind: '体験', when: '3日後', name: 'テスト花子' });
-  var plain = subjectProd + '\n' + 'テスト太郎 様\n\n当店を気に入っていただけたら幸いです。\n\n※自動送信です。返信は受け付けておりません。\n' +
-    KENGAKU_CAMPAIGN_URL_;
-  var sent = kengakuSendMail_(to, subject, plain, html);
-  if (!sent.ok) {
-    return { ok: false, to: to, actor: actor, wantFrom: KENGAKU_MAIL_FROM_, message: sent.message, prev: sent.prev };
+  var prefix = '【テスト】';
+  var jobs = [];
+  if (opt.all || (!opt.kind && !opt.when)) {
+    jobs = [
+      { kind: '見学', when: '当日', name: 'テスト太郎' },
+      { kind: '体験', when: '当日', name: 'テスト花子' },
+      { kind: '見学', when: '3日後', name: 'テスト太郎' },
+      { kind: '体験', when: '3日後', name: 'テスト花子' }
+    ];
+  } else {
+    jobs = [{
+      kind: opt.kind === '体験' ? '体験' : '見学',
+      when: opt.when === '3日後' ? '3日後' : '当日',
+      name: opt.kind === '体験' ? 'テスト花子' : 'テスト太郎'
+    }];
+  }
+  var results = [];
+  for (var i = 0; i < jobs.length; i++) {
+    var j = jobs[i];
+    var r = kengakuSendOneFollow_(to, j.kind, j.when, j.name, prefix);
+    results.push(r);
+    if (!r.ok) {
+      return {
+        ok: false,
+        to: to,
+        actor: actor,
+        wantFrom: KENGAKU_MAIL_FROM_,
+        at: stamp,
+        results: results,
+        message: r.message,
+        prev: r.prev
+      };
+    }
+    if (i < jobs.length - 1) Utilities.sleep(1200);
   }
   try {
     var ss = openWorkspaceSpreadsheet_();
@@ -4709,7 +4783,7 @@ function sendKengakuTestMail_(to) {
     if (sh) {
       sh.getRange('A1').setNote(
         '最終テスト送信: ' + stamp + ' → ' + to +
-        ' / actor=' + actor + ' / from=' + sent.fromUsed + ' / via=' + sent.via
+        ' / actor=' + actor + ' / ' + results.length + '通 / from=' + (results[0] && results[0].from)
       );
     }
   } catch (eN) {}
@@ -4717,12 +4791,11 @@ function sendKengakuTestMail_(to) {
     ok: true,
     to: to,
     actor: actor,
-    from: sent.fromUsed,
     wantFrom: KENGAKU_MAIL_FROM_,
-    via: sent.via,
-    subject: subject,
-    draftId: sent.draftId,
-    at: stamp
+    from: results[0] && results[0].from,
+    at: stamp,
+    count: results.length,
+    results: results
   };
 }
 
