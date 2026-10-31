@@ -4575,48 +4575,93 @@ function sendKengakuTestMailFromMenu() {
   return r;
 }
 
+/**
+ * 見学／体験フォローHTML（名刺カード風・短文）。
+ * o: { kind:'見学'|'体験', when:'当日'|'3日後', name, testNote? }
+ */
+function kengakuFollowHtml_(o) {
+  var kind = o.kind === '体験' ? '体験' : '見学';
+  var day = o.when === '3日後' ? '3日後' : '当日';
+  var name = String(o.name || '').trim() || '会員';
+  var title = day === '当日' ? ('本日は' + kind + 'ありがとうございました') : ('先日は' + kind + 'ありがとうございました');
+  var lead = day === '当日'
+    ? '本日はご来店いただき、ありがとうございました。'
+    : '先日はご来店いただき、ありがとうございました。';
+  var care = day === '当日'
+    ? '短時間でしたが、当店を少しでも気に入っていただけたら幸いです。'
+    : 'ご検討のほど、当店を思い出していただけたら幸いです。';
+  return '' +
+    '<div style="margin:0;padding:24px 12px;background:#f3f1ec;font-family:\'Hiragino Mincho ProN\',\'Yu Mincho\',serif;">' +
+    '<div style="max-width:420px;margin:0 auto;background:#fff;border:1px solid #1a1a1a;">' +
+    '<div style="height:4px;background:#1a1a1a;"></div>' +
+    '<div style="padding:28px 28px 8px;letter-spacing:.28em;font-size:10px;color:#888;font-family:\'Hiragino Sans\',Meiryo,sans-serif;">' +
+    kind + '　' + day + 'フォロー</div>' +
+    '<div style="padding:4px 28px 0;font-size:20px;line-height:1.45;color:#111;font-weight:700;">' + title + '</div>' +
+    '<div style="padding:18px 28px 0;font-size:14px;color:#111;font-family:\'Hiragino Sans\',Meiryo,sans-serif;letter-spacing:.04em;">' +
+    name + '　様</div>' +
+    '<div style="margin:22px 28px 0;border-top:1px solid #e5e5e5;"></div>' +
+    '<div style="padding:18px 28px 0;font-size:13px;line-height:1.9;color:#333;font-family:\'Hiragino Sans\',Meiryo,sans-serif;">' +
+    'JOYFIT24経堂です。<br>' + lead + '<br>' + care +
+    '</div>' +
+    '<div style="padding:28px 28px 10px;font-size:13px;color:#111;letter-spacing:.12em;font-family:\'Hiragino Sans\',Meiryo,sans-serif;font-weight:700;">JOYFIT24経堂</div>' +
+    '<div style="padding:0 28px 22px;font-size:10px;line-height:1.7;color:#999;font-family:\'Hiragino Sans\',Meiryo,sans-serif;">' +
+    '※このメールは自動送信です。返信は受け付けておりません。</div>' +
+    (o.testNote ? ('<div style="padding:0 28px 20px;font-size:10px;color:#bbb;font-family:\'Hiragino Sans\',Meiryo,sans-serif;">' + o.testNote + '</div>') : '') +
+    '</div></div>';
+}
+
+function kengakuFollowSubject_(kind, when, name) {
+  var k = kind === '体験' ? '体験' : '見学';
+  if (when === '3日後') return '先日は' + k + 'ありがとうございました｜JOYFIT24経堂';
+  return '本日は' + k + 'ありがとうございました｜JOYFIT24経堂';
+}
+
 /** 見学／体験フォローのHTMLたたき台を自分宛に送る（本番送信はまだしない） */
 function sendKengakuTestMail_(to) {
   to = String(to || 'r-kusaka@okamoto-group.co.jp').trim();
   if (!to) return { ok: false, message: '宛先なし' };
-  var samples = [
-    { kind: '見学', when: '当日', name: 'テスト太郎' },
-    { kind: '体験', when: '3日後', name: 'テスト花子' }
-  ];
-  var html = '' +
-    '<div style="font-family:\'Hiragino Sans\',Meiryo,sans-serif;color:#111;line-height:1.7;max-width:560px">' +
-    '<p style="color:#666;font-size:12px">※これは Workspace のテスト送信です。本番の自動送信はまだ動いていません。</p>';
-  samples.forEach(function (s) {
-    var title = s.when === '当日'
-      ? '本日は' + s.kind + 'ありがとうございました'
-      : '先日は' + s.kind + 'ありがとうございました';
-    html += '<div style="border:1px solid #ddd;padding:18px 20px;margin:16px 0">' +
-      '<div style="font-size:11px;color:#888;letter-spacing:.12em">' + s.kind + '　' + s.when + 'フォロー</div>' +
-      '<h2 style="font-size:18px;margin:8px 0 12px;font-weight:700">' + title + '</h2>' +
-      '<p>' + s.name + ' 様</p>' +
-      '<p>JOYFIT24経堂です。<br>' +
-      (s.when === '当日'
-        ? '本日はご来店いただき、ありがとうございました。<br>ご不明点があれば、このメールにご返信ください。'
-        : '先日はご来店いただき、ありがとうございました。<br>ご検討の様子はいかがでしょうか。ご質問があればお気軽にご連絡ください。') +
-      '</p>' +
-      '<p style="margin-top:18px;font-size:13px;color:#444">JOYFIT24経堂</p>' +
-      '</div>';
+  var from = '';
+  try { from = Session.getEffectiveUser().getEmail() || Session.getActiveUser().getEmail() || ''; } catch (eU) {}
+  var stamp = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm:ss');
+  var subject = '【テスト ' + stamp + '】本日は見学ありがとうございました｜JOYFIT24経堂';
+  var html = kengakuFollowHtml_({
+    kind: '見学',
+    when: '当日',
+    name: 'テスト太郎',
+    testNote: '※Workspaceテスト送信 ' + stamp + ' / from ' + (from || '不明')
   });
-  html += '</div>';
+  // 参考用に体験・3日後も続けて載せる
+  html += '<div style="max-width:420px;margin:18px auto 0;font-size:11px;color:#888;font-family:sans-serif;letter-spacing:.1em;">以下は参考（体験／3日後）</div>';
+  html += kengakuFollowHtml_({ kind: '体験', when: '当日', name: 'テスト花子' });
+  html += kengakuFollowHtml_({ kind: '見学', when: '3日後', name: 'テスト太郎' });
+  html += kengakuFollowHtml_({ kind: '体験', when: '3日後', name: 'テスト花子' });
+  var plain = '本日は見学ありがとうございました\nテスト太郎 様\n\nJOYFIT24経堂です。\n本日はご来店いただき、ありがとうございました。\n短時間でしたが、当店を少しでも気に入っていただけたら幸いです。\n\nJOYFIT24経堂\n※このメールは自動送信です。返信は受け付けておりません。';
+  var via = '';
+  var draftId = '';
   try {
-    GmailApp.sendEmail(to, '【テスト】見学・体験フォローメール（Workspace）', 'HTMLメールを表示できる環境でご覧ください。', {
-      htmlBody: html,
-      name: 'JOYFIT24経堂'
-    });
-    return { ok: true, to: to };
-  } catch (e) {
+    var draft = GmailApp.createDraft(to, subject, plain, { htmlBody: html, name: 'JOYFIT24経堂' });
+    draftId = draft.getId();
+    draft.send();
+    via = 'GmailApp.draft.send';
+  } catch (e1) {
     try {
-      MailApp.sendEmail({ to: to, subject: '【テスト】見学・体験フォローメール（Workspace）', htmlBody: html, name: 'JOYFIT24経堂' });
-      return { ok: true, to: to, via: 'MailApp' };
+      GmailApp.sendEmail(to, subject, plain, { htmlBody: html, name: 'JOYFIT24経堂' });
+      via = 'GmailApp.sendEmail';
     } catch (e2) {
-      return { ok: false, message: String(e2.message || e2) };
+      try {
+        MailApp.sendEmail({ to: to, subject: subject, body: plain, htmlBody: html, name: 'JOYFIT24経堂' });
+        via = 'MailApp';
+      } catch (e3) {
+        return { ok: false, to: to, from: from, message: String(e3.message || e3), prev: String(e2.message || e2) };
+      }
     }
   }
+  try {
+    var ss = openWorkspaceSpreadsheet_();
+    var sh = ss.getSheetByName(KENGAKU_SHEET_);
+    if (sh) sh.getRange('A1').setNote('最終テスト送信: ' + stamp + ' → ' + to + ' / from=' + from + ' / via=' + via);
+  } catch (eN) {}
+  return { ok: true, to: to, from: from, via: via, subject: subject, draftId: draftId, at: stamp };
 }
 
 function memberSliceFormula_(monthCell, gender, ageMin, ageMax) {
