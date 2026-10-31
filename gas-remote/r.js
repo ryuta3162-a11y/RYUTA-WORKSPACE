@@ -4590,24 +4590,63 @@ var KENGAKU_CAMPAIGN_LABEL_ = '6ヶ月3,200円｜先着30名限定';
 var KENGAKU_RED_ = '#b21e35';
 var KENGAKU_FONT_ = '\'Hiragino Sans\',\'Hiragino Kaku Gothic ProN\',Meiryo,sans-serif';
 
+/** スマホでも勝手折れしないよう、1行を短く区切って <br> 固定する */
+function kengakuLinesHtml_(lines) {
+  var out = [];
+  for (var i = 0; i < lines.length; i++) {
+    var s = String(lines[i] == null ? '' : lines[i]);
+    out.push(s === '' ? '&nbsp;' : s);
+  }
+  return out.join('<br>');
+}
+
+function kengakuFollowCopy_(kind, when) {
+  var k = kind === '体験' ? '体験' : '見学';
+  var day = when === '3日後' ? '3日後' : '当日';
+  var title = day === '当日'
+    ? ['本日は' + k, 'ありがとうございました']
+    : ['先日は' + k, 'ありがとうございました'];
+  var body = day === '当日'
+    ? [
+      '本日は' + k + 'に',
+      'お越しいただき、',
+      'ありがとうございました。',
+      '',
+      '当店を気に入って',
+      'いただけたら幸いです。'
+    ]
+    : [
+      '先日は' + k + 'に',
+      'お越しいただき、',
+      'ありがとうございました。',
+      '',
+      '現在もお得な',
+      'キャンペーンを',
+      '実施しております。',
+      '',
+      'ご検討の参考に',
+      'なりましたら、',
+      '下記もご覧ください。'
+    ];
+  var note = [
+    '※このメールは',
+    '自動送信です。',
+    '返信は受け付けて',
+    'おりません。'
+  ];
+  return { kind: k, day: day, title: title, body: body, note: note };
+}
+
 /**
- * 見学／体験フォローHTML（赤アクセント・白カード・太字）。
+ * 見学／体験フォローHTML（赤アクセント・白カード・太字・行固定）。
  * 当日＝お礼のジャブ／3日後＝キャンペーン案内＋フル幅バナー。住所・メールは載せない。
  * o: { kind:'見学'|'体験', when:'当日'|'3日後', name }
  */
 function kengakuFollowHtml_(o) {
-  var kind = o.kind === '体験' ? '体験' : '見学';
-  var day = o.when === '3日後' ? '3日後' : '当日';
+  var c = kengakuFollowCopy_(o.kind, o.when);
   var name = String(o.name || '').trim() || '会員';
-  var title = day === '当日' ? ('本日は' + kind + 'ありがとうございました') : ('先日は' + kind + 'ありがとうございました');
-  var body = day === '当日'
-    ? ('本日は' + kind + 'にお越しいただき、ありがとうございました。<br>' +
-      '短時間でしたが、JOYFIT24経堂を少しでも気に入っていただけたら幸いです。')
-    : ('先日は' + kind + 'にお越しいただき、ありがとうございました。<br>' +
-      '現在もお得なキャンペーンを実施しております。<br>' +
-      'ご検討の参考になりましたら、下記もご覧ください。');
   var campaign = '';
-  if (day === '3日後') {
+  if (c.day === '3日後') {
     campaign =
       '<div style="padding:8px 0 0;line-height:0;">' +
       '<a href="' + KENGAKU_CAMPAIGN_URL_ + '" style="display:block;line-height:0;text-decoration:none;" target="_blank">' +
@@ -4615,44 +4654,35 @@ function kengakuFollowHtml_(o) {
       'style="display:block;width:100%;max-width:560px;height:auto;border:0;margin:0;padding:0;">' +
       '</a></div>';
   }
+  var textCss = 'word-break:keep-all;overflow-wrap:normal;white-space:normal;';
   return '' +
     '<div style="margin:0;padding:28px 14px;background:#f4f2ef;font-family:' + KENGAKU_FONT_ + ';">' +
     '<div style="max-width:560px;margin:0 auto;background:#fff;border:1px solid #e6e2dc;overflow:hidden;">' +
     '<div style="height:5px;background:' + KENGAKU_RED_ + ';line-height:5px;font-size:0;">&nbsp;</div>' +
     '<div style="padding:22px 28px 0;">' +
-    '<div style="font-size:11px;font-weight:800;letter-spacing:.28em;color:' + KENGAKU_RED_ + ';">' +
-    kind + '　' + day + 'フォロー</div>' +
-    '<div style="margin-top:12px;font-size:22px;line-height:1.4;color:#111;font-weight:900;letter-spacing:.02em;">' +
-    title + '</div>' +
-    '<div style="margin-top:14px;font-size:15px;color:#111;font-weight:800;">' + name + '　様</div>' +
+    '<div style="font-size:11px;font-weight:800;letter-spacing:.28em;color:' + KENGAKU_RED_ + ';' + textCss + '">' +
+    c.kind + '　' + c.day + 'フォロー</div>' +
+    '<div style="margin-top:12px;font-size:22px;line-height:1.45;color:#111;font-weight:900;letter-spacing:.02em;' + textCss + '">' +
+    kengakuLinesHtml_(c.title) + '</div>' +
+    '<div style="margin-top:14px;font-size:15px;color:#111;font-weight:800;' + textCss + '">' + name + '　様</div>' +
     '<div style="margin:18px 0 0;border-top:1px solid #ece8e2;"></div>' +
-    '<div style="padding:18px 0 6px;font-size:14px;line-height:1.95;color:#222;font-weight:700;">' +
-    body + '</div></div>' +
+    '<div style="padding:18px 0 6px;font-size:14px;line-height:1.85;color:#222;font-weight:700;' + textCss + '">' +
+    kengakuLinesHtml_(c.body) + '</div></div>' +
     campaign +
     '<div style="padding:18px 28px 24px;">' +
-    '<div style="font-size:13px;font-weight:800;letter-spacing:.14em;color:#111;">JOYFIT24経堂</div>' +
-    '<div style="margin-top:8px;font-size:11px;line-height:1.7;color:#999;font-weight:700;">' +
-    '※このメールは自動送信です。返信は受け付けておりません。</div>' +
+    '<div style="font-size:13px;font-weight:800;letter-spacing:.14em;color:#111;' + textCss + '">JOYFIT24経堂</div>' +
+    '<div style="margin-top:8px;font-size:11px;line-height:1.7;color:#999;font-weight:700;' + textCss + '">' +
+    kengakuLinesHtml_(c.note) + '</div>' +
     '</div></div></div>';
 }
 
 function kengakuFollowPlain_(o) {
-  var kind = o.kind === '体験' ? '体験' : '見学';
-  var day = o.when === '3日後' ? '3日後' : '当日';
+  var c = kengakuFollowCopy_(o.kind, o.when);
   var name = String(o.name || '').trim() || '会員';
-  var title = day === '当日' ? ('本日は' + kind + 'ありがとうございました') : ('先日は' + kind + 'ありがとうございました');
-  var lines = [title, name + '　様', ''];
-  if (day === '当日') {
-    lines.push('本日は' + kind + 'にお越しいただき、ありがとうございました。');
-    lines.push('短時間でしたが、JOYFIT24経堂を少しでも気に入っていただけたら幸いです。');
-  } else {
-    lines.push('先日は' + kind + 'にお越しいただき、ありがとうございました。');
-    lines.push('現在もお得なキャンペーンを実施しております。');
-    lines.push('ご検討の参考になりましたら、下記もご覧ください。');
-    lines.push(KENGAKU_CAMPAIGN_URL_);
-  }
-  lines.push('', 'JOYFIT24経堂');
-  lines.push('※このメールは自動送信です。返信は受け付けておりません。');
+  var lines = c.title.concat([name + '　様', ''], c.body, ['']);
+  if (c.day === '3日後') lines.push(KENGAKU_CAMPAIGN_URL_, '');
+  lines.push('JOYFIT24経堂');
+  lines = lines.concat(c.note);
   return lines.join('\n');
 }
 
