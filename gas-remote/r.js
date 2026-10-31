@@ -4575,8 +4575,14 @@ function sendKengakuTestMailFromMenu() {
   return r;
 }
 
+/** 3日後フォローに載せる現行キャンペーン（店舗HPヒーローと同期） */
+var KENGAKU_CAMPAIGN_URL_ = 'https://lp-24kyodo.vercel.app/';
+var KENGAKU_CAMPAIGN_BANNER_ = 'https://joyfit.jp/kyodo/wp-content/uploads/sites/250/2026/10/kyodo-fv-3200-web.gif';
+var KENGAKU_CAMPAIGN_LABEL_ = '6ヶ月3,200円｜先着30名限定';
+
 /**
  * 見学／体験フォローHTML（名刺カード風・短文）。
+ * 当日＝ジャブ／3日後＝取りこぼし防止でキャンペーンバナーをそっと添える。
  * o: { kind:'見学'|'体験', when:'当日'|'3日後', name, testNote? }
  */
 function kengakuFollowHtml_(o) {
@@ -4589,7 +4595,17 @@ function kengakuFollowHtml_(o) {
     : '先日はご来店いただき、ありがとうございました。';
   var care = day === '当日'
     ? '短時間でしたが、当店を少しでも気に入っていただけたら幸いです。'
-    : 'ご検討のほど、当店を思い出していただけたら幸いです。';
+    : '現在もお得なキャンペーンを実施中です。<br>ご検討の参考になれば幸いです。';
+  var campaign = '';
+  if (day === '3日後') {
+    campaign =
+      '<div style="padding:18px 28px 0;">' +
+      '<a href="' + KENGAKU_CAMPAIGN_URL_ + '" style="display:block;text-decoration:none;" target="_blank">' +
+      '<img src="' + KENGAKU_CAMPAIGN_BANNER_ + '" alt="' + KENGAKU_CAMPAIGN_LABEL_ + '" width="364" style="display:block;width:100%;max-width:364px;height:auto;border:0;">' +
+      '</a>' +
+      '<div style="margin-top:10px;font-size:11px;line-height:1.7;color:#666;font-family:\'Hiragino Sans\',Meiryo,sans-serif;">' +
+      '気になる方は、バナーから詳細をご覧ください。</div></div>';
+  }
   return '' +
     '<div style="margin:0;padding:24px 12px;background:#f3f1ec;font-family:\'Hiragino Mincho ProN\',\'Yu Mincho\',serif;">' +
     '<div style="max-width:420px;margin:0 auto;background:#fff;border:1px solid #1a1a1a;">' +
@@ -4603,6 +4619,7 @@ function kengakuFollowHtml_(o) {
     '<div style="padding:18px 28px 0;font-size:13px;line-height:1.9;color:#333;font-family:\'Hiragino Sans\',Meiryo,sans-serif;">' +
     'JOYFIT24経堂です。<br>' + lead + '<br>' + care +
     '</div>' +
+    campaign +
     '<div style="padding:28px 28px 10px;font-size:13px;color:#111;letter-spacing:.12em;font-family:\'Hiragino Sans\',Meiryo,sans-serif;font-weight:700;">JOYFIT24経堂</div>' +
     '<div style="padding:0 28px 22px;font-size:10px;line-height:1.7;color:#999;font-family:\'Hiragino Sans\',Meiryo,sans-serif;">' +
     '※このメールは自動送信です。返信は受け付けておりません。</div>' +
@@ -4635,7 +4652,7 @@ function sendKengakuTestMail_(to) {
   html += kengakuFollowHtml_({ kind: '体験', when: '当日', name: 'テスト花子' });
   html += kengakuFollowHtml_({ kind: '見学', when: '3日後', name: 'テスト太郎' });
   html += kengakuFollowHtml_({ kind: '体験', when: '3日後', name: 'テスト花子' });
-  var plain = '本日は見学ありがとうございました\nテスト太郎 様\n\nJOYFIT24経堂です。\n本日はご来店いただき、ありがとうございました。\n短時間でしたが、当店を少しでも気に入っていただけたら幸いです。\n\nJOYFIT24経堂\n※このメールは自動送信です。返信は受け付けておりません。';
+  var plain = '本日は見学ありがとうございました\nテスト太郎 様\n\nJOYFIT24経堂です。\n本日はご来店いただき、ありがとうございました。\n短時間でしたが、当店を少しでも気に入っていただけたら幸いです。\n\n—— 3日後サンプル ——\n先日は見学ありがとうございました\n現在もお得なキャンペーンを実施中です。ご検討の参考になれば幸いです。\n' + KENGAKU_CAMPAIGN_URL_ + '\n\nJOYFIT24経堂\n※このメールは自動送信です。返信は受け付けておりません。';
   var via = '';
   var draftId = '';
   try {
