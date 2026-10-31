@@ -201,7 +201,8 @@ function dashMember_(ss) {
 /** 見学・体験：申請日・区分・性別・年代・希望日・時刻・入会したか */
 function dashVisit_(ss) {
   var kinds = [], sexes = [], ages = [], out = { kinds: kinds, sexes: sexes, ages: ages, ev: [] };
-  var sh = ss.getSheetByName('見学体験申請');
+  // 全件は非表示の _見学体験全件（なければ表示用シート）
+  var sh = ss.getSheetByName('_見学体験全件') || ss.getSheetByName('見学体験申請');
   if (!sh || sh.getLastRow() < 2) return out;
   // 入会の受付メールと、メールアドレスまたは氏名（空白を除く）で照合。申し込みから KENGAKU_JOIN_WINDOW_DAYS_ 日以内の入会を数える
   var norm = function (s) { return String(s || '').replace(/[\s\u3000]/g, '').toLowerCase(); };
@@ -217,26 +218,22 @@ function dashVisit_(ss) {
   var dayN = function (d) { return Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10)) / 864e5; };
   var start = 2;
   try {
-    var h0 = String(sh.getRange(2, 1).getDisplayValue() || '');
-    if (/申込日時|タイムスタンプ/.test(h0)) start = 3;
+    var h0 = String(sh.getRange(1, 1).getDisplayValue() || '');
+    if (/申込日時|タイムスタンプ/.test(h0)) start = 2;
+    var h1 = String(sh.getRange(2, 1).getDisplayValue() || '');
+    if (/申込日時|タイムスタンプ/.test(h1)) start = 3;
   } catch (eSt) {}
   var last = sh.getLastRow();
   if (last < start) return out;
-  sh.getRange(start, 1, last - start + 1, 12).getValues().forEach(function (r) {
+  sh.getRange(start, 1, last - start + 1, 10).getValues().forEach(function (r) {
     var t = dashDate_(r[0]);
     if (!t || !String(r[1]).trim()) return;
     var w = dashDate_(r[7]);
     var tm = r[8] instanceof Date ? Number(Utilities.formatDate(r[8], 'Asia/Tokyo', 'H')) : (String(r[8]).match(/^(\d{1,2}):/) || [])[1];
-    var best = null;
-    if (String(r[10] || '') === '入会' || r[11]) {
-      var jd = dashDate_(r[11]);
-      best = jd ? Math.max(0, dayN(jd.d) - dayN(t.d)) : 0;
-    } else {
-      var n0 = dayN(t.d);
-      [norm(r[2]), norm(r[3])].forEach(function (k) {
-        (joins[k] || []).forEach(function (d) { var x = dayN(d) - n0; if (x >= -1 && x <= KENGAKU_JOIN_WINDOW_DAYS_ && (best === null || x < best)) best = Math.max(0, x); });
-      });
-    }
+    var n0 = dayN(t.d), best = null;
+    [norm(r[2]), norm(r[3])].forEach(function (k) {
+      (joins[k] || []).forEach(function (d) { var x = dayN(d) - n0; if (x >= -1 && x <= KENGAKU_JOIN_WINDOW_DAYS_ && (best === null || x < best)) best = Math.max(0, x); });
+    });
     out.ev.push([t.d, dashIdx_(kinds, r[1]), dashIdx_(sexes, r[5]), dashIdx_(ages, r[6]), w ? w.d : '', tm == null ? null : Number(tm), best === null ? 0 : 1, best]);
   });
   return out;
