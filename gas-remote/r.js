@@ -64,6 +64,7 @@ function onOpen() {
   .addItem('見学体験フォロー：今すぐスキャン（ドライラン）', 'runKengakuFollowDryFromMenu')
   .addItem('見学体験フォロー：今すぐスキャン（本番送信）', 'runKengakuFollowLiveFromMenu')
   .addItem('見学体験フォロー：時間トリガーを入れる', 'installKengakuFollowTriggerFromMenu')
+  .addItem('オプション分析を作り直す', 'rebuildOptAnalysisFromMenu')
   .addToUi();
   try { hideGesshoSideSheets_(); } catch (eHideSide) { Logger.log(eHideSide); }
   try { ensureCumulativeBoard_(); } catch (eBoard) { Logger.log(eBoard); }
@@ -1094,6 +1095,15 @@ function handleApiGet_(e) {
     if (api === 'syncVisitBase' && String(e.parameter.token || '') === RECEPTION_REFRESH_TOKEN_) {
       return jsonOutput_(syncVisitBase_());
     }
+    if (api === 'masterAuto' && String(e.parameter.token || '') === RECEPTION_REFRESH_TOKEN_) {
+      var mss = openWorkspaceSpreadsheet_();
+      var block = ensureMasterAutoBlock_(mss);
+      var reading = masterReading_(mss, true);
+      return jsonOutput_({ ok: true, block: block, reading: reading && reading.ok });
+    }
+    if (api === 'syncReview' && String(e.parameter.token || '') === RECEPTION_REFRESH_TOKEN_) {
+      return jsonOutput_(syncReviewTodo_(openWorkspaceSpreadsheet_()));
+    }
     if (api === 'dropDeadSheets' && String(e.parameter.token || '') === RECEPTION_REFRESH_TOKEN_) {
       return jsonOutput_(dropDeadSheets_());
     }
@@ -1143,6 +1153,9 @@ function handleApiGet_(e) {
     }
     if (api === 'installKengakuFollowTrigger') {
       return jsonOutput_(installKengakuFollowTrigger_());
+    }
+    if (api === 'rebuildOptAnalysis') {
+      return jsonOutput_(optAnalysisBuild_(openWorkspaceSpreadsheet_(), true));
     }
     if (api === 'inspectSheet') {
       return jsonOutput_(
@@ -3270,6 +3283,79 @@ function ensureMasterSameDayRow_(ss) {
   sh.getRange(row, 10).setFormula('=IF(AND(ISNUMBER(F' + row + '),ISNUMBER(E' + row + ')),F' + row + '-E' + row + ',)');
 }
 
+/** 経堂マスタに、会員動向の復会・移籍・未納率・見学体験を出す */
+function masterTrendMonthFormula_(key, offset) {
+  return '=IFERROR(INDEX(\'【経堂】会員動向\'!$C$2:$N$115,MATCH("' + key + '",\'【経堂】会員動向\'!$B$2:$B$115,0),MATCH(MONTH(EDATE($AG$5,' + offset + ')),\'【経堂】会員動向\'!$C$1:$N$1,0)),)';
+}
+
+function masterTrendSideFormulas_(row, rate) {
+  var pace = rate
+    ? '=IF(F' + row + '="","",F' + row + ')'
+    : '=IF(TEXT($AG$5,"yymm")<>TEXT(TODAY(),"yymm"),,IF(AND(ISNUMBER(F' + row + '),F' + row + '<>"",DAY(TODAY())>0),ROUND(F' + row + '/DAY(TODAY())*DAY(EOMONTH($AG$5,0)),0),))';
+  var prev = rate
+    ? '=IF(E' + row + '="","",E' + row + ')'
+    : '=IF(ISNUMBER(E' + row + '),E' + row + ',)';
+  var gap = rate
+    ? '=IF(OR(F' + row + '="",E' + row + '=""),"",F' + row + '-E' + row + ')'
+    : '=IF(AND(ISNUMBER(F' + row + '),ISNUMBER(E' + row + ')),F' + row + '-E' + row + ',)';
+  return [
+    pace,
+    prev,
+    '=IF(AND(ISNUMBER(G' + row + '),ISNUMBER(H' + row + '),H' + row + '<>0),G' + row + '/H' + row + ',IF(AND(ISNUMBER(F' + row + '),ISNUMBER(H' + row + '),H' + row + '<>0),F' + row + '/H' + row + ',))',
+    gap
+  ];
+}
+
+function masterWriteTrendRow_(sh, row, label, key, rate) {
+  var intro = 0;
+  var names = sh.getRange('A1:A80').getDisplayValues();
+  for (var i = 0; i < names.length; i++) if (names[i][0] === '紹介') intro = i + 1;
+  if (intro) sh.getRange(intro, 1, 1, 10).copyTo(sh.getRange(row, 1, 1, 10), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+  sh.getRange(row, 1).setValue(label);
+  var months = [];
+  for (var k = -4; k <= 0; k++) months.push(masterTrendMonthFormula_(key, k));
+  sh.getRange(row, 2, 1, 5).setFormulas([months]);
+  sh.getRange(row, 7, 1, 4).setFormulas([masterTrendSideFormulas_(row, rate)]);
+  if (rate) {
+    sh.getRange(row, 2, 1, 6).setNumberFormat('0.00%');
+    sh.getRange(row, 10).setNumberFormat('0.00%');
+  }
+}
+
+function ensureMasterAutoBlock_(ss) {
+  var sh = ss.getSheetByName('経堂マスタ');
+  if (!sh) return { ok: false, message: '経堂マスタがありません' };
+  var names = sh.getRange('A1:A90').getDisplayValues();
+  function find(name) {
+    for (var i = 0; i < names.length; i++) if (names[i][0] === name) return i + 1;
+    return 0;
+  }
+  var intro = find('紹介');
+  if (!intro) return { ok: false, message: '紹介行がありません' };
+  var block = [
+    ['復会', '復会', false],
+    ['移籍', '移籍', false],
+    ['未納率', '未納率', true]
+  ];
+  var missing = block.filter(function (b) { return !find(b[0]); });
+  if (missing.length) sh.insertRowsAfter(intro, missing.length);
+  names = sh.getRange('A1:A90').getDisplayValues();
+  var intro2 = 0;
+  for (var i = 0; i < names.length; i++) if (names[i][0] === '紹介') intro2 = i + 1;
+  missing.forEach(function (b, k) {
+    masterWriteTrendRow_(sh, intro2 + 1 + k, b[0], b[1], b[2]);
+  });
+  var visit = 0;
+  names = sh.getRange('A1:A90').getDisplayValues();
+  for (var j = 0; j < names.length; j++) if (names[j][0] === '見学体験') visit = j + 1;
+  if (visit) {
+    var cur = sh.getRange(visit, 2).getFormula();
+    if (cur.indexOf('見学・体験母数') < 0) masterWriteTrendRow_(sh, visit, '見学体験', '見学・体験母数', false);
+  }
+  SpreadsheetApp.flush();
+  return { ok: true, added: missing.map(function (b) { return b[0]; }), visit: visit };
+}
+
 /** トップの引用元リンク（H列）の末尾にエンジョイポイント付与画面を足す。既にあれば何もしない */
 function ensureEnjoyPointLink_(ss) {
   var sh = ss.getSheetByName(HUB_HOME_SHEET_);
@@ -4535,7 +4621,10 @@ function billingPullTriggered() {
     p.setProperty('MASTER_LINE_FIX', 'v1');
     return { ok: true };
   });
-  mark('masterRead', function () { return masterReading_(ss, false); });
+  mark('masterRead', function () {
+    ensureMasterAutoBlock_(ss);
+    return masterReading_(ss, false);
+  });
   mark('optLog', function () { return optLogSync_(ss); });
   mark('optAnalysis', function () { return optAnalysisBuild_(ss); });
   mark('kaigi', function () { return migrateKaigiSheet_(ss); });
@@ -6310,10 +6399,9 @@ function ensureOptionPlanSheet_(ss) {
 }
 
 /**
- * 口コミ管理：未対応の口コミを一覧にして、ここでエンジョイ付与をチェックする。
- * ① EAST付与は口コミ_経堂の「ポイント付与済」（付与アプリが書く）をそのまま表示。
- * ② エンジョイ付与・メモはこのシートで入力し、隠しシート「口コミ付与記録」に残す。両方済で一覧から消える。
- * 10/3 より前に EAST付与済みの口コミは完了扱い。
+ * 口コミ管理：ポイント未付与の口コミを、月をまたいで全部出す。
+ * ① EAST付与は口コミ_経堂の「ポイント付与済」（付与アプリが書く）をそのまま表示。付与されると次の更新で一覧から外れる。
+ * ② エンジョイ付与・メモはこのシートで入力し、隠しシート「口コミ付与記録」に残す。
  */
 var REVIEW_TODO_SHEET_ = '口コミ管理';
 var REVIEW_LOG_SHEET_ = '口コミ付与記録';
@@ -6364,6 +6452,10 @@ function syncReviewTodo_(ss) {
   var sh = ss.getSheetByName(REVIEW_TODO_SHEET_);
   var src = ss.getSheetByName('口コミ_経堂');
   if (!sh || !src) return { ok: false };
+  var dead = sh.getRange('J8');
+  if (/IMPORTRANGE|経堂_回答|#REF!/i.test(String(dead.getFormula() || '') + String(dead.getDisplayValue() || ''))) {
+    dead.clearContent();
+  }
   var INK = '#111111', MUTE = '#7A7A7A', LINE = '#D9D9D9', RED = '#B91C1C', HEAD = '#111111';
   var log = reviewLog_(ss);
 
@@ -6382,20 +6474,22 @@ function syncReviewTodo_(ss) {
 
   var last = src.getLastRow();
   var rows = last >= 3 ? src.getRange(3, 1, last - 2, 23).getValues() : [];
-  var now = new Date();
-  var ym = Utilities.formatDate(now, 'Asia/Tokyo', 'yyyyMM');
   var list = [];
   rows.forEach(function (r) {
-    if (!r[4] || !(r[0] instanceof Date)) return;
-    if (Utilities.formatDate(r[0], 'Asia/Tokyo', 'yyyyMM') !== ym) return;
+    if (!r[4] || reviewTruthy_(r[21])) return;
     var key = reviewKey_(r);
     var lg = log.map[key] || {};
-    list.push([r[0], r[4], String(r[5] || ''), r[3], r[9], '', lg.enjoy === true, lg.date || '', lg.memo || '', '', '', key]);
+    var when = r[0] instanceof Date ? r[0] : '';
+    list.push([when, r[4], String(r[5] || ''), r[3], r[9], '', lg.enjoy === true, lg.date || '', lg.memo || '', '', '', key]);
   });
-  list.sort(function (a, b) { return b[0].getTime() - a[0].getTime(); });
+  list.sort(function (a, b) {
+    var ta = a[0] instanceof Date ? a[0].getTime() : 0;
+    var tb = b[0] instanceof Date ? b[0].getTime() : 0;
+    return tb - ta;
+  });
 
   var props = PropertiesService.getDocumentProperties();
-  var sig = 'v2|' + ym + '|' + list.map(function (t) { return t[11]; }).join(',');
+  var sig = 'v3|open|' + list.map(function (t) { return t[11]; }).join(',');
   if (props.getProperty('REVIEW_TODO_SIG') === sig && String(sh.getRange(16, 1).getValue()) === '口コミ日') return { ok: true, skipped: true };
 
   try { src.hideSheet(); } catch (eH) {}
@@ -6407,14 +6501,11 @@ function syncReviewTodo_(ss) {
   area.clearFormat();
   area.clearDataValidations();
   sh.setConditionalFormatRules([]);
-  var month = Number(ym.slice(4));
   sh.getRange('A12:C12').copyTo(sh.getRange('A13:C13'), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
   sh.getRange('A13:C13').setValues([['5. Googleの口コミに返信', '', 'Googleビジネスプロフィールで口コミに返信する']]);
   sh.getRange('B13').setFormula('=HYPERLINK("' + REVIEW_GBP_URL_ + '","Google口コミに返信 ↗")');
-  sh.getRange('A14').setValue('流れ：① 口コミ付与アプリでEAST付与（元の回答シートでチェックされると自動で ✓ 済）→ ② エンジョイ付与をしたら G にチェック → 両方済で灰色になります').setFontColor(MUTE).setFontSize(9);
-  var first = REVIEW_TODO_ROW_, lastRow = REVIEW_TODO_ROW_ + Math.max(list.length, 1) - 1;
-  sh.getRange('A15').setFormula('="今月の口コミ（' + month + '月）　' + list.length + '件　未対応 "&SUMPRODUCT((L' + first + ':L' + lastRow + '<>"")*(((F' + first + ':F' + lastRow + '<>"✓ 済")+(G' + first + ':G' + lastRow + '<>TRUE))>0))&"件"')
-    .setFontWeight('bold').setFontSize(12).setFontColor(INK);
+  sh.getRange('A14').setValue('未付与の口コミを月に関係なく出しています。EAST付与が付くと、次の更新で一覧から外れます。エンジョイ付与をしたら G にチェック。').setFontColor(MUTE).setFontSize(9);
+  sh.getRange('A15').setValue('未付与　' + list.length + '件').setFontWeight('bold').setFontSize(12).setFontColor(INK);
   var head = ['口コミ日', '氏名', '会員番号', '評価', '来店日', '① EAST付与', '② エンジョイ付与', '付与日', 'メモ'];
   sh.getRange(16, 1, 1, head.length).setValues([head]).setBackground(HEAD).setFontColor('#FFFFFF').setFontWeight('bold').setHorizontalAlignment('center');
   if (list.length) {
@@ -6443,7 +6534,7 @@ function syncReviewTodo_(ss) {
       SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo('未').setFontColor(RED).setBold(true).setRanges([fRg]).build()
     ]);
   } else {
-    sh.getRange(REVIEW_TODO_ROW_, 1).setValue('今月の口コミはまだありません').setFontColor(MUTE);
+    sh.getRange(REVIEW_TODO_ROW_, 1).setValue('未付与の口コミはありません').setFontColor(MUTE);
   }
   props.setProperty('REVIEW_TODO_SIG', sig);
   return { ok: true, rows: list.length };
@@ -8849,13 +8940,23 @@ function optLogSync_(ss) {
   return { ok: true, rows: out.length };
 }
 
+function rebuildOptAnalysisFromMenu() {
+  var r = optAnalysisBuild_(SpreadsheetApp.getActiveSpreadsheet(), true);
+  SpreadsheetApp.getActiveSpreadsheet().toast(
+    r && r.ok ? (r.skipped ? 'すでに最新です' : 'オプション分析を作り直しました') : ((r && r.message) || '失敗'),
+    '分析',
+    8
+  );
+  return r;
+}
+
 /**
- * オプション分析（会議用）を作る。入会・退会分析と同じ形：上で開始月・終了月・比べる相手を選び、どの表も 1ヶ月＝今回｜比較｜増減 で横に並べる。
- * 「有料オプション検討」はこのシートに作り直す（名前もオプション分析に）。1回だけ。
+ * オプション分析（会議用）を作る。OPの動きだけに絞る。
+ * 開始月・終了月・比べる相手を選び、表は 今回｜比較｜増減。force で作り直し。
  */
-function optAnalysisBuild_(ss) {
+function optAnalysisBuild_(ss, force) {
   var props = PropertiesService.getDocumentProperties();
-  if (props.getProperty('OPT_AN') === 'v2') return { ok: true, skipped: true };
+  if (!force && props.getProperty('OPT_AN') === 'v3') return { ok: true, skipped: true };
   var log = ss.getSheetByName(OPT_LOG_SHEET_);
   if (!log) return { ok: false, wait: 'log' };
   var sh = ss.getSheetByName(OPT_AN_SHEET_);
@@ -8932,7 +9033,7 @@ function optAnalysisBuild_(ss) {
   box('C4:E4', '開始月', startTxt, monthRule);
   box('F4:H4', '終了月', endTxt, monthRule);
   box('I4:K4', '比べる相手', KAIGI_CMP_MOM_, SpreadsheetApp.newDataValidation().requireValueInList(KAIGI_CMP_, true).setAllowInvalid(false).build());
-  sh.getRange('B5').setValue('データ：受付状況表「OP集計」のメール（2026年1月〜）').setFontSize(8).setFontColor(MUTE);
+  sh.getRange('B5').setValue('データ：OPメール明細（自動付与／契約追加／停止）。入会人数などOP以外の指標は出さない').setFontSize(8).setFontColor(MUTE);
   ['B6', 'C6', 'H6', 'I6'].forEach(function (a) { sh.getRange(a).setNumberFormat('yyyy/m/d').setFontSize(8).setFontColor('#FFFFFF'); });
   kaigiApplyPeriod_(sh);
 
@@ -9043,17 +9144,13 @@ function optAnalysisBuild_(ss) {
     return total.concat(canon.map(function (o) { return [o, fn(cat, o), '#,##0', 'pct', 0]; }));
   };
 
-  block('主要指標（月ごと）', '自動付与＝入会のときに付いたオプション。契約追加＝入会後に自分で追加したオプション', [
-    ['入会した人', joiners, '#,##0', 'pct', 1],
+  block('主要指標（月ごと）', '自動付与＝入会時に付いたOP／契約追加＝入会後の追加／停止＝利用停止メール', [
     ['自動付与（入会時）', cnt('自動付与'), '#,##0', 'pct', 1],
-    ['入会1人あたりの自動付与', function (m) { return 'IFERROR(' + cnt('自動付与')(m) + '/' + joiners(m) + ',"")'; }, '0.0', 'diff', 1, 'avg'],
     ['契約追加（入会後）', cnt('契約追加'), '#,##0', 'pct', 1],
-    ['利用開始の合計', function (m) { return '(' + cnt('自動付与')(m) + '+' + cnt('契約追加')(m) + ')'; }, '#,##0', 'pct', 1],
     ['利用停止', cnt('停止'), '#,##0', 'pct', -1],
     ['差し引き（開始−停止）', function (m) { return '(' + cnt('自動付与')(m) + '+' + cnt('契約追加')(m) + '-' + cnt('停止')(m) + ')'; }, '+#,##0;-#,##0;0', 'diff', 1]
   ]);
-  var effRow = row;
-  block('効果検証：続いている割合（月ごと）', '続いている＝その月に始まった契約で、同じ人・同じオプションの「利用停止」メールがまだ来ていないもの', [
+  block('効果検証：続いている割合（月ごと）', '続いている＝その月に始まった契約で、同じ人・同じOPの停止メールがまだ来ていない', [
     ['自動付与（入会時）', cnt('自動付与'), '#,##0', 'pct', 1],
     ['　うち続いている', stay('自動付与'), '#,##0', 'pct', 1],
     ['　継続率', stayRate('自動付与'), '0%', 'pt', 1, 'avg'],
@@ -9061,25 +9158,25 @@ function optAnalysisBuild_(ss) {
     ['　うち続いている', stay('契約追加'), '#,##0', 'pct', 1],
     ['　継続率', stayRate('契約追加'), '0%', 'pt', 1, 'avg']
   ], { sep: [3] });
-  block('自動付与の継続率（オプションごと）', '入会のときに付いたオプションが、どれだけ残っているか', canon.map(function (o) {
+  block('自動付与の継続率（オプションごと）', '入会時に付いたOPがどれだけ残っているか', canon.map(function (o) {
     return [o, stayRate('自動付与', o), '0%', 'pt', 1, 'avg'];
   }));
   block('自動付与の内訳（オプションごと）', '', perOpt(cnt, '自動付与'), { total: true });
   block('契約追加の内訳（オプションごと）', '', perOpt(cnt, '契約追加'), { total: true });
   block('利用停止の内訳（オプションごと）', '', perOpt(cnt, '停止').map(function (x) { x[4] = -1; return x; }), { total: true });
-  block('有料オプション：月初の契約数と目標（合計）', '会員動向の「月初」（31〜46行）と「有料ＯＰ計画」（73〜88行）。今年度の月だけ', [
+  block('在籍契約と目標（会員動向・参考）', '会員動向の月初契約（31〜46）と有料OP計画（73〜88）。今年度のみ', [
     ['月初の契約数', hqSum(31, 46), '#,##0', 'pct', 1, 'first'],
-    ['目標（有料ＯＰ計画）', hqSum(73, 88), '#,##0', 'pct', 0, 'first'],
+    ['目標（有料OP計画）', hqSum(73, 88), '#,##0', 'pct', 0, 'first'],
     ['達成率（月初÷目標）', function (m) { return 'IFERROR(' + hqSum(31, 46)(m) + '/' + hqSum(73, 88)(m) + ',"")'; }, '0%', 'pt', 1, 'avg']
   ]);
-  block('有料オプション：月初の契約数（オプションごと）', '', OPT_PLAN_ITEMS_.map(function (it) {
+  block('在籍契約（オプションごと）', '', OPT_PLAN_ITEMS_.map(function (it) {
     return [it[0], hqVal(it[2]), '#,##0', 'pct', 1, 'first'];
   }));
-  block('有料オプション：目標（オプションごと）', '', OPT_PLAN_ITEMS_.map(function (it) {
+  block('目標（オプションごと）', '', OPT_PLAN_ITEMS_.map(function (it) {
     return [it[0], hqVal(it[1]), '#,##0', 'pct', 0, 'first'];
   }));
 
-  // カード（8〜10行）：選んだ期間の合計
+  // カード（8〜10行）：選んだ期間の合計（OP指標のみ）
   var sumP = function (F, isCmp) {
     var M = isCmp ? '$AZ$2:$AZ$13' : '$AV$2:$AV$13';
     return 'IFERROR(SUMPRODUCT(N(' + M + '<>""),' + F('IF(' + M + '="",DATE(1900,1,1),' + M + ')') + '),0)';
@@ -9088,25 +9185,25 @@ function optAnalysisBuild_(ss) {
     return function (m) { return 'COUNTIFS(' + dA + ',' + m + ',' + dD + ',"' + cat + '"' + (stayOnly ? ',' + dF + ',""' : '') + ')'; };
   };
   var cards = [
-    ['B', '入会した人', function (c) { return sumP(function (m) { return 'COUNTIF(' + jV + ',' + m + ')'; }, c); }, '#,##0', 1],
-    ['D', '自動付与', function (c) { return sumP(arrCnt('自動付与'), c); }, '#,##0', 1],
-    ['F', '契約追加', function (c) { return sumP(arrCnt('契約追加'), c); }, '#,##0', 1],
-    ['H', '利用停止', function (c) { return sumP(arrCnt('停止'), c); }, '#,##0', -1],
-    ['J', '差し引き', function (c) { return '(' + sumP(arrCnt('自動付与'), c) + '+' + sumP(arrCnt('契約追加'), c) + '-' + sumP(arrCnt('停止'), c) + ')'; }, '+#,##0;-#,##0;0', 1],
-    ['L', '自動付与の継続率', function (c) { return 'IFERROR(' + sumP(arrCnt('自動付与', true), c) + '/' + sumP(arrCnt('自動付与'), c) + ',"")'; }, '0%', 1]
+    ['B', '自動付与', function (c) { return sumP(arrCnt('自動付与'), c); }, '#,##0', 1],
+    ['D', '契約追加', function (c) { return sumP(arrCnt('契約追加'), c); }, '#,##0', 1],
+    ['F', '利用停止', function (c) { return sumP(arrCnt('停止'), c); }, '#,##0', -1],
+    ['H', '差し引き', function (c) { return '(' + sumP(arrCnt('自動付与'), c) + '+' + sumP(arrCnt('契約追加'), c) + '-' + sumP(arrCnt('停止'), c) + ')'; }, '+#,##0;-#,##0;0', 1],
+    ['J', '自動付与の継続率', function (c) { return 'IFERROR(' + sumP(arrCnt('自動付与', true), c) + '/' + sumP(arrCnt('自動付与'), c) + ',"")'; }, '0%', 1],
+    ['L', '契約追加の継続率', function (c) { return 'IFERROR(' + sumP(arrCnt('契約追加', true), c) + '/' + sumP(arrCnt('契約追加'), c) + ',"")'; }, '0%', 1]
   ];
   sh.setRowHeight(8, 22); sh.setRowHeight(9, 44); sh.setRowHeight(10, 36);
   cards.forEach(function (cd, n) {
     var c0 = sh.getRange(cd[0] + '8').getColumn();
     [8, 9, 10].forEach(function (rr) { sh.getRange(rr, c0, 1, 2).merge(); });
-    sh.getRange(8, c0).setValue(cd[1]).setFontSize(9).setFontColor(MUTE).setFontWeight('bold');
+    sh.getRange(8, c0).setValue(cd[1]).setFontSize(10).setFontColor(MUTE).setFontWeight('bold');
     var dcell = 'BE' + (2 + n);
     sh.getRange(dcell).setFormula('=IF(' + off + ',"",IFERROR(' + cd[2](false) + '-' + cd[2](true) + ',""))');
-    sh.getRange(9, c0).setFormula('=' + cd[2](false)).setNumberFormat(cd[3]).setFontSize(24).setFontWeight('bold').setFontColor(INK);
+    sh.getRange(9, c0).setFormula('=' + cd[2](false)).setNumberFormat(cd[3]).setFontSize(26).setFontWeight('bold').setFontColor(INK);
     var diff = cd[3] === '0%' ? 'TEXT(' + dcell + '*100,"+0.0;-0.0;0.0")&"pt"' : 'TEXT(' + dcell + ',"+#,##0;-#,##0;0")';
     var sub = sh.getRange(10, c0);
     sub.setFormula('=IF(' + dcell + '="","","比較 "&TEXT(' + cd[2](true) + ',"' + cd[3] + '")&CHAR(10)&"差 "&' + diff + ')')
-      .setWrap(true).setFontSize(9).setFontColor(MUTE).setVerticalAlignment('top');
+      .setWrap(true).setFontSize(10).setFontColor(MUTE).setVerticalAlignment('top');
     sh.getRange(8, c0, 3, 2).setBackground(SOFT).setHorizontalAlignment('left')
       .setBorder(true, null, null, null, null, null, INK, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
     var abs = '$' + dcell.replace(/(\d+)/, '$$$1');
@@ -9154,18 +9251,18 @@ function optAnalysisBuild_(ss) {
   mk('column', 'BG1:BJ13', '利用開始と停止（月ごと）', ['#111111', '#9E9E9E', '#B91C1C'], '', 0);
   mk('line', 'BL1:BN13', '継続率（月ごと）', ['#111111', '#9E9E9E'], '0%', 1);
 
-  // 幅・フォント・非表示
+  // 幅・フォント・非表示（区分列を広め・数字列を少し広げて読みやすく）
   sh.setColumnWidth(1, 16);
-  sh.setColumnWidth(2, 170);
-  for (var k4 = 0; k4 < SLOTS; k4++) { sh.setColumnWidth(ca(k4), 52); sh.setColumnWidth(ca(k4) + 1, 48); sh.setColumnWidth(ca(k4) + 2, 56); }
-  sh.setColumnWidth(SUM_COL, 62); sh.setColumnWidth(SUM_COL + 1, 56); sh.setColumnWidth(SUM_COL + 2, 56);
+  sh.setColumnWidth(2, 200);
+  for (var k4 = 0; k4 < SLOTS; k4++) { sh.setColumnWidth(ca(k4), 58); sh.setColumnWidth(ca(k4) + 1, 52); sh.setColumnWidth(ca(k4) + 2, 58); }
+  sh.setColumnWidth(SUM_COL, 68); sh.setColumnWidth(SUM_COL + 1, 58); sh.setColumnWidth(SUM_COL + 2, 58);
   sh.getRange(1, 1, row, END_COL).setFontFamily('Meiryo').setVerticalAlignment('middle');
   sh.getRange('B1').setVerticalAlignment('bottom');
   sh.hideColumns(END_COL + 1, sh.getMaxColumns() - END_COL);
   protectInputsOnly_(sh, [C.from, C.month, C.cmp]);
-  props.setProperty('OPT_AN', 'v2');
+  props.setProperty('OPT_AN', 'v3');
   props.deleteProperty('TOP_LAYOUT_V');
-  return { ok: true, rows: row, opts: canon.length };
+  return { ok: true, rows: row, opts: canon.length, version: 'v3' };
 }
 
 /**
@@ -9259,7 +9356,7 @@ function masterReading_(ss, force) {
   var opTxt = function (x) { return x.k + ' ' + x.b + '→' + x.a + '名（' + (chg(x.a, x.b) || (x.a > x.b ? '新規' : '')) + '）'; };
 
   // その他の項目：先月の同じペース（先月の数×今日までの日数÷月の日数）と比べる
-  var others = ['紹介', '口コミ', '見学体験', 'レクチャー', '販促乗換', '販促ペア', '学校関係者', 'ラグビー割', '6ヶ月継続'];
+  var others = ['紹介', '復会', '口コミ', '見学体験', 'レクチャー', '販促乗換', '販促ペア', '学校関係者', 'ラグビー割', '6ヶ月継続'];
   var moves = others.map(function (k) {
     var a = g(k, CUR), b0 = g(k, PREV);
     if (a === null || b0 === null) return null;
