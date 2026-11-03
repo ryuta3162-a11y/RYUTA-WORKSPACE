@@ -61,8 +61,12 @@ function onOpen() {
   .addItem('見学体験シートを整える（フォロー用）', 'setupKengakuFollowFromMenu')
   .addItem('見学体験の入会判定を更新', 'refreshKengakuJoinFromMenu')
   .addItem('見学体験フォロー：テストメールを自分に送る', 'sendKengakuTestMailFromMenu')
+  .addItem('見学体験フォロー：今すぐスキャン（ドライラン）', 'runKengakuFollowDryFromMenu')
+  .addItem('見学体験フォロー：今すぐスキャン（本番送信）', 'runKengakuFollowLiveFromMenu')
+  .addItem('見学体験フォロー：時間トリガーを入れる', 'installKengakuFollowTriggerFromMenu')
   .addToUi();
   try { hideGesshoSideSheets_(); } catch (eHideSide) { Logger.log(eHideSide); }
+  try { ensureCumulativeBoard_(); } catch (eBoard) { Logger.log(eBoard); }
   try { ensureNippoMirror_(); } catch (eMirror) { Logger.log(eMirror); }
   try { installTokureiKaiinSheet(); } catch (eTokurei) { Logger.log(eTokurei); }
   try { fixOctoberNippo_(); } catch (eOct) { Logger.log(eOct); }
@@ -1075,6 +1079,27 @@ function handleApiGet_(e) {
     if (api === 'listSheets') {
       return jsonOutput_(listWorkspaceSheets_());
     }
+    if (api === 'ensureCumulativeBoard') {
+      return jsonOutput_(ensureCumulativeBoard_(openWorkspaceSpreadsheet_()));
+    }
+    if (api === 'auditCumulative' && String(e.parameter.token || '') === RECEPTION_REFRESH_TOKEN_) {
+      return jsonOutput_(auditCumulative_(e.parameter.clean === '1'));
+    }
+    if (api === 'syncTrendApps' && String(e.parameter.token || '') === RECEPTION_REFRESH_TOKEN_) {
+      return jsonOutput_(syncTrendApplications_());
+    }
+    if (api === 'syncUnpaidRate' && String(e.parameter.token || '') === RECEPTION_REFRESH_TOKEN_) {
+      return jsonOutput_(syncUnpaidRate_());
+    }
+    if (api === 'syncVisitBase' && String(e.parameter.token || '') === RECEPTION_REFRESH_TOKEN_) {
+      return jsonOutput_(syncVisitBase_());
+    }
+    if (api === 'dropDeadSheets' && String(e.parameter.token || '') === RECEPTION_REFRESH_TOKEN_) {
+      return jsonOutput_(dropDeadSheets_());
+    }
+    if (api === 'syncRejoin' && String(e.parameter.token || '') === RECEPTION_REFRESH_TOKEN_) {
+      return jsonOutput_(syncRejoin_());
+    }
     if (api === 'exportPdf' && String(e.parameter.token || '') === RECEPTION_REFRESH_TOKEN_) {
       var ssx = openWorkspaceSpreadsheet_();
       var shx = ssx.getSheetByName(String(e.parameter.name || ''));
@@ -1109,6 +1134,15 @@ function handleApiGet_(e) {
         when: String(e.parameter.when || ''),
         all: String(e.parameter.all || '') === '1'
       }));
+    }
+    if (api === 'kengakuFollowScan') {
+      return jsonOutput_(runKengakuFollowScan_({
+        dryRun: String(e.parameter.dry || '1') !== '0',
+        limit: Number(e.parameter.limit || 20)
+      }));
+    }
+    if (api === 'installKengakuFollowTrigger') {
+      return jsonOutput_(installKengakuFollowTrigger_());
     }
     if (api === 'inspectSheet') {
       return jsonOutput_(
@@ -3257,7 +3291,7 @@ function ensureEnjoyPointLink_(ss) {
 }
 
 /** トップの作り（版を上げると次の自動実行で作り直す） */
-var TOP_LAYOUT_VERSION_ = 'simple-v7';
+var TOP_LAYOUT_VERSION_ = 'simple-v9';
 var TOP_SRC_RECEPTION_ = 'https://docs.google.com/spreadsheets/d/14hxiLBzvGTuIpfZcoVjiHpz8b419OzUrtQAr5788h3w/edit';
 var TOP_SRC_UNPAID_ = 'https://docs.google.com/spreadsheets/d/10vpQRDfTdwx_Wb7JaSm3lZCkTk8msLyf8ggAHhI1shI/edit';
 var TOP_SRC_TRIAL_ = 'https://docs.google.com/spreadsheets/d/1RPUw0slNCit9ZwJgINGfv89oc2Hxw8zzAZyMt6g_QuY/edit';
@@ -3265,6 +3299,7 @@ var TOP_SRC_SCHOOL_ = 'https://docs.google.com/spreadsheets/d/1mmG_xM1WoWFKgpmOl
 var TOP_SRC_REVIEW_ = 'https://docs.google.com/spreadsheets/d/13_E8m3vQa_61hcoMAPb7XZTyVDVtQ9O7rkVDNtHQvRM/edit';
 var TOP_SRC_LECTURE_ = 'https://docs.google.com/spreadsheets/d/1wntzhyPGcz9hW4saswppYmVG-zHINbjAibu9VkCyEQ8/edit';
 var TOP_SRC_PROMO_ = 'https://docs.google.com/spreadsheets/d/1w7ExndmZn7t2_z55CvxRDMZy4QAcuEyNhIuj-6sUy3E/edit';
+var TOP_SRC_HQ_ = 'https://docs.google.com/spreadsheets/d/1LOOUG97wuiKbhzl0BjJstXgLaaSCZAKNFdD8P3I5x_o/edit';
 
 /** sub: 文字列なら元シートURL、{text} ならただの説明 */
 function topSections_() {
@@ -3272,7 +3307,7 @@ function topSections_() {
     { label: '数字', items: [
       { name: '経堂マスタ', sub: TOP_SRC_RECEPTION_ },
       { name: '日報', sub: TOP_SRC_RECEPTION_ },
-      { name: '【経堂】会員動向', sub: TOP_SRC_RECEPTION_ }
+      { name: '【経堂】会員動向', sub: TOP_SRC_HQ_ }
     ] },
     { label: '分析', items: [
       { name: '会員分析', sub: { text: '今月の数字（累計データから自動）' } },
@@ -3299,8 +3334,7 @@ function topSections_() {
       { name: '販促_6ヶ月継続', sub: TOP_SRC_PROMO_ }
     ] },
     { label: 'データ', items: [
-      { name: '累計入会データ', sub: { text: '入会の元データ' } },
-      { name: '累計退会データ', sub: { text: '退会の元データ' } }
+      { name: '累計入会退会', sub: { text: '次に入れる日' } }
     ] }
   ];
 }
@@ -3989,6 +4023,469 @@ function billingOnEdit(e) {
   }
 }
 
+/**
+ * 復会はアプリの入会・退会（入会・退会_データ）。氏名の空白を除いた一致で、
+ * 退会月より後の入会月を、その入会月の復会にする。会員動向25行と、日報の送信欄へ入れる。
+ * 日報の復会は月次シートJ列（10列目）、紹介はK列。移籍の申請は隠したAA列。入会合計には足さない。
+ */
+function syncRejoin_() {
+  var book = SpreadsheetApp.openById(RECEPTION_SOURCE_ID_);
+  var data = book.getSheetByName('入会・退会_データ');
+  if (!data || data.getLastRow() < 2) return { ok: false, message: 'アプリの入会・退会がありません' };
+
+  function nameKey(s) { return String(s || '').replace(/[\s\u3000]/g, ''); }
+  function ymSerial(v) {
+    if (v instanceof Date && !isNaN(v.getTime())) return v.getFullYear() * 12 + v.getMonth();
+    var m = String(v || '').match(/(\d{4})\D+(\d{1,2})/);
+    if (!m) return 0;
+    var month = Number(m[2]);
+    if (month < 1 || month > 12) return 0;
+    return Number(m[1]) * 12 + (month - 1);
+  }
+  function ymLabel(serial) {
+    var y = Math.floor(serial / 12);
+    var m = serial - y * 12 + 1;
+    return y + '/' + m;
+  }
+  var last = data.getLastRow();
+  var enroll = data.getRange(2, 1, last - 1, 5).getValues();
+  var leave = data.getRange(2, 7, last - 1, 6).getValues();
+  var leaves = {};
+  var joins = {};
+  var earliest = '';
+  leave.forEach(function (r) {
+    if (r[5] === true || String(r[5]).toUpperCase() === 'TRUE') return;
+    var name = nameKey(r[1]);
+    var serial = ymSerial(r[2]);
+    if (name.length < 2 || !serial) return;
+    (leaves[name] || (leaves[name] = [])).push(serial);
+  });
+  enroll.forEach(function (r) {
+    var name = nameKey(r[1]);
+    var serial = ymSerial(r[2]);
+    if (name.length < 2 || !serial) return;
+    (joins[name] || (joins[name] = [])).push({ serial: serial, ts: r[0], name: String(r[1] || '').trim() });
+    var lab = ymLabel(serial);
+    if (!earliest || lab < earliest) earliest = lab;
+  });
+
+  var counts = {};
+  var counted = {};
+  var index = { join: {}, prior: {}, leave: {} };
+  Object.keys(joins).forEach(function (name) {
+    var lvs = leaves[name];
+    if (!lvs) return;
+    joins[name].forEach(function (join) {
+      var leaveAt = -1;
+      lvs.forEach(function (lv) { if (lv < join.serial && lv > leaveAt) leaveAt = lv; });
+      if (leaveAt < 0) return;
+      index.join[name + '|' + join.serial] = true;
+      index.leave[name + '|' + leaveAt] = true;
+      var prior = -1;
+      joins[name].forEach(function (old) { if (old.serial < leaveAt && old.serial > prior) prior = old.serial; });
+      if (prior >= 0) index.prior[name + '|' + prior] = true;
+      if (counted[name + '|' + join.serial]) return;
+      counted[name + '|' + join.serial] = true;
+      var lab = ymLabel(join.serial);
+      counts[lab] = (counts[lab] || 0) + 1;
+    });
+  });
+
+  var hq = SpreadsheetApp.openById('1LOOUG97wuiKbhzl0BjJstXgLaaSCZAKNFdD8P3I5x_o').getSheetByName('経堂');
+  var changed = [];
+  var filled = [];
+  if (hq) {
+    var now = new Date();
+    var year = now.getFullYear();
+    var month = now.getMonth() + 1;
+    var startYear = month >= 4 ? year : year - 1;
+    var cursor = new Date(startYear, 3, 1);
+    var end = new Date(year, month - 1, 1);
+    while (cursor <= end) {
+      var yy = cursor.getFullYear();
+      var mm = cursor.getMonth() + 1;
+      var col = ((mm + 8) % 12) + 3;
+      var n = counts[yy + '/' + mm] || 0;
+      filled.push(mm + '月=' + n);
+      if (Number(hq.getRange(1, col).getValue()) === mm) {
+        var cell = hq.getRange(25, col);
+        var cur = cell.getValue();
+        if (cur === '' || Number(cur) !== n) {
+          cell.setValue(n);
+          changed.push('復会' + mm + '月=' + n);
+        }
+      }
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+  }
+
+  var nippo = book.getSheetByName('日報');
+  var b1 = nippo ? String(nippo.getRange('B1').getDisplayValue() || '') : '';
+  var sheet = b1 ? book.getSheetByName(b1) : null;
+  var todayRejoin = 0;
+  var sumBefore = '';
+  if (sheet && /^(\d{2})(\d{2})$/.test(b1)) {
+    var sheetYear = 2000 + Number(b1.slice(0, 2));
+    var sheetMonth = Number(b1.slice(2));
+    var byDay = {};
+    var seenDay = {};
+    Object.keys(joins).forEach(function (name) {
+      joins[name].forEach(function (join) {
+        var lab = ymLabel(join.serial);
+        if (lab !== sheetYear + '/' + sheetMonth) return;
+        if (!index.join[name + '|' + join.serial] || seenDay[name]) return;
+        seenDay[name] = true;
+        var ts = join.ts;
+        var day = 1;
+        if (ts instanceof Date && !isNaN(ts.getTime()) && ts.getFullYear() === sheetYear && ts.getMonth() + 1 === sheetMonth) day = ts.getDate();
+        byDay[day] = (byDay[day] || 0) + 1;
+      });
+    });
+    var promo = SpreadsheetApp.openById(PROMO_SOURCE_ID_);
+    function promoDays(shName) {
+      var sh = promo.getSheetByName(shName);
+      var days = {};
+      if (!sh || sh.getLastRow() < 2) return days;
+      sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues().forEach(function (r) {
+        var v = r[0];
+        if (!(v instanceof Date) || isNaN(v.getTime())) return;
+        if (v.getFullYear() !== sheetYear || v.getMonth() + 1 !== sheetMonth) return;
+        var d = v.getDate();
+        days[d] = (days[d] || 0) + 1;
+      });
+      return days;
+    }
+    var transferDays = promoDays('乗り換え');
+    var introDays = promoDays('紹介・ペア入会');
+    function dayValues(map) {
+      var vals = [];
+      for (var d = 1; d <= 31; d++) vals.push([(map[d] || 0) > 0 ? map[d] : '']);
+      return vals;
+    }
+    var sumNow = String(sheet.getRange('D5').getFormula() || '');
+    sumBefore = sumNow;
+    var formulas = [];
+    for (var i = 0; i < 31; i++) {
+      var row = 5 + i;
+      formulas.push(['=SUM(E' + row + ':I' + row + ')']);
+    }
+    sheet.getRange(5, 4, 31, 1).setFormulas(formulas);
+    sheet.getRange('D36').setFormula('=SUM(D5:D35)');
+    SpreadsheetApp.flush();
+    sumBefore = sumNow + ' → ' + sheet.getRange('D5').getDisplayValue() + ' | ' + sheet.getRange('E5:K5').getFormulas()[0].join(',');
+    sheet.getRange(5, 10, 31, 1).setValues(dayValues(byDay));
+    sheet.getRange(5, 11, 31, 1).setValues(dayValues(introDays));
+    if (sheet.getMaxColumns() < 27) sheet.insertColumnsAfter(sheet.getMaxColumns(), 27 - sheet.getMaxColumns());
+    sheet.getRange(5, 27, 31, 1).setValues(dayValues(transferDays));
+    sheet.hideColumns(27);
+    var today = new Date().getDate();
+    todayRejoin = byDay[today] || 0;
+    if (nippo) {
+      var dayOf = function (col) { return '=IFERROR(N(INDEX(INDIRECT("\'"&$B$1&"\'!$' + col + '$5:$' + col + '$35"),DAY(TODAY()))),0)'; };
+      var monthOf = function (col) { return '=IFERROR(SUM(INDIRECT("\'"&$B$1&"\'!$' + col + '$5:$' + col + '$35")),0)'; };
+      var want = { D10: dayOf('AA'), F10: dayOf('J'), H10: dayOf('K'), D14: monthOf('AA'), F14: monthOf('J'), H14: monthOf('K') };
+      Object.keys(want).forEach(function (a1) {
+        if (nippo.getRange(a1).getFormula() !== want[a1]) nippo.getRange(a1).setFormula(want[a1]);
+      });
+    }
+  }
+
+  var view = book.getSheetByName('入会・退会');
+  var colored = 0;
+  if (view && view.getLastRow() >= 3) {
+    var viewLast = Math.min(view.getLastRow(), 500);
+    var rows = view.getRange(3, 1, viewLast - 2, 8).getValues();
+    var bgJoin = [];
+    var bgLeave = [];
+    rows.forEach(function (r) {
+      var nk = nameKey(r[1]);
+      var js = ymSerial(r[2]);
+      var joinHit = !!(nk && js && (index.join[nk + '|' + js] || index.prior[nk + '|' + js]));
+      var lk = nameKey(r[6]);
+      var ls = ymSerial(r[7]);
+      var leaveHit = !!(lk && ls && index.leave[lk + '|' + ls]);
+      if (joinHit) colored++;
+      if (leaveHit) colored++;
+      bgJoin.push([joinHit ? '#F6C56B' : '#ffffff']);
+      bgLeave.push([leaveHit ? '#F6C56B' : '#ffffff']);
+    });
+    view.getRange(3, 2, rows.length, 1).setBackgrounds(bgJoin);
+    view.getRange(3, 7, rows.length, 1).setBackgrounds(bgLeave);
+  }
+
+  var board = openWorkspaceSpreadsheet_().getSheetByName('累計入会退会');
+  if (board) {
+    var rules = board.getConditionalFormatRules().filter(function (rule) {
+      var cond = rule.getBooleanCondition();
+      if (!cond) return true;
+      var f = String((cond.getCriteriaValues() || [])[0] || '');
+      return f.indexOf('$AC3=1') < 0 && f.indexOf('$AD3=1') < 0 && f.indexOf('復会色') < 0;
+    });
+    board.setConditionalFormatRules(rules);
+    board.getRange('AA3:AD3').clearContent();
+  }
+  var autoNote = noteTrendAuto_(book);
+  return { ok: true, filled: filled, changed: changed, earliest: earliest, todayRejoin: todayRejoin, colored: colored, sumBefore: sumBefore, autoNote: autoNote };
+}
+
+/** 会員動向は数字だけ。メモ「自動」は外す。元のシートは本部の経堂シートを開く */
+function noteTrendAuto_(receptionBook) {
+  var note = '自動';
+  function clearAuto_(range) {
+    var notes = range.getNotes();
+    var changed = false;
+    for (var r = 0; r < notes.length; r++) {
+      for (var c = 0; c < notes[r].length; c++) {
+        if (notes[r][c] === note) { notes[r][c] = ''; changed = true; }
+      }
+    }
+    if (changed) range.setNotes(notes);
+  }
+  var hqBook = SpreadsheetApp.openById('1LOOUG97wuiKbhzl0BjJstXgLaaSCZAKNFdD8P3I5x_o');
+  var hq = hqBook.getSheetByName('経堂');
+  var ws = openWorkspaceSpreadsheet_().getSheetByName('【経堂】会員動向');
+  [hq, ws].forEach(function (sh) {
+    if (!sh) return;
+    clearAuto_(sh.getRange('B25:N28'));
+    clearAuto_(sh.getRange('B31:N46'));
+  });
+  var url = 'https://docs.google.com/spreadsheets/d/1LOOUG97wuiKbhzl0BjJstXgLaaSCZAKNFdD8P3I5x_o/edit#gid=' + (hq ? hq.getSheetId() : 0);
+  var link = '=HYPERLINK("' + url + '","元のシートを開く ↗")';
+  if (ws) {
+    var p1 = ws.getRange('P1');
+    if (String(p1.getFormula()).indexOf('1LOOUG97') < 0) p1.setFormula(link);
+  }
+  var home = openWorkspaceSpreadsheet_().getSheetByName('トップ');
+  if (home) {
+    var formulas = home.getDataRange().getFormulas();
+    for (var r = 0; r < formulas.length; r++) {
+      for (var c = 0; c < formulas[r].length; c++) {
+        var f = formulas[r][c];
+        if (!f || f.indexOf('会員動向') < 0 || f.indexOf('#gid=') < 0) continue;
+        var below = home.getRange(r + 2, c + 1);
+        var bf = String(below.getFormula() || '');
+        if (bf.indexOf('HYPERLINK') >= 0 && bf.indexOf('1LOOUG97') < 0) below.setFormula(topLinkFormula_(url, '元のシート ↗'));
+      }
+    }
+  }
+  var b1 = receptionBook ? String(receptionBook.getSheetByName('日報').getRange('B1').getDisplayValue() || '') : '';
+  var monthSh = b1 ? receptionBook.getSheetByName(b1) : null;
+  if (monthSh) {
+    [5, 6, 10, 11].forEach(function (col) {
+      var head = monthSh.getRange(4, col);
+      if (!head.getNote()) head.setNote(note);
+    });
+    var block = monthSh.getRange(5, 10, 31, 2);
+    var values = block.getDisplayValues();
+    var notes = block.getNotes();
+    var dirty = false;
+    for (var r = 0; r < notes.length; r++) {
+      for (var c = 0; c < notes[r].length; c++) {
+        if (String(values[r][c] || '') === '' || notes[r][c] === note) continue;
+        notes[r][c] = note;
+        dirty = true;
+      }
+    }
+    if (dirty) block.setNotes(notes);
+  }
+  var nippo = receptionBook ? receptionBook.getSheetByName('日報') : null;
+  if (nippo) {
+    ['D10', 'F10', 'H10', 'D14', 'F14', 'H14'].forEach(function (a1) {
+      var cell = nippo.getRange(a1);
+      if (!cell.getNote()) cell.setNote(note);
+    });
+  }
+  return { workspace: ws ? ws.getRange('B25').getNote() : '', link: ws ? ws.getRange('P1').getFormula() : '' };
+}
+
+
+/** 追加販促の申請数を、会員動向の移籍（26行）と紹介（28行）へ月ごとに入れる */
+function syncTrendApplications_() {
+  var promo = SpreadsheetApp.openById(PROMO_SOURCE_ID_);
+  var transferSh = promo.getSheetByName('乗り換え');
+  var introSh = promo.getSheetByName('紹介・ペア入会');
+  if (!transferSh || !introSh) return { ok: false, message: '追加販促のシートがありません' };
+  var hq = SpreadsheetApp.openById('1LOOUG97wuiKbhzl0BjJstXgLaaSCZAKNFdD8P3I5x_o').getSheetByName('経堂');
+  if (!hq) return { ok: false, message: '会員動向がありません' };
+  var now = new Date();
+  var year = now.getFullYear();
+  var month = now.getMonth() + 1;
+  var startYear = month >= 4 ? year : year - 1;
+  var changed = [];
+  function countsOf(sh) {
+    var last = sh.getLastRow();
+    var counts = {};
+    if (last < 2) return counts;
+    sh.getRange(2, 1, last - 1, 1).getValues().forEach(function (r) {
+      var v = r[0];
+      var y, m;
+      if (v instanceof Date && !isNaN(v.getTime())) {
+        y = v.getFullYear();
+        m = v.getMonth() + 1;
+      } else {
+        var d = String(v || '').match(/(\d{4})\/(\d{1,2})/);
+        if (!d) return;
+        y = Number(d[1]);
+        m = Number(d[2]);
+      }
+      var key = y + '/' + m;
+      counts[key] = (counts[key] || 0) + 1;
+    });
+    return counts;
+  }
+  function writeRow(row, counts) {
+    var cursor = new Date(startYear, 3, 1);
+    var end = new Date(year, month - 1, 1);
+    while (cursor <= end) {
+      var yy = cursor.getFullYear();
+      var mm = cursor.getMonth() + 1;
+      var col = ((mm + 8) % 12) + 3;
+      if (Number(hq.getRange(1, col).getValue()) === mm) {
+        var n = counts[yy + '/' + mm] || 0;
+        var cell = hq.getRange(row, col);
+        var cur = cell.getValue();
+        if (cur === '' || Number(cur) !== n) {
+          cell.setValue(n);
+          changed.push((row === 26 ? '移籍' : '紹介') + mm + '月=' + n);
+        }
+      }
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+  }
+  writeRow(26, countsOf(transferSh));
+  writeRow(28, countsOf(introSh));
+  return { ok: true, changed: changed };
+}
+
+/** 会員動向29行の見学・体験母数。見学体験フォームの申込日時で、見学と体験を月ごとに数える */
+function syncVisitBase_() {
+  var src = SpreadsheetApp.openById(KENGAKU_SOURCE_ID_).getSheetByName('見学体験申請');
+  if (!src) return { ok: false, message: '見学体験申請がありません' };
+  var hq = SpreadsheetApp.openById('1LOOUG97wuiKbhzl0BjJstXgLaaSCZAKNFdD8P3I5x_o').getSheetByName('経堂');
+  if (!hq) return { ok: false, message: '会員動向がありません' };
+  if (String(hq.getRange(29, 2).getDisplayValue()).indexOf('見学') < 0) return { ok: false, message: '29行が見学・体験母数ではありません' };
+  var last = src.getLastRow();
+  var counts = {};
+  if (last >= 2) {
+    src.getRange(2, 1, last - 1, 2).getValues().forEach(function (r) {
+      var plan = String(r[1] || '');
+      if (plan.indexOf('見学') < 0 && plan.indexOf('体験') < 0) return;
+      var v = r[0];
+      var y, m;
+      if (v instanceof Date && !isNaN(v.getTime())) {
+        y = v.getFullYear();
+        m = v.getMonth() + 1;
+      } else {
+        var d = String(v || '').match(/(\d{4})[\/\-](\d{1,2})/);
+        if (!d) return;
+        y = Number(d[1]);
+        m = Number(d[2]);
+      }
+      var key = y + '/' + m;
+      counts[key] = (counts[key] || 0) + 1;
+    });
+  }
+  var now = new Date();
+  var year = now.getFullYear();
+  var month = now.getMonth() + 1;
+  var startYear = month >= 4 ? year : year - 1;
+  var changed = [];
+  var cursor = new Date(startYear, 3, 1);
+  var end = new Date(year, month - 1, 1);
+  while (cursor <= end) {
+    var yy = cursor.getFullYear();
+    var mm = cursor.getMonth() + 1;
+    var col = ((mm + 8) % 12) + 3;
+    if (Number(hq.getRange(1, col).getValue()) === mm) {
+      var n = counts[yy + '/' + mm] || 0;
+      var cell = hq.getRange(29, col);
+      if (!cell.getFormula() && Number(cell.getValue()) !== n) {
+        cell.setValue(n);
+        changed.push(mm + '月=' + n);
+      }
+    }
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+  return { ok: true, changed: changed };
+}
+
+/** 会員動向27行の未納率。請求・回収実績の未納額÷売上（分析表の未納率）を月ごとに入れる */
+function syncUnpaidRate_(ss) {
+  ss = ss || openWorkspaceSpreadsheet_();
+  var bill = ss.getSheetByName(BILL_SHEET_);
+  if (!bill) return { ok: false, message: '請求がありません' };
+  var hq = SpreadsheetApp.openById('1LOOUG97wuiKbhzl0BjJstXgLaaSCZAKNFdD8P3I5x_o').getSheetByName('経堂');
+  if (!hq) return { ok: false, message: '会員動向がありません' };
+  if (String(hq.getRange(27, 2).getDisplayValue()).indexOf('未納率') < 0) return { ok: false, message: '27行が未納率ではありません' };
+  var months = billMonths_();
+  var rates = bill.getRange(BILL_ANALYSIS_ROW_ + 2, 8, months.length, 1).getValues();
+  var changed = [];
+  for (var i = 0; i < months.length; i++) {
+    var n = Number(rates[i][0]);
+    if (!isFinite(n) || n <= 0) continue;
+    var ym = String(months[i]).match(/(\d+)年(\d+)月/);
+    if (!ym) continue;
+    var month = Number(ym[2]);
+    var col = ((month + 8) % 12) + 3;
+    if (Number(hq.getRange(1, col).getValue()) !== month) continue;
+    var cell = hq.getRange(27, col);
+    if (cell.getFormula()) continue;
+    var cur = Number(cell.getValue());
+    if (isFinite(cur) && Math.round(cur * 10000) === Math.round(n * 10000)) continue;
+    cell.setValue(n).setNumberFormat('0.00%');
+    changed.push(month + '月=' + Math.round(n * 10000) / 100 + '%');
+  }
+  return { ok: true, changed: changed };
+}
+
+/** 参照のないシートを消し、残すシートの空の行・列だけ縮める */
+function dropDeadSheets_() {
+  var ss = openWorkspaceSpreadsheet_();
+  var deleted = ['復会色', '会員動向_自動'].filter(function (name) {
+    var sh = ss.getSheetByName(name);
+    if (!sh) return false;
+    ss.deleteSheet(sh);
+    return true;
+  });
+  function trim_(sh, keepRows, keepCols) {
+    if (!sh) return null;
+    var before = sh.getMaxRows() * sh.getMaxColumns();
+    var maxR = sh.getMaxRows();
+    var maxC = sh.getMaxColumns();
+    var rows = 0;
+    var cols = 0;
+    if (maxR > keepRows) {
+      sh.deleteRows(keepRows + 1, maxR - keepRows);
+      rows = maxR - keepRows;
+    }
+    if (maxC > keepCols) {
+      sh.deleteColumns(keepCols + 1, maxC - keepCols);
+      cols = maxC - keepCols;
+    }
+    return { name: sh.getName(), before: before, after: sh.getMaxRows() * sh.getMaxColumns(), rows: rows, cols: cols };
+  }
+  var trimmed = [];
+  var log = ss.getSheetByName('経堂_OPログ');
+  if (log) trimmed.push(trim_(log, Math.max(log.getLastRow() + 800, 100), 3));
+  var op = ss.getSheetByName('分析用_OP明細');
+  if (op) trimmed.push(trim_(op, op.getMaxRows(), Math.max(op.getLastColumn(), 9)));
+  var board = ss.getSheetByName('累計入会退会');
+  if (board) trimmed.push(trim_(board, board.getLastRow() + 800, board.getMaxColumns()));
+  var master = ss.getSheetByName('分析用_会員マスタ');
+  if (master) trimmed.push(trim_(master, master.getMaxRows(), Math.max(master.getLastColumn(), 23)));
+  var recNote = '';
+  try {
+    var rec = SpreadsheetApp.openById('14hxiLBzvGTuIpfZcoVjiHpz8b419OzUrtQAr5788h3w').getSheetByName('OP集計');
+    if (rec) {
+      trimmed.push(trim_(rec, rec.getLastRow() + 200, rec.getMaxColumns()));
+      recNote = 'OP集計 last=' + rec.getLastRow();
+    }
+  } catch (eRec) {
+    recNote = String(eRec.message || eRec).slice(0, 80);
+  }
+  return { ok: true, deleted: deleted, trimmed: trimmed, rec: recNote };
+}
+
 function billingPullTriggered() {
   var ss = openWorkspaceSpreadsheet_();
   var t0 = Date.now();
@@ -4004,12 +4501,17 @@ function billingPullTriggered() {
       if (log) log.getRange('H1:H2').setValues([[Utilities.formatDate(new Date(), 'Asia/Tokyo', 'M/d HH:mm:ss')], [trace.join(' / ') + ' / total ' + Math.round((Date.now() - t0) / 1000) + 's']]);
     } catch (eLog) {}
   };
+  mark('cumulativeBoard', function () { return ensureCumulativeBoard_(ss); });
+  mark('trendApps', function () { return syncTrendApplications_(); });
+  mark('visitBase', function () { return syncVisitBase_(); });
+  mark('rejoin', function () { return syncRejoin_(); });
   mark('topStatus', function () { return syncTopRefreshStatus_(ss); });
   mark('reviewTodo', function () { return syncReviewTodo_(ss); });
   mark('unpaidMirror', function () { syncUnpaidMirror_(ss, false); });
   writeTrace();
   try { memberAnalysisIfChanged_(ss); } catch (e2) { console.error(e2); }
   try { billPull_(ss); } catch (e) { console.error(e); }
+  try { syncUnpaidRate_(ss); } catch (eRate) { console.error(eRate); }
   try { ensureEnjoyPointLink_(ss); } catch (e3) { console.error(e3); }
   try { ensureMasterMonthAuto_(ss); } catch (e8) { console.error(e8); }
   try { ensureMasterSameDayRow_(ss); } catch (e9) { console.error(e9); }
@@ -4580,6 +5082,36 @@ function sendKengakuTestMailFromMenu() {
   return r;
 }
 
+function runKengakuFollowDryFromMenu() {
+  var r = runKengakuFollowScan_({ dryRun: true, limit: 50 });
+  SpreadsheetApp.getActiveSpreadsheet().toast(
+    r.ok ? ('対象 当日' + (r.dueDay || 0) + '／3日後' + (r.dueD3 || 0) + '（送信なし）') : (r.message || '失敗'),
+    '見学体験',
+    10
+  );
+  return r;
+}
+
+function runKengakuFollowLiveFromMenu() {
+  var r = runKengakuFollowScan_({ dryRun: false, limit: 20 });
+  SpreadsheetApp.getActiveSpreadsheet().toast(
+    r.ok ? ('送信 当日' + (r.sentDay || 0) + '／3日後' + (r.sentD3 || 0)) : (r.message || '失敗'),
+    '見学体験',
+    10
+  );
+  return r;
+}
+
+function installKengakuFollowTriggerFromMenu() {
+  var r = installKengakuFollowTrigger_();
+  SpreadsheetApp.getActiveSpreadsheet().toast(
+    r.ok ? ('トリガー設置済（' + (r.minutes || 15) + '分毎・実行者=' + (r.actor || '') + '）') : (r.message || '失敗'),
+    '見学体験',
+    10
+  );
+  return r;
+}
+
 /** 送信元＝店舗アカウント（デプロイ実行ユーザー／Send as） */
 var KENGAKU_MAIL_FROM_ = 'jf-kyoudou@okamoto-group.co.jp';
 var KENGAKU_MAIL_NAME_ = 'JOYFIT24経堂';
@@ -4813,6 +5345,204 @@ function sendKengakuTestMail_(opt) {
     at: stamp,
     count: results.length,
     results: results
+  };
+}
+
+/** 希望日＋時刻 → Date（Asia/Tokyo 想定のスプレッドシート値） */
+function kengakuHopeDateTime_(hopeDay, hopeTime) {
+  var d = null;
+  if (hopeDay instanceof Date && !isNaN(hopeDay.getTime())) {
+    d = new Date(hopeDay.getFullYear(), hopeDay.getMonth(), hopeDay.getDate());
+  } else {
+    var m = String(hopeDay || '').match(/(\d{4})[\/\-年](\d{1,2})[\/\-月](\d{1,2})/);
+    if (!m) return null;
+    d = new Date(+m[1], +m[2] - 1, +m[3]);
+  }
+  var hh = 12, mm = 0;
+  if (hopeTime instanceof Date && !isNaN(hopeTime.getTime())) {
+    hh = hopeTime.getHours();
+    mm = hopeTime.getMinutes();
+  } else {
+    var tm = String(hopeTime || '').match(/(\d{1,2})[:：時](\d{2})?/);
+    if (tm) {
+      hh = +tm[1];
+      mm = tm[2] ? +tm[2] : 0;
+    }
+  }
+  d.setHours(hh, mm, 0, 0);
+  return d;
+}
+
+/** 送信済チェック＋日時＋ログを書く */
+function kengakuMarkSent_(ss, sh, row, when, at) {
+  var col = when === '3日後' ? 15 : 13;
+  sh.getRange(row, col).setValue(true);
+  sh.getRange(row, col + 1).setValue(at).setNumberFormat('yyyy/mm/dd hh:mm');
+  var mail = String(sh.getRange(row, 4).getDisplayValue() || '').trim().toLowerCase();
+  if (!mail) return;
+  var keep = kengakuLoadKeep_(ss, sh);
+  var cur = keep[mail] || { day: false, dayAt: '', d3: false, d3At: '' };
+  if (when === '3日後') {
+    cur.d3 = true;
+    cur.d3At = at;
+  } else {
+    cur.day = true;
+    cur.dayAt = at;
+  }
+  keep[mail] = cur;
+  kengakuSaveKeep_(ss, keep);
+}
+
+/**
+ * 見学体験フォロー自動送信スキャン（一元管理シート＝Workspace「見学体験申請」）。
+ * 当日：希望日時の2時間後・未送信なら送る（入会済みでもお礼は送る）
+ * 3日後：希望日の3日後0:00以降・未入会・未送信なら送る
+ * opt: { dryRun?:boolean, limit?:number, now?:Date }
+ */
+function runKengakuFollowScan_(opt) {
+  opt = opt || {};
+  var dry = !(opt.dryRun === false || opt.dryRun === 0 || String(opt.dryRun) === '0');
+  var limit = Math.max(1, Math.min(50, Number(opt.limit) || 20));
+  var now = opt.now instanceof Date ? opt.now : new Date();
+  var ss = openWorkspaceSpreadsheet_();
+  ensureKengakuFollowSheet_(ss, false);
+  refreshKengakuJoinStatus_(ss);
+  var sh = ss.getSheetByName(KENGAKU_SHEET_);
+  if (!sh) return { ok: false, message: '見学体験申請がありません' };
+
+  var data = KENGAKU_DATA_ROW_, end = KENGAKU_END_, n = end - data + 1;
+  var vals = sh.getRange(data, 1, n, 16).getValues();
+  var dueDay = [], dueD3 = [], sentDay = 0, sentD3 = 0, errors = [], skipped = 0;
+  var MS2H = 2 * 60 * 60 * 1000;
+
+  for (var i = 0; i < n; i++) {
+    var row = vals[i];
+    var kindRaw = String(row[1] || '').trim();
+    var name = String(row[2] || '').trim();
+    var mail = String(row[3] || '').trim();
+    var status = String(row[9] || '').trim();
+    var joinLabel = String(row[10] || '').trim();
+    var daySent = row[12] === true || row[12] === 'TRUE' || row[12] === 'true';
+    var d3Sent = row[14] === true || row[14] === 'TRUE' || row[14] === 'true';
+    if (!name && !mail) continue;
+    if (!mail || mail.indexOf('@') < 0) { skipped++; continue; }
+    if (status.indexOf('キャンセル') >= 0) { skipped++; continue; }
+    if (kindRaw !== '見学' && kindRaw !== '体験') { skipped++; continue; }
+
+    var hopeAt = kengakuHopeDateTime_(row[7], row[8]);
+    if (!hopeAt) { skipped++; continue; }
+    var sheetRow = data + i;
+
+    // 当日：希望時刻＋2時間
+    if (!daySent && now.getTime() >= hopeAt.getTime() + MS2H) {
+      dueDay.push({ row: sheetRow, kind: kindRaw, name: name, mail: mail, hopeAt: hopeAt });
+    }
+    // 3日後：希望日の3日後0:00以降・未入会のみ
+    if (!d3Sent && joinLabel !== '入会') {
+      var d3Start = new Date(hopeAt.getFullYear(), hopeAt.getMonth(), hopeAt.getDate() + 3, 0, 0, 0, 0);
+      if (now.getTime() >= d3Start.getTime()) {
+        dueD3.push({ row: sheetRow, kind: kindRaw, name: name, mail: mail, hopeAt: hopeAt });
+      }
+    }
+  }
+
+  var jobs = [];
+  dueDay.forEach(function (x) { jobs.push({ when: '当日', item: x }); });
+  dueD3.forEach(function (x) { jobs.push({ when: '3日後', item: x }); });
+  jobs = jobs.slice(0, limit);
+
+  var results = [];
+  if (dry) {
+    return {
+      ok: true,
+      dryRun: true,
+      at: Utilities.formatDate(now, 'Asia/Tokyo', 'yyyy/MM/dd HH:mm:ss'),
+      dueDay: dueDay.length,
+      dueD3: dueD3.length,
+      queued: jobs.length,
+      skipped: skipped,
+      sample: jobs.slice(0, 8).map(function (j) {
+        return {
+          when: j.when,
+          kind: j.item.kind,
+          name: j.item.name,
+          mail: j.item.mail,
+          row: j.item.row,
+          hopeAt: Utilities.formatDate(j.item.hopeAt, 'Asia/Tokyo', 'yyyy/MM/dd HH:mm')
+        };
+      })
+    };
+  }
+
+  for (var j = 0; j < jobs.length; j++) {
+    var job = jobs[j];
+    var it = job.item;
+    var sent = kengakuSendOneFollow_(it.mail, it.kind, job.when, it.name, '');
+    results.push({
+      when: job.when,
+      kind: it.kind,
+      name: it.name,
+      mail: it.mail,
+      row: it.row,
+      ok: !!sent.ok,
+      subject: sent.subject,
+      from: sent.from,
+      message: sent.message || ''
+    });
+    if (sent.ok) {
+      var stamp = new Date();
+      try { kengakuMarkSent_(ss, sh, it.row, job.when, stamp); } catch (eMark) {}
+      if (job.when === '3日後') sentD3++;
+      else sentDay++;
+    } else {
+      errors.push(sent.message || 'send failed');
+    }
+    if (j < jobs.length - 1) Utilities.sleep(800);
+  }
+
+  try {
+    sh.getRange('A1').setNote(
+      '最終自動スキャン: ' + Utilities.formatDate(now, 'Asia/Tokyo', 'yyyy/MM/dd HH:mm:ss') +
+      ' 当日' + sentDay + '／3日後' + sentD3 +
+      (errors.length ? ' err=' + errors[0] : '')
+    );
+  } catch (eNote) {}
+
+  return {
+    ok: errors.length === 0,
+    dryRun: false,
+    at: Utilities.formatDate(now, 'Asia/Tokyo', 'yyyy/MM/dd HH:mm:ss'),
+    dueDay: dueDay.length,
+    dueD3: dueD3.length,
+    sentDay: sentDay,
+    sentD3: sentD3,
+    queued: jobs.length,
+    skipped: skipped,
+    errors: errors,
+    results: results
+  };
+}
+
+/** 時間トリガー本体（店舗アカウントで設置すること＝送信元になる） */
+function kengakuFollowTriggered_() {
+  return runKengakuFollowScan_({ dryRun: false, limit: 20 });
+}
+
+/** 15分毎トリガー。既存の見学フォロー用は付け替える */
+function installKengakuFollowTrigger_() {
+  var actor = '';
+  try { actor = Session.getEffectiveUser().getEmail() || ''; } catch (eA) {}
+  var mins = 15;
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'kengakuFollowTriggered_') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('kengakuFollowTriggered_').timeBased().everyMinutes(mins).create();
+  return {
+    ok: true,
+    minutes: mins,
+    actor: actor,
+    wantFrom: KENGAKU_MAIL_FROM_,
+    note: '送信元はトリガー実行アカウントです。店舗(' + KENGAKU_MAIL_FROM_ + ')でこのメニューを実行してください。'
   };
 }
 
@@ -6945,8 +7675,17 @@ function importLeaveSurvey_(rows) {
 
 /** メニュー「ファイルUP」→ 数値更新ファイル。ブラウザでCSVを読んで uploadNumbersFile に渡す */
 function openNumbersUpload() {
-  var html = HtmlService.createHtmlOutputFromFile('numbersui').setWidth(560).setHeight(420);
-  SpreadsheetApp.getUi().showModalDialog(html, '数値更新ファイルUP');
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  try { ensureCumulativeBoard_(ss); } catch (eBoard) { Logger.log(eBoard); }
+  var line = '同じ会員番号の手続きは、自動で飛ばします。期間がかぶっていても大丈夫です。';
+  var board = ss && ss.getSheetByName('累計入会退会');
+  if (board) {
+    var shown = [board.getRange('A1').getDisplayValue(), board.getRange('N1').getDisplayValue()];
+    if (shown[0] && shown[1]) line = shown[0] + '<br>' + shown[1];
+  }
+  var t = HtmlService.createTemplateFromFile('numbersui');
+  t.cut = line;
+  SpreadsheetApp.getUi().showModalDialog(t.evaluate().setWidth(640).setHeight(520), '数値更新ファイルUP');
 }
 
 /**
@@ -6996,7 +7735,7 @@ function numbersImportGrid_(grid, name) {
   return appendCumulative_(isLeave ? '累計退会データ' : '累計入会データ', grid, hr, name);
 }
 
-/** 手続き一覧表を累計シートの末尾へ足す。同じ人・同じ手続き（会員番号＋届出日／退会年月）はとばす。T列より右の自動列は触らない */
+/** 手続き一覧表を累計へ足す。行は消さない。退会は同じ届出か、退会年月が半年以内の同じ人だけ月を入れ替える。それより前の退会はそのまま残す */
 function appendCumulative_(sheetName, grid, hr, fileName) {
   var ss = SpreadsheetApp.openById(WS_CONFIG.SPREADSHEET_ID);
   var sh = ss.getSheetByName(sheetName);
@@ -7014,7 +7753,9 @@ function appendCumulative_(sheetName, grid, hr, fileName) {
     if (/年月$/.test(h)) ymCols[i] = true;
     else if (/日$/.test(h)) dateCols[i] = true;
   });
-  var keyCol = target.indexOf(leave ? '退会年月' : '届出日');
+  var keyCol = target.indexOf(leave ? '退会届出日' : '届出日');
+  if (keyCol < 0) throw new Error(fileName + '：届出日の列がありません');
+  var monthCol = target.indexOf(leave ? '退会年月' : '利用開始年月');
   var fmt = function (v, i) {
     if (v instanceof Date) return Utilities.formatDate(v, 'Asia/Tokyo', ymCols[i] ? 'yyyy/MM' : 'yyyy/MM/dd');
     if (typeof v === 'number' && (dateCols[i] || ymCols[i]) && v > 20000 && v < 80000) {
@@ -7023,36 +7764,217 @@ function appendCumulative_(sheetName, grid, hr, fileName) {
     }
     return v == null ? '' : v;
   };
+  var cellText = function (v) { return String(v == null ? '' : v).replace(/[\s\u3000]/g, ''); };
+  var sameVals = function (a, b) {
+    if (!a || !b || a.length !== b.length) return false;
+    for (var c = 0; c < a.length; c++) if (cellText(a[c]) !== cellText(b[c])) return false;
+    return true;
+  };
+  var noKey = function (no) { return String(no).replace(/\D/g, '').replace(/^0+/, ''); };
+  var ymOf = function (text) {
+    var d = String(text || '').replace(/\D/g, '');
+    if (d.length < 6) return 0;
+    return Number(d.slice(0, 4)) * 12 + Number(d.slice(4, 6));
+  };
   var keyOf = function (no, k) {
-    var n = String(no).replace(/\D/g, '').replace(/^0+/, '');
-    return n + '|' + String(k).replace(/\D/g, '').slice(0, ymCols[keyCol] ? 6 : 8);
+    return noKey(no) + '|' + String(k).replace(/\D/g, '').slice(0, 8);
   };
   var lastRow = 1;
   var colF = sh.getRange(1, colNo + 1, Math.max(sh.getMaxRows(), 2), 1).getValues();
   for (var i = colF.length - 1; i >= 1; i--) if (String(colF[i][0]) !== '') { lastRow = i + 1; break; }
   var have = {};
+  var byNo = {};
   if (lastRow >= 2) {
     var ex = sh.getRange(2, 1, lastRow - 1, width).getValues();
-    ex.forEach(function (row) { have[keyOf(row[colNo], fmt(row[keyCol], keyCol))] = true; });
+    ex.forEach(function (row, idx) {
+      var vals = row.map(function (v, c) { return fmt(v, c); });
+      var filedEx = String(vals[keyCol] || '').replace(/\D/g, '');
+      var monthEx = monthCol >= 0 ? String(vals[monthCol] || '').replace(/\D/g, '') : '';
+      if (!filedEx && !monthEx) return;
+      var k = filedEx ? keyOf(row[colNo], vals[keyCol]) : keyOf(row[colNo], vals[monthCol] || '');
+      var entry = { row: filedEx ? idx + 2 : 0, vals: vals, skipOnly: !filedEx, ym: ymOf(monthCol >= 0 ? vals[monthCol] : '') };
+      have[k] = entry;
+      if (leave && filedEx && entry.row) {
+        var nk = noKey(row[colNo]);
+        if (!byNo[nk]) byNo[nk] = [];
+        byNo[nk].push(entry);
+      }
+    });
   }
   var carry = {};
-  var out = [], skipped = 0;
+  var out = [], skipped = 0, updated = 0;
+  var updates = [];
   grid.slice(hr + 1).forEach(function (row) {
-    var vals = map.map(function (si, i) { return si < 0 ? '' : fmt(row[si], i); });
-    [0, 1, 2].forEach(function (i) { if (vals[i] !== '') carry[i] = vals[i]; else if (carry[i]) vals[i] = carry[i]; });
-    var no = String(vals[colNo]).replace(/\s/g, '');
-    if (!/\d{3,}/.test(no)) return;
-    var k = keyOf(no, vals[keyCol]);
-    if (have[k]) { skipped++; return; }
-    have[k] = true;
+    var vals = map.map(function (si, c) { return si < 0 ? '' : fmt(row[si], c); });
+    [0, 1, 2].forEach(function (c) { if (vals[c] !== '') carry[c] = vals[c]; else if (carry[c]) vals[c] = carry[c]; });
+    var headLabel = String(vals[0] || '') + String(vals[1] || '') + String(vals[2] || '');
+    if (/小計|中計|合計/.test(headLabel)) return;
+    var no = String(vals[colNo]).replace(/[\s\u3000]/g, '');
+    if (!/^\d{4,}$/.test(no)) return;
+    var filed = String(vals[keyCol] || '').replace(/\D/g, '');
+    var k = filed ? keyOf(no, vals[keyCol]) : keyOf(no, monthCol >= 0 ? vals[monthCol] || '' : '');
+    var hit = have[k];
+    if (hit && (!filed || hit.skipOnly)) { skipped++; return; }
+    if (!hit && leave && filed && monthCol >= 0) {
+      var ymNew = ymOf(vals[monthCol]);
+      var near = byNo[noKey(no)] || [];
+      var best = null, bestGap = 7;
+      near.forEach(function (e) {
+        if (!e.ym || !ymNew) return;
+        var gap = Math.abs(e.ym - ymNew);
+        if (gap <= 6 && gap < bestGap) { best = e; bestGap = gap; }
+      });
+      hit = best;
+    }
+    if (hit) {
+      if (sameVals(hit.vals, vals)) { skipped++; have[k] = hit; return; }
+      if (hit.row) updates.push({ row: hit.row, vals: vals });
+      else out[hit.outIndex] = vals;
+      hit.vals = vals;
+      if (monthCol >= 0) hit.ym = ymOf(vals[monthCol]);
+      have[k] = hit;
+      updated++;
+      return;
+    }
+    var added = { row: 0, vals: vals, outIndex: out.length, ym: monthCol >= 0 ? ymOf(vals[monthCol]) : 0 };
+    have[k] = added;
+    if (leave && filed) {
+      var nkNew = noKey(no);
+      if (!byNo[nkNew]) byNo[nkNew] = [];
+      byNo[nkNew].push(added);
+    }
     out.push(vals);
+  });
+  updates.forEach(function (u) {
+    sh.getRange(u.row, colNo + 1).setNumberFormat('@');
+    sh.getRange(u.row, 1, 1, width).setValues([u.vals]);
   });
   if (out.length) {
     if (sh.getMaxRows() < lastRow + out.length) sh.insertRowsAfter(sh.getMaxRows(), lastRow + out.length - sh.getMaxRows());
     sh.getRange(lastRow + 1, colNo + 1, out.length, 1).setNumberFormat('@');
     sh.getRange(lastRow + 1, 1, out.length, width).setValues(out);
   }
-  return { ok: true, kind: leave ? 'leave' : 'join', label: leave ? '退会手続き一覧表' : '入会手続き一覧表', added: out.length, skipped: skipped, total: lastRow - 1 + out.length };
+  return {
+    ok: true,
+    kind: leave ? 'leave' : 'join',
+    label: leave ? '退会手続き一覧表' : '入会手続き一覧表',
+    added: out.length,
+    updated: updated,
+    skipped: skipped,
+    total: lastRow - 1 + out.length
+  };
+}
+
+/** 累計の集計行（合計・○人）と、名前・日付の崩れを見る。clean=1 のとき会員番号が8桁以上の数字でない行だけ消す */
+function auditCumulative_(clean) {
+  var ss = openWorkspaceSpreadsheet_();
+  var specs = [
+    { name: '累計入会データ', width: 15, no: 5, person: 6, kana: 7, sex: 8, age: 9, birth: 10, tel: 11, filed: 12, month: 13 },
+    { name: '累計退会データ', width: 19, no: 5, person: 6, kana: 7, sex: 8, age: 9, birth: 10, tel: 11, filed: 16, month: 17 }
+  ];
+  function ymOf(text) {
+    var d = String(text || '').replace(/\D/g, '');
+    if (d.length < 6) return 0;
+    return Number(d.slice(0, 4)) * 12 + Number(d.slice(4, 6));
+  }
+  function isSubtotalRow(row, no) {
+    var head = String(row[0] || '') + String(row[1] || '') + String(row[2] || '');
+    if (/小計|中計|合計/.test(head)) return true;
+    if (/人/.test(no)) return true;
+    return false;
+  }
+  function weirdName(name, kana) {
+    var s = String(name || '').replace(/[\s\u3000]/g, '');
+    var k = String(kana || '').replace(/[\s\u3000]/g, '');
+    if (!s && !k) return '空';
+    if (/[0-9]/.test(s)) return '数字';
+    if (/[\uFFFD�]|Ã.|ï¿/.test(s + k)) return '文字化け';
+    return '';
+  }
+  var out = [];
+  specs.forEach(function (spec) {
+    var sh = ss.getSheetByName(spec.name);
+    var last = sh.getLastRow();
+    var vals = last >= 2 ? sh.getRange(2, 1, last - 1, spec.width).getDisplayValues() : [];
+    var badRows = [];
+    var badPreview = [];
+    var dup = 0;
+    var dupSample = [];
+    var near = 0;
+    var nearNow = 0;
+    var names = [];
+    var nameOdd = 0;
+    var sex = 0;
+    var dates = 0;
+    var tel = 0;
+    var seen = {};
+    var byNo = {};
+    vals.forEach(function (row, i) {
+      var no = String(row[spec.no] || '').replace(/[\s\u3000]/g, '');
+      var sheetRow = i + 2;
+      if (isSubtotalRow(row, no)) {
+        badRows.push(sheetRow);
+        if (badPreview.length < 20) badPreview.push([sheetRow, String(row[0] || ''), String(row[1] || ''), no]);
+        return;
+      }
+      if (!/^\d{4,}$/.test(no)) return;
+      var why = weirdName(row[spec.person], row[spec.kana]);
+      if (why) {
+        nameOdd++;
+        if (names.length < 8) names.push({ row: sheetRow, why: why });
+      }
+      var g = String(row[spec.sex] || '').replace(/[\s\u3000]/g, '');
+      if (g && g !== '男' && g !== '女') sex++;
+      var filed = String(row[spec.filed] || '');
+      var month = String(row[spec.month] || '');
+      if (filed && !/^\d{4}\/\d{1,2}\/\d{1,2}/.test(filed)) dates++;
+      if (month && !/^\d{4}\/\d{1,2}/.test(month)) dates++;
+      var phone = String(row[spec.tel] || '').replace(/\D/g, '');
+      if (phone.length === 10 && /^(70|80|90)/.test(phone)) {
+        tel++;
+        if (clean) sh.getRange(sheetRow, spec.tel + 1).setNumberFormat('@').setValue('0' + phone);
+      }
+      var key = no + '|' + filed.replace(/\D/g, '').slice(0, 8);
+      if (seen[key]) {
+        dup++;
+        if (dupSample.length < 6) dupSample.push({ row: sheetRow, month: month, filed: filed });
+      }
+      seen[key] = true;
+      var ym = ymOf(month);
+      if (ym) {
+        (byNo[no] || (byNo[no] = [])).push(ym);
+      }
+    });
+    Object.keys(byNo).forEach(function (no) {
+      var list = byNo[no].sort(function (a, b) { return a - b; });
+      for (var j = 1; j < list.length; j++) {
+        if (list[j] - list[j - 1] <= 6 && list[j] !== list[j - 1]) {
+          near++;
+          if (list[j - 1] >= 2026 * 12 + 9) nearNow++;
+        }
+      }
+    });
+    if (clean && badRows.length) {
+      badRows.sort(function (a, b) { return b - a; });
+      badRows.forEach(function (r) { sh.deleteRow(r); });
+    }
+    out.push({
+      sheet: spec.name,
+      rows: vals.length,
+      bad: badRows.length,
+      badPreview: badPreview,
+      dupKeys: dup,
+      dupSample: dupSample,
+      nearSix: near,
+      nearSinceSep: nearNow,
+      sexOdd: sex,
+      dateOdd: dates,
+      telOdd: tel,
+      names: names,
+      nameOdd: nameOdd
+    });
+  });
+  return { ok: true, cleaned: clean === true || clean === '1', sheets: out };
 }
 
 /**
